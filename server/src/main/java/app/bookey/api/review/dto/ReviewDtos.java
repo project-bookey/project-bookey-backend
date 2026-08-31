@@ -29,24 +29,24 @@ public final class ReviewDtos {
     ) {}
 
     public record ReviewView(
-            Long id,
-            Long bookId,
-            Long authorId,
-            String authorNickname,
+            @NotNull Long id,
+            @NotNull Long bookId,
+            @NotNull Long authorId,
+            @NotNull String authorNickname,
             String authorHandle,
             Short rating,
-            String body,
+            @NotNull String body,
             List<String> tags,
             boolean hasSpoiler,
-            VerificationLevel verificationLevel,
+            @NotNull VerificationLevel verificationLevel,
             Map<String, Object> verificationSnapshot,
             int helpfulCount,
-            Instant createdAt
+            @NotNull Instant createdAt
     ) {}
 
     /** 리뷰 작성 전 미리 보여주는 예상 등급 — "지금 쓰면 어떤 배지를 받는지" */
     public record VerificationPreview(
-            VerificationLevel expectedLevel,
+            @NotNull VerificationLevel expectedLevel,
             double coverage,
             int timerSessionCount,
             long verifiedMinutes,

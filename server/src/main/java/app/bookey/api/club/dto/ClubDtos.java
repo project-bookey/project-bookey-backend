@@ -60,27 +60,27 @@ public final class ClubDtos {
 
     /** 코드로 볼 수 있는 정보는 미리보기 수준까지만 (§8.5). */
     public record ClubPreview(
-            Long id,
-            String name,
+            @NotNull Long id,
+            @NotNull String name,
             String description,
             BookSummary book,
             String hostNickname,
             int memberCount,
             int memberLimit,
-            LocalDate startsAt,
-            LocalDate endsAt,
-            ClubStatus status,
+            @NotNull LocalDate startsAt,
+            @NotNull LocalDate endsAt,
+            @NotNull ClubStatus status,
             boolean alreadyMember,
             boolean joinable,
             String joinBlockedReason
     ) {}
 
     public record ClubSummaryView(
-            Long id,
-            String name,
+            @NotNull Long id,
+            @NotNull String name,
             String coverUrl,
             BookSummary book,
-            ClubStatus status,
+            @NotNull ClubStatus status,
             int memberCount,
             long daysLeft,
             Double myCompletionRate,
@@ -89,11 +89,11 @@ public final class ClubDtos {
     ) {}
 
     public record MemberProgressView(
-            Long userId,
-            Long clubMemberId,
-            String nickname,
+            @NotNull Long userId,
+            @NotNull Long clubMemberId,
+            @NotNull String nickname,
             String avatarUrl,
-            ClubRole role,
+            @NotNull ClubRole role,
             boolean isMe,
             /** 진척 비공개 멤버는 아래 값들이 모두 null 이다. */
             boolean shareProgress,
@@ -107,11 +107,11 @@ public final class ClubDtos {
     ) {}
 
     public record CheckpointView(
-            Long id,
+            @NotNull Long id,
             short seq,
-            String title,
+            @NotNull String title,
             int targetPage,
-            Instant dueAt,
+            @NotNull Instant dueAt,
             boolean evaluated,
             long achievedCount,
             long memberCount,
@@ -119,20 +119,20 @@ public final class ClubDtos {
     ) {}
 
     public record ClubHomeView(
-            Long id,
-            String name,
+            @NotNull Long id,
+            @NotNull String name,
             String description,
             String coverUrl,
-            String joinCode,          // 호스트/멤버에게만 노출
-            ClubVisibility visibility,
-            ClubStatus status,
+            @NotNull String joinCode,  // 호스트/멤버에게만 노출
+            @NotNull ClubVisibility visibility,
+            @NotNull ClubStatus status,
             BookSummary book,
-            LocalDate startsAt,
-            LocalDate endsAt,
+            @NotNull LocalDate startsAt,
+            @NotNull LocalDate endsAt,
             long daysLeft,
             int memberCount,
             int memberLimit,
-            ClubRole myRole,
+            @NotNull ClubRole myRole,
             boolean myShareProgress,
             boolean myAllowNudge,
             int myRank,
@@ -143,8 +143,8 @@ public final class ClubDtos {
     ) {}
 
     public record ClubResultView(
-            Long clubId,
-            String name,
+            @NotNull Long clubId,
+            @NotNull String name,
             BookSummary book,
             int memberCount,
             long finishedCount,
@@ -156,7 +156,7 @@ public final class ClubDtos {
     ) {}
 
     // ── 토론 ─────────────────────────────────────────────────
-    public record CreatePostRequest(
+    public record CreateClubPostRequest(
             ClubPostType type,
             @NotBlank @Size(max = 10000) String body,
             @Min(0) Integer anchorPage,
@@ -165,24 +165,24 @@ public final class ClubDtos {
             Long linkedPostId
     ) {}
 
-    public record PostView(
-            Long id,
+    public record ClubPostView(
+            @NotNull Long id,
             Long parentId,
-            ClubPostType type,
-            Long authorId,
-            String authorNickname,
+            @NotNull ClubPostType type,
+            @NotNull Long authorId,
+            @NotNull String authorNickname,
             String authorAvatarUrl,
             /** 마스킹된 글은 body 가 null 이다 — 서버가 애초에 내려보내지 않는다(§8.5). */
             String body,
             boolean masked,
             Integer anchorPage,
-            SpoilerLevel spoilerLevel,
+            @NotNull SpoilerLevel spoilerLevel,
             boolean pinned,
             int commentCount,
             int reactionCount,
             List<String> myReactions,
-            Instant createdAt,
-            List<PostView> comments
+            @NotNull Instant createdAt,
+            List<ClubPostView> comments
     ) {}
 
     public record ReactionRequest(@NotNull ReactionKind kind) {}

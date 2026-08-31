@@ -4,6 +4,7 @@ import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.user.NotifyTone;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
 
 import java.time.Instant;
 import java.util.Map;
@@ -13,15 +14,15 @@ public final class NotificationDtos {
     private NotificationDtos() {}
 
     public record NotificationView(
-            Long id,
-            NotificationType type,
+            @NotNull Long id,
+            @NotNull NotificationType type,
             Short lagLevel,
             Long readingRecordId,
             Long clubId,
-            String title,
-            String body,
+            @NotNull String title,
+            @NotNull String body,
             Map<String, Object> payload,
-            Instant scheduledAt,
+            @NotNull Instant scheduledAt,
             Instant sentAt,
             Instant openedAt
     ) {}

@@ -30,7 +30,7 @@ public final class AdminDtos {
             AdminProfile admin
     ) {}
 
-    public record AdminProfile(Long id, String email, String name, AdminRole role,
+    public record AdminProfile(@NotNull Long id, @NotNull String email, @NotNull String name, @NotNull AdminRole role,
                                boolean totpEnabled, Instant lastLoginAt) {}
 
     public record CreateAdminRequest(
@@ -55,23 +55,23 @@ public final class AdminDtos {
 
     // ── 회원 ────────────────────────────────────────────────
     public record UserRow(
-            Long id,
-            String handle,
-            String nickname,
+            @NotNull Long id,
+            @NotNull String handle,
+            @NotNull String nickname,
             String maskedEmail,
-            UserStatus status,
-            Instant createdAt,
+            @NotNull UserStatus status,
+            @NotNull Instant createdAt,
             long booksReading,
             long booksFinished
     ) {}
 
     public record UserDetailView(
-            Long id,
-            String handle,
-            String nickname,
+            @NotNull Long id,
+            @NotNull String handle,
+            @NotNull String nickname,
             String email,          // 마스킹 여부는 revealEmail 파라미터로 결정
-            UserStatus status,
-            Instant createdAt,
+            @NotNull UserStatus status,
+            @NotNull Instant createdAt,
             long totalSessions,
             long totalDurationSec,
             long reviewCount,
@@ -79,7 +79,7 @@ public final class AdminDtos {
             List<SanctionRow> sanctions
     ) {}
 
-    public record SanctionRow(Long id, SanctionType type, String reason, Instant startsAt,
+    public record SanctionRow(@NotNull Long id, @NotNull SanctionType type, @NotNull String reason, @NotNull Instant startsAt,
                               Instant endsAt, Instant releasedAt, Long adminId) {}
 
     public record SanctionRequest(
@@ -90,8 +90,8 @@ public final class AdminDtos {
     ) {}
 
     // ── 도서 ────────────────────────────────────────────────
-    public record BookRow(Long id, String isbn13, String title, String author, String publisher,
-                          Integer totalPages, String source, boolean userCreated, Instant createdAt) {}
+    public record BookRow(@NotNull Long id, String isbn13, @NotNull String title, String author, String publisher,
+                          Integer totalPages, @NotNull String source, boolean userCreated, @NotNull Instant createdAt) {}
 
     public record UpdateBookRequest(
             @Size(max = 500) String title,
@@ -105,15 +105,15 @@ public final class AdminDtos {
 
     // ── 신고 큐 ─────────────────────────────────────────────
     public record ModerationRow(
-            Long id,
-            ModerationSource sourceType,
-            Long sourceId,
-            String reason,
+            @NotNull Long id,
+            @NotNull ModerationSource sourceType,
+            @NotNull Long sourceId,
+            @NotNull String reason,
             int reportCount,
             short priority,
-            Instant slaDueAt,
+            @NotNull Instant slaDueAt,
             boolean overdue,
-            ModerationStatus status,
+            @NotNull ModerationStatus status,
             Long assignedAdminId,
             String contentPreview,
             Long authorId,
@@ -129,18 +129,18 @@ public final class AdminDtos {
 
     // ── 검증 심사 ───────────────────────────────────────────
     public record ReviewRow(
-            Long id,
-            Long bookId,
+            @NotNull Long id,
+            @NotNull Long bookId,
             String bookTitle,
-            Long authorId,
+            @NotNull Long authorId,
             String authorNickname,
             Short rating,
-            String body,
-            VerificationLevel verificationLevel,
+            @NotNull String body,
+            @NotNull VerificationLevel verificationLevel,
             Map<String, Object> verificationSnapshot,
             int reportCount,
-            String status,
-            Instant createdAt
+            @NotNull String status,
+            @NotNull Instant createdAt
     ) {}
 
     public record OverrideVerificationRequest(
@@ -150,18 +150,18 @@ public final class AdminDtos {
 
     // ── 모임 ────────────────────────────────────────────────
     public record ClubRow(
-            Long id,
-            String name,
-            String joinCode,
-            ClubStatus status,
+            @NotNull Long id,
+            @NotNull String name,
+            @NotNull String joinCode,
+            @NotNull ClubStatus status,
             int memberCount,
             int memberLimit,
-            LocalDate startsAt,
-            LocalDate endsAt,
-            Long ownerId,
+            @NotNull LocalDate startsAt,
+            @NotNull LocalDate endsAt,
+            @NotNull Long ownerId,
             String ownerNickname,
             long postCount,
-            Instant createdAt
+            @NotNull Instant createdAt
     ) {}
 
     public record ClubActionRequest(@NotBlank @Size(max = 500) String reason) {}
@@ -176,9 +176,9 @@ public final class AdminDtos {
 
     public record OpsFlagRequest(@NotNull Boolean enabled, @Size(max = 300) String note) {}
 
-    public record OpsFlagRow(String key, boolean enabled, String note, Instant updatedAt) {}
+    public record OpsFlagRow(@NotNull String key, boolean enabled, String note, @NotNull Instant updatedAt) {}
 
     // ── 감사 로그 ───────────────────────────────────────────
-    public record AuditRow(Long id, Long adminId, String action, String targetType, Long targetId,
-                           String reason, String ip, Instant createdAt) {}
+    public record AuditRow(@NotNull Long id, @NotNull Long adminId, @NotNull String action, String targetType, Long targetId,
+                           String reason, String ip, @NotNull Instant createdAt) {}
 }

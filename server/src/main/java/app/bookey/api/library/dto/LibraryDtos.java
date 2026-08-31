@@ -45,16 +45,16 @@ public final class LibraryDtos {
             Double paceGap,
             LocalDate estimatedFinishDate,
             Long daysSinceLastRead,
-            String lagLevel,
+            @NotNull String lagLevel,
             long totalDurationSec
     ) {}
 
     public record ReadingRecordView(
-            Long id,
+            @NotNull Long id,
             short round,
-            ReadingStatus status,
+            @NotNull ReadingStatus status,
             BookSummary book,
-            ProgressView progress,
+            @NotNull ProgressView progress,
             LocalDate targetFinishDate,
             Instant startedAt,
             Instant finishedAt,

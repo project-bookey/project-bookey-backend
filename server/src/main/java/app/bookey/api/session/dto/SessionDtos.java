@@ -38,15 +38,15 @@ public final class SessionDtos {
     ) {}
 
     public record SessionView(
-            Long id,
-            Long readingRecordId,
-            Instant startedAt,
+            @NotNull Long id,
+            @NotNull Long readingRecordId,
+            @NotNull Instant startedAt,
             Instant endedAt,
             int durationSec,
             Integer startPage,
             Integer endPage,
             Integer readPages,
-            SessionSource source,
+            @NotNull SessionSource source,
             String memo,
             List<String> abuseFlags,
             boolean countedForVerification
@@ -54,17 +54,17 @@ public final class SessionDtos {
 
     /** 세션 종료 응답 — 진척 변화와 모임 반영 결과를 함께 준다. */
     public record SessionEndResult(
-            SessionView session,
+            @NotNull SessionView session,
             int currentPage,
             Double completionRate,
-            String lagLevel,
+            @NotNull String lagLevel,
             boolean bookFinished,
-            List<ClubProgressEcho> clubs
+            @NotNull List<ClubProgressEcho> clubs
     ) {}
 
     public record ClubProgressEcho(Long clubId, String clubName, int rank, int memberCount) {}
 
-    public record DailyStat(String date, long durationSec, long pages, int sessionCount) {}
+    public record DailyStat(@NotNull String date, long durationSec, long pages, int sessionCount) {}
 
     public record StatsSummary(
             long totalDurationSec,

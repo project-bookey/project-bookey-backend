@@ -61,7 +61,7 @@ public class ClubPostService {
     private record ViewerState(int currentPage, boolean finished) {}
 
     @Transactional(readOnly = true)
-    public PageResponse<PostView> feed(Long userId, Long clubId, boolean onlyMyRange,
+    public PageResponse<ClubPostView> feed(Long userId, Long clubId, boolean onlyMyRange,
                                        Pageable pageable) {
         ClubMember me = clubService.activeMember(clubId, userId);
         ViewerState viewer = viewerState(me);
@@ -91,7 +91,7 @@ public class ClubPostService {
     }
 
     @Transactional(readOnly = true)
-    public PostView detail(Long userId, Long clubId, Long postId) {
+    public ClubPostView detail(Long userId, Long clubId, Long postId) {
         ClubMember me = clubService.activeMember(clubId, userId);
         ViewerState viewer = viewerState(me);
         ClubPost post = getPost(clubId, postId);
@@ -107,7 +107,7 @@ public class ClubPostService {
 
     /** "그래도 볼래요" — 개별 글 스포일러 해제. 감사 로그를 남긴다(§8.5). */
     @Transactional
-    public PostView reveal(Long userId, Long clubId, Long postId) {
+    public ClubPostView reveal(Long userId, Long clubId, Long postId) {
         ClubMember me = clubService.activeMember(clubId, userId);
         ClubPost post = getPost(clubId, postId);
 
@@ -119,7 +119,7 @@ public class ClubPostService {
     }
 
     @Transactional
-    public PostView create(Long userId, Long clubId, CreatePostRequest request) {
+    public ClubPostView create(Long userId, Long clubId, CreateClubPostRequest request) {
         ClubMember me = clubService.activeMember(clubId, userId);
         Club club = clubService.getClub(clubId);
         if (club.getStatus().isOver()) {
@@ -319,7 +319,7 @@ public class ClubPostService {
                         Collectors.mapping(r -> r.getKind().name(), Collectors.toList())));
     }
 
-    private PostView toView(ClubPost post, ViewerState viewer, Long viewerId,
+    private ClubPostView toView(ClubPost post, ViewerState viewer, Long viewerId,
                             Map<Long, User> authors, Set<Long> revealed,
                             Map<Long, List<String>> myReactions, List<ClubPost> comments) {
         boolean isAuthor = post.isAuthor(viewerId);
@@ -327,13 +327,13 @@ public class ClubPostService {
                 && !revealed.contains(post.getId());
 
         User author = authors.get(post.getUserId());
-        List<PostView> commentViews = masked
+        List<ClubPostView> commentViews = masked
                 ? List.of()
                 : comments.stream()
                         .map(c -> toView(c, viewer, viewerId, authors, revealed, myReactions, List.of()))
                         .toList();
 
-        return new PostView(
+        return new ClubPostView(
                 post.getId(),
                 post.getParentId(),
                 post.getType(),

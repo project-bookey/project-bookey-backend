@@ -10,16 +10,16 @@ public final class BookDtos {
     private BookDtos() {}
 
     public record BookSummary(
-            Long id,
+            @NotNull Long id,
             String isbn13,
-            String title,
+            @NotNull String title,
             String author,
             String publisher,
             LocalDate publishedAt,
             Integer totalPages,
             String coverUrl,
             String category,
-            String source,
+            @NotNull String source,
             /** 총 페이지 수가 없으면 클라이언트가 직접 입력을 유도해야 한다(§F1). */
             boolean needsPageInput
     ) {
@@ -33,7 +33,7 @@ public final class BookDtos {
     }
 
     public record BookDetail(
-            BookSummary book,
+            @NotNull BookSummary book,
             String description,
             RatingSummary verifiedRating,
             RatingSummary overallRating,

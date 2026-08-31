@@ -22,7 +22,7 @@ public class ClubPostController {
 
     @Operation(summary = "토론 목록 — onlyMyRange=true 면 내 진도까지만 노출")
     @GetMapping
-    public PageResponse<PostView> feed(@AuthenticationPrincipal AuthUser user,
+    public PageResponse<ClubPostView> feed(@AuthenticationPrincipal AuthUser user,
                                        @PathVariable Long clubId,
                                        @RequestParam(defaultValue = "true") boolean onlyMyRange,
                                        @RequestParam(defaultValue = "0") int page,
@@ -32,7 +32,7 @@ public class ClubPostController {
 
     @Operation(summary = "토론 상세 — 댓글 포함")
     @GetMapping("/{postId}")
-    public PostView detail(@AuthenticationPrincipal AuthUser user,
+    public ClubPostView detail(@AuthenticationPrincipal AuthUser user,
                            @PathVariable Long clubId,
                            @PathVariable Long postId) {
         return postService.detail(user.id(), clubId, postId);
@@ -40,15 +40,15 @@ public class ClubPostController {
 
     @Operation(summary = "글 · 댓글 작성")
     @PostMapping
-    public PostView create(@AuthenticationPrincipal AuthUser user,
+    public ClubPostView create(@AuthenticationPrincipal AuthUser user,
                            @PathVariable Long clubId,
-                           @Valid @RequestBody CreatePostRequest request) {
+                           @Valid @RequestBody CreateClubPostRequest request) {
         return postService.create(user.id(), clubId, request);
     }
 
     @Operation(summary = "스포일러 해제 — '그래도 볼래요'")
     @PostMapping("/{postId}/reveal")
-    public PostView reveal(@AuthenticationPrincipal AuthUser user,
+    public ClubPostView reveal(@AuthenticationPrincipal AuthUser user,
                            @PathVariable Long clubId,
                            @PathVariable Long postId) {
         return postService.reveal(user.id(), clubId, postId);

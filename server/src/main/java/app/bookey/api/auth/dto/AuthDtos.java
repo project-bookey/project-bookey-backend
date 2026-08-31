@@ -21,27 +21,27 @@ public final class AuthDtos {
     public record RefreshRequest(@NotBlank String refreshToken) {}
 
     public record TokenResponse(
-            String accessToken,
-            String refreshToken,
+            @NotNull String accessToken,
+            @NotNull String refreshToken,
             long expiresInSec,
             boolean newUser,
-            MeResponse user
+            @NotNull MeResponse user
     ) {}
 
     public record MeResponse(
-            Long id,
-            String handle,
-            String nickname,
+            @NotNull Long id,
+            @NotNull String handle,
+            @NotNull String nickname,
             String email,
             String avatarUrl,
-            String timezone,
-            String notifyTone,
+            @NotNull String timezone,
+            @NotNull String notifyTone,
             short quietHoursStart,
             short quietHoursEnd,
             short dailyNotifyCap,
             short clubNotifyCap,
             boolean allowNudge,
-            String status
+            @NotNull String status
     ) {}
 
     public record DeviceRegisterRequest(
