@@ -1,0 +1,84 @@
+spring:
+  application:
+    name: bookey-server
+  profiles:
+    default: local
+  jackson:
+    # Jackson 3 는 날짜를 기본적으로 ISO-8601 로 직렬화한다.
+    default-property-inclusion: non_null
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:55432/bookey}
+    username: ${DB_USER:bookey}
+    password: ${DB_PASSWORD:bookey_local}
+    hikari:
+      maximum-pool-size: 15
+      pool-name: bookey-pool
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: Asia/Seoul
+        default_batch_fetch_size: 100
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:56379}
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  swagger-ui:
+    path: /docs
+    tags-sorter: alpha
+    operations-sorter: alpha
+  api-docs:
+    path: /openapi.json
+
+bookey:
+  jwt:
+    secret: ${JWT_SECRET:local-dev-secret-please-change-this-to-32bytes-or-more}
+    access-token-ttl: PT1H
+    refresh-token-ttl: P30D
+    admin-token-ttl: PT30M
+  book-api:
+    kakao-key: ${KAKAO_REST_KEY:}
+    aladin-ttb-key: ${ALADIN_TTB_KEY:}
+    google-books-key: ${GOOGLE_BOOKS_KEY:}
+    cache-ttl: PT24H
+  club:
+    default-member-limit: 20
+    max-member-limit: 50
+    nudge-cooldown: PT24H
+    nudge-daily-limit: 3
+    join-code-lookup-rate-limit: 10        # 분당
+  notification:
+    daily-cap: 2
+    weekly-cap: 7
+    club-daily-cap: 3
+    default-send-hour: 20
+
+logging:
+  level:
+    app.bookey: DEBUG
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:INFO}

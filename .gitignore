@@ -1,0 +1,42 @@
+# ── OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# ── Java / Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+
+# ── Node
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# ── Expo
+.expo/
+.expo-shared/
+apps/mobile/ios/
+apps/mobile/android/
+apps/mobile/.expo/
+
+# ── env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.p8
+*.keystore
+google-services.json
+GoogleService-Info.plist
+
+# ── logs / tmp
+*.log
+logs/
+tmp/
+coverage/

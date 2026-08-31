@@ -1,0 +1,13 @@
+spring:
+  jpa:
+    properties:
+      hibernate:
+        format_sql: false
+logging:
+  level:
+    app.bookey: INFO
+    org.hibernate.SQL: WARN
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
