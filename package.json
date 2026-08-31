@@ -1,13 +1,9 @@
 {
   "name": "project-bookey",
   "private": true,
-  "packageManager": "pnpm@10.15.0",
-  "engines": { "node": ">=22" },
   "scripts": {
-    "dev:server": "cd server && ./mvnw spring-boot:run",
-    "dev:mobile": "pnpm --filter @bookey/mobile start",
-    "dev:web": "pnpm --filter @bookey/web dev",
-    "dev:admin": "pnpm --filter @bookey/admin dev",
+    "dev": "cd server && ./mvnw spring-boot:run",
+    "test": "cd server && ./mvnw test",
     "infra:up": "docker compose -f infra/docker-compose.yml up -d",
     "infra:down": "docker compose -f infra/docker-compose.yml down",
     "infra:reset": "docker compose -f infra/docker-compose.yml down -v && docker compose -f infra/docker-compose.yml up -d"

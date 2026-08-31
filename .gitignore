@@ -9,21 +9,9 @@ target/
 !.mvn/wrapper/maven-wrapper.jar
 .mvn/timing.properties
 
-# ── Node
+# ── Node (도구 스크립트용)
 node_modules/
-.pnpm-store/
-dist/
-build/
-.next/
-out/
-*.tsbuildinfo
 
-# ── Expo
-.expo/
-.expo-shared/
-apps/mobile/ios/
-apps/mobile/android/
-apps/mobile/.expo/
 
 # ── env / secrets
 .env
@@ -41,5 +29,3 @@ logs/
 tmp/
 coverage/
 
-# Expo web build
-apps/mobile/dist/
