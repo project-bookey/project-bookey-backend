@@ -70,6 +70,13 @@ jobs:
           region: ${{ env.REGION }}
           service: ${{ env.SERVICE }}
           image: ${{ env.IMAGE }}
+          flags: >-
+            --allow-unauthenticated
+            --port=8080
+            --memory=1Gi
+            --cpu=1
+            --max-instances=1
+            --startup-probe=tcpSocket.port=8080,periodSeconds=10,timeoutSeconds=10,failureThreshold=30
           env_vars: |
             SPRING_PROFILES_ACTIVE=prod
             SERVER_PORT=8080
