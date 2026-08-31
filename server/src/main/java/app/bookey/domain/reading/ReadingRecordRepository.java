@@ -57,4 +57,18 @@ public interface ReadingRecordRepository extends JpaRepository<ReadingRecord, Lo
     /** 관리자 대시보드 — 전체 사용자 기준 기간 내 완독 수. */
     @Query("SELECT COUNT(r) FROM ReadingRecord r WHERE r.finishedAt >= :since")
     long countAllFinishedSince(@Param("since") Instant since);
+
+    /** 책별 서재 담김 수 — 같은 사용자의 회차 반복은 1로 센다. */
+    @Query("""
+            SELECT r.bookId AS bookId, COUNT(DISTINCT r.userId) AS savedCount
+            FROM ReadingRecord r
+            GROUP BY r.bookId
+            ORDER BY COUNT(DISTINCT r.userId) DESC, r.bookId ASC
+            """)
+    List<BookSavedCount> countSavedPerBook(Pageable pageable);
+
+    interface BookSavedCount {
+        Long getBookId();
+        long getSavedCount();
+    }
 }

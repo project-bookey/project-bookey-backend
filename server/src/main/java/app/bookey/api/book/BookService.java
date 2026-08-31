@@ -4,12 +4,19 @@ import app.bookey.api.book.dto.BookDtos.*;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.book.*;
+import app.bookey.domain.curation.EditorPick;
+import app.bookey.domain.curation.EditorPickRepository;
+import app.bookey.domain.reading.ReadingRecordRepository;
+import app.bookey.domain.reading.ReadingRecordRepository.BookSavedCount;
 import app.bookey.domain.review.ReviewRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +29,8 @@ public class BookService {
     private final BookPageSuggestionRepository suggestionRepository;
     private final ReviewRepository reviewRepository;
     private final BookSearchService searchService;
+    private final ReadingRecordRepository readingRecordRepository;
+    private final EditorPickRepository editorPickRepository;
 
     @Transactional
     public List<BookSummary> search(String keyword, int size) {
@@ -115,6 +124,40 @@ public class BookService {
     public Book getBook(Long bookId) {
         return bookRepository.findById(bookId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
+    }
+
+    /** 인기 도서 — 서재에 담긴 수(중복 사용자 제거) 순. */
+    @Transactional(readOnly = true)
+    public List<PopularBookView> popular(int size) {
+        List<BookSavedCount> counts = readingRecordRepository.countSavedPerBook(PageRequest.of(0, size));
+        Map<Long, Book> books = bookRepository.findAllById(
+                        counts.stream().map(BookSavedCount::getBookId).toList())
+                .stream().collect(Collectors.toMap(Book::getId, b -> b));
+        return assemblePopular(counts, books);
+    }
+
+    static List<PopularBookView> assemblePopular(List<BookSavedCount> counts, Map<Long, Book> books) {
+        return counts.stream()
+                .filter(c -> books.containsKey(c.getBookId()))
+                .map(c -> new PopularBookView(BookSummary.from(books.get(c.getBookId())), c.getSavedCount()))
+                .toList();
+    }
+
+    /** 추천 도서 — 에디터 픽 순서를 따른다. */
+    @Transactional(readOnly = true)
+    public List<BookSummary> recommended(int size) {
+        List<EditorPick> picks = editorPickRepository.findAllByOrderBySortOrderAscIdAsc();
+        Map<Long, Book> books = bookRepository.findAllById(
+                        picks.stream().map(EditorPick::getBookId).toList())
+                .stream().collect(Collectors.toMap(Book::getId, b -> b));
+        return assembleRecommended(picks.stream().limit(size).toList(), books);
+    }
+
+    static List<BookSummary> assembleRecommended(List<EditorPick> picks, Map<Long, Book> books) {
+        return picks.stream()
+                .filter(p -> books.containsKey(p.getBookId()))
+                .map(p -> BookSummary.from(books.get(p.getBookId())))
+                .toList();
     }
 
     private static String emptyToNull(String value) {
