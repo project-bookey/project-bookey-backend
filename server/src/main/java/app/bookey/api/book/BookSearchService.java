@@ -60,10 +60,18 @@ public class BookSearchService {
 
         // 2) 카카오
         List<ExternalBook> external = new ArrayList<>(kakaoClient.search(keyword, size));
+        BookSource externalSource = BookSource.KAKAO;
+
+        // 3) 카카오 결과가 없으면 알라딘 폴백
+        if (external.isEmpty()) {
+            external = new ArrayList<>(aladinClient.search(keyword, size));
+            externalSource = BookSource.ALADIN;
+        }
 
         // 4) 국내 결과가 없으면 구글 폴백
         if (external.isEmpty()) {
             external = new ArrayList<>(googleClient.search(keyword, size));
+            externalSource = BookSource.GOOGLE;
         }
 
         if (external.isEmpty()) {
@@ -72,7 +80,7 @@ public class BookSearchService {
         }
 
         // 5) upsert
-        List<Book> merged = upsertAll(external);
+        List<Book> merged = upsertAll(external, externalSource);
 
         // 3) 페이지 수 없는 책은 비동기로 알라딘 보강 — 검색 응답을 블로킹하지 않는다
         metaEnricher.enrichMissingPagesAsync(idsNeedingEnrichment(merged));
@@ -119,7 +127,7 @@ public class BookSearchService {
                 .toList();
     }
 
-    private List<Book> upsertAll(List<ExternalBook> externals) {
+    private List<Book> upsertAll(List<ExternalBook> externals, BookSource source) {
         List<String> isbns = externals.stream()
                 .map(ExternalBook::isbn13)
                 .filter(i -> i != null && !i.isBlank())
@@ -136,7 +144,7 @@ public class BookSearchService {
             }
             Book book = external.isbn13() == null ? null : existing.get(external.isbn13());
             if (book == null) {
-                book = bookRepository.save(toEntity(external, inferSource(external)));
+                book = bookRepository.save(toEntity(external, source));
                 if (book.getIsbn13() != null) {
                     existing.put(book.getIsbn13(), book);
                 }
@@ -160,10 +168,6 @@ public class BookSearchService {
             }
         }
         return bookRepository.save(toEntity(external, source));
-    }
-
-    private BookSource inferSource(ExternalBook external) {
-        return external.totalPages() != null ? BookSource.GOOGLE : BookSource.KAKAO;
     }
 
     private Book toEntity(ExternalBook external, BookSource source) {
