@@ -76,8 +76,6 @@ jobs:
             DB_URL=${{ secrets.DB_URL }}
             DB_USER=${{ secrets.DB_USER }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            REDIS_HOST=${{ secrets.REDIS_HOST }}
-            REDIS_PORT=${{ secrets.REDIS_PORT }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
             KAKAO_REST_KEY=${{ secrets.KAKAO_REST_KEY }}
             ALADIN_TTB_KEY=${{ secrets.ALADIN_TTB_KEY }}
