@@ -40,3 +40,6 @@ GoogleService-Info.plist
 logs/
 tmp/
 coverage/
+
+# Expo web build
+apps/mobile/dist/
