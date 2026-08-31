@@ -2,8 +2,13 @@
 
 **읽기로 한 책을 진짜로 다 읽게 만들고, 진짜로 읽은 사람만 리뷰를 쓰는 독서 관리 앱**
 
-bookey 백엔드 API 저장소입니다. 클라이언트(모바일 앱 · 관리자 웹)는 별도 저장소에 있습니다:
-**[project-bookey-client](https://github.com/Jay-0315/project-bookey-client)**
+bookey 백엔드 API 저장소입니다. 프론트는 각각 별도 저장소에 있습니다.
+
+| 저장소 | 내용 |
+|---|---|
+| **project-bookey** (여기) | 백엔드 API · 기획서 · 인프라 |
+| **[project-bookey-app](https://github.com/Jay-0315/project-bookey-app)** | 모바일 앱 (Expo) |
+| **[project-bookey-admin](https://github.com/Jay-0315/project-bookey-admin)** | 관리자 백오피스 (Next.js) |
 
 기획서: [docs/기획서.md](docs/기획서.md)
 
@@ -63,12 +68,13 @@ curl -X POST http://localhost:8080/api/v1/auth/social \
   -d '{"provider":"DEV","token":"tester1","nickname":"테스터"}'
 ```
 
-## 클라이언트와의 계약
+## 프론트와의 계약
 
-클라이언트 저장소는 `/openapi.json` 에서 TypeScript 타입을 생성해 씁니다.
-**API 를 바꾸면 클라이언트 쪽에서 `npm run types` 를 다시 돌려야 합니다.**
+두 프론트 저장소는 `/openapi.json` 에서 TypeScript 타입을 생성해 씁니다.
+**응답 스키마를 바꾸면 양쪽에서 `npm run types` 를 다시 돌려야 합니다.**
 
-응답 스키마를 바꿀 때는 클라이언트 저장소에도 대응 PR이 필요하다는 점을 염두에 두세요.
+저장소가 나뉘어 있으니, 계약을 깨는 변경은 세 저장소에 각각 PR이 필요합니다.
+호환되지 않는 변경은 필드를 지우기 전에 새 필드를 먼저 추가하는 식으로 단계를 나누세요.
 
 ## 환경 변수
 
