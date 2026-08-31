@@ -18,8 +18,11 @@ public enum ErrorCode {
 
     // 인증
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "토큰이 유효하지 않습니다."),
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "토큰이 만료되었습니다."),
     USER_SUSPENDED(HttpStatus.FORBIDDEN, "이용이 제한된 계정입니다."),
+    EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
+    SOCIAL_ACCOUNT_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 계정에 연결된 소셜 계정입니다."),
     WRITE_BANNED(HttpStatus.FORBIDDEN, "글쓰기가 제한된 계정입니다."),
 
     // 도서 / 서재

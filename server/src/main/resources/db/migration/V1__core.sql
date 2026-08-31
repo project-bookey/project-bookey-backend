@@ -10,6 +10,7 @@ CREATE TABLE users (
     id                  BIGSERIAL PRIMARY KEY,
     handle              VARCHAR(30)  NOT NULL UNIQUE,
     email               VARCHAR(255) UNIQUE,
+    password_hash       VARCHAR(100),
     nickname            VARCHAR(50)  NOT NULL,
     avatar_url          TEXT,
     timezone            VARCHAR(64)  NOT NULL DEFAULT 'Asia/Seoul',
@@ -30,7 +31,7 @@ CREATE TABLE users (
 CREATE TABLE user_identities (
     id            BIGSERIAL PRIMARY KEY,
     user_id       BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    provider      VARCHAR(20)  NOT NULL,   -- APPLE|GOOGLE|KAKAO|DEV
+    provider      VARCHAR(20)  NOT NULL,   -- APPLE|GOOGLE|KAKAO
     provider_uid  VARCHAR(255) NOT NULL,
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
     UNIQUE (provider, provider_uid)

@@ -12,6 +12,7 @@ import app.bookey.domain.user.*;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,6 +38,7 @@ public class AuthService {
     private final HandleGenerator handleGenerator;
     private final BookeyProperties properties;
     private final List<SocialTokenVerifier> verifiers;
+    private final PasswordEncoder passwordEncoder;
 
     private Map<AuthProvider, SocialTokenVerifier> verifierMap;
 
@@ -77,6 +79,55 @@ public class AuthService {
             throw ApiException.of(ErrorCode.USER_SUSPENDED);
         }
         return issueTokens(user, newUser);
+    }
+
+    @Transactional
+    public TokenResponse emailSignup(EmailSignupRequest request) {
+        requireSignupOpen();
+        String email = normalizeEmail(request.email());
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+        User user = User.builder()
+                .handle(handleGenerator.generate(email.substring(0, email.indexOf("@"))))
+                .email(email)
+                .nickname(request.nickname().trim())
+                .build();
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        return issueTokens(userRepository.save(user), true);
+    }
+
+    @Transactional
+    public TokenResponse emailLogin(EmailLoginRequest request) {
+        String email = normalizeEmail(request.email());
+        User user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> ApiException.of(ErrorCode.INVALID_CREDENTIALS));
+        if (user.getPasswordHash() == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            throw ApiException.of(ErrorCode.INVALID_CREDENTIALS);
+        }
+        if (!user.getStatus().canLogin()) {
+            throw ApiException.of(ErrorCode.USER_SUSPENDED);
+        }
+        return issueTokens(user, false);
+    }
+
+    private static String normalizeEmail(String email) {
+        return email.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    @Transactional
+    public MeResponse linkSocial(Long userId, SocialLoginRequest request) {
+        SocialProfile profile = verifierFor(request.provider()).verify(request.token());
+        identityRepository.findByProviderAndProviderUid(profile.provider(), profile.providerUid()).ifPresent(identity -> {
+            if (!identity.getUserId().equals(userId)) {
+                throw ApiException.of(ErrorCode.SOCIAL_ACCOUNT_ALREADY_LINKED);
+            }
+        });
+        if (identityRepository.findByProviderAndProviderUid(profile.provider(), profile.providerUid()).isEmpty()) {
+            userRepository.findById(userId).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+            identityRepository.save(new UserIdentity(userId, profile.provider(), profile.providerUid()));
+        }
+        return toMe(userRepository.findById(userId).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)));
     }
 
     private void requireSignupOpen() {

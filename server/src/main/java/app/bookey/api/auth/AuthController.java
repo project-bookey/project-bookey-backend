@@ -10,7 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Auth", description = "소셜 로그인 · 토큰")
+@Tag(name = "Auth", description = "이메일·소셜 로그인 · 토큰")
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
@@ -22,6 +22,24 @@ public class AuthController {
     @PostMapping("/social")
     public TokenResponse socialLogin(@Valid @RequestBody SocialLoginRequest request) {
         return authService.socialLogin(request);
+    }
+
+    @Operation(summary = "이메일 회원가입")
+    @PostMapping("/signup")
+    public TokenResponse signup(@Valid @RequestBody EmailSignupRequest request) {
+        return authService.emailSignup(request);
+    }
+
+    @Operation(summary = "이메일 로그인")
+    @PostMapping("/login")
+    public TokenResponse login(@Valid @RequestBody EmailLoginRequest request) {
+        return authService.emailLogin(request);
+    }
+
+    @Operation(summary = "소셜 계정 연동")
+    @PostMapping("/social/link")
+    public MeResponse linkSocial(@AuthenticationPrincipal AuthUser user, @Valid @RequestBody SocialLoginRequest request) {
+        return authService.linkSocial(user.id(), request);
     }
 
     @Operation(summary = "액세스 토큰 재발급")
