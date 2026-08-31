@@ -70,6 +70,7 @@ jobs:
           region: ${{ env.REGION }}
           service: ${{ env.SERVICE }}
           image: ${{ env.IMAGE }}
+          env_vars_update_strategy: overwrite
           flags: >-
             --allow-unauthenticated
             --port=8080
