@@ -11,3 +11,6 @@ server:
   error:
     include-message: never
     include-stacktrace: never
+bookey:
+  auth:
+    dev-login-enabled: ${DEV_LOGIN_ENABLED:false}

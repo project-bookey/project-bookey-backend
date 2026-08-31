@@ -80,6 +80,7 @@ jobs:
             --startup-probe=tcpSocket.port=8080,periodSeconds=10,timeoutSeconds=10,failureThreshold=30
           env_vars: |
             SPRING_PROFILES_ACTIVE=prod
+            DEV_LOGIN_ENABLED=${{ vars.DEV_LOGIN_ENABLED || 'false' }}
             SERVER_PORT=8080
             DB_URL=${{ secrets.DB_URL }}
             DB_USER=${{ secrets.DB_USER }}

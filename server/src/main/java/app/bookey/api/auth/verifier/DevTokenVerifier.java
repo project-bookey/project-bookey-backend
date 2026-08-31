@@ -5,15 +5,15 @@ import app.bookey.api.auth.SocialTokenVerifier;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.user.AuthProvider;
-import org.springframework.context.annotation.Profile;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
  * 로컬 개발용 로그인. token 을 그대로 식별자로 사용한다.
- * prod 프로필에서는 빈 자체가 등록되지 않는다.
+ * 운영 배포에서는 DEV_LOGIN_ENABLED=true 일 때만 등록한다.
  */
 @Component
-@Profile("!prod")
+@ConditionalOnProperty(prefix = "bookey.auth", name = "dev-login-enabled", havingValue = "true")
 public class DevTokenVerifier implements SocialTokenVerifier {
 
     @Override
