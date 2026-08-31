@@ -2,17 +2,18 @@ package app.bookey.domain.banner;
 
 import app.bookey.common.support.BaseTimeEntity;
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
 /** 홈 이벤트 배너. 기간(startsAt~endsAt) 안에서만 노출한다. */
+@Getter
 @Entity
 @Table(name = "banners")
-@Getter
-@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class Banner extends BaseTimeEntity {
 
     @Id
@@ -45,6 +46,20 @@ public class Banner extends BaseTimeEntity {
 
     @Column(name = "ends_at", nullable = false)
     private Instant endsAt;
+
+    @Builder
+    private Banner(String title, String subtitle, String imageUrl, String bgColor,
+                   String linkUrl, int sortOrder, boolean enabled, Instant startsAt, Instant endsAt) {
+        this.title = title;
+        this.subtitle = subtitle;
+        this.imageUrl = imageUrl;
+        this.bgColor = bgColor;
+        this.linkUrl = linkUrl;
+        this.sortOrder = sortOrder;
+        this.enabled = enabled;
+        this.startsAt = startsAt;
+        this.endsAt = endsAt;
+    }
 
     /** 시작 포함, 종료 제외의 반열린 구간. */
     public boolean isActiveAt(Instant now) {

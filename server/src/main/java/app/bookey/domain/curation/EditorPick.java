@@ -2,15 +2,16 @@ package app.bookey.domain.curation;
 
 import app.bookey.common.support.BaseTimeEntity;
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /** 에디터 픽 — 운영자가 고른 추천 도서. book_id 당 1건. */
+@Getter
 @Entity
 @Table(name = "editor_picks")
-@Getter
-@Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class EditorPick extends BaseTimeEntity {
 
     @Id
@@ -25,6 +26,13 @@ public class EditorPick extends BaseTimeEntity {
 
     @Column(length = 200)
     private String note;
+
+    @Builder
+    private EditorPick(Long bookId, int sortOrder, String note) {
+        this.bookId = bookId;
+        this.sortOrder = sortOrder;
+        this.note = note;
+    }
 
     public void update(int sortOrder, String note) {
         this.sortOrder = sortOrder;
