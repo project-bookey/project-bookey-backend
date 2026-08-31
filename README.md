@@ -1,4 +1,4 @@
-# project-bookey — 서버
+# project-bookey-backend
 
 **읽기로 한 책을 진짜로 다 읽게 만들고, 진짜로 읽은 사람만 리뷰를 쓰는 독서 관리 앱**
 
@@ -6,7 +6,7 @@ bookey 백엔드 API 저장소입니다. 프론트는 각각 별도 저장소에
 
 | 저장소 | 내용 |
 |---|---|
-| **project-bookey** (여기) | 백엔드 API · 기획서 · 인프라 |
+| **project-bookey-backend** (여기) | 백엔드 API · 기획서 · 인프라 |
 | **[project-bookey-app](https://github.com/Jay-0315/project-bookey-app)** | 모바일 앱 (Expo) |
 | **[project-bookey-admin](https://github.com/Jay-0315/project-bookey-admin)** | 관리자 백오피스 (Next.js) |
 
@@ -23,7 +23,7 @@ bookey 백엔드 API 저장소입니다. 프론트는 각각 별도 저장소에
 ## 구성
 
 ```
-project-bookey/
+project-bookey-backend/
 ├─ server/                  Spring Boot 4.1 API (Java 21, Maven)
 │   └─ src/main/java/app/bookey/
 │       ├─ api/             서비스 API  /api/v1/**
