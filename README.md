@@ -6,11 +6,12 @@ bookey 백엔드 API 저장소입니다. 프론트는 각각 별도 저장소에
 
 | 저장소 | 내용 |
 |---|---|
-| **project-bookey-backend** (여기) | 백엔드 API · 기획서 · 인프라 |
-| **[project-bookey-app](https://github.com/Jay-0315/project-bookey-app)** | 모바일 앱 (Expo) |
-| **[project-bookey-admin](https://github.com/Jay-0315/project-bookey-admin)** | 관리자 백오피스 (Next.js) |
+| **project-bookey-backend** (여기) | 백엔드 API · 인프라 |
+| **[project-bookey-app](https://github.com/project-bookey/project-bookey-app)** | 모바일 앱 (Expo) |
+| **[project-bookey-admin](https://github.com/project-bookey/project-bookey-admin)** | 관리자 백오피스 (Next.js) |
 
-기획서: [docs/기획서.md](docs/기획서.md)
+기획서는 비공개 저장소에 있습니다: **[project-bookey-docs](https://github.com/Jay-0315/project-bookey-docs)**
+코드 주석의 `§F12`, `§8.2` 같은 표기는 그 기획서의 절 번호를 가리킵니다.
 
 ## 핵심 가치
 
@@ -31,7 +32,6 @@ project-bookey-backend/
 │       ├─ domain/          엔티티 · 리포지토리 · 순수 도메인 규칙
 │       ├─ batch/           재촉 · 체크포인트 · 알림 디스패치 스케줄러
 │       └─ common/          보안 · 에러 · 설정
-├─ docs/                    기획서 · ADR
 └─ infra/                   docker-compose
 ```
 
