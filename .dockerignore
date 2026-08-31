@@ -1,0 +1,9 @@
+.git
+.github
+infra
+server/target
+server/.mvn/wrapper/maven-wrapper.jar
+node_modules
+.DS_Store
+*.log
+.env*

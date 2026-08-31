@@ -94,3 +94,41 @@ curl -X POST http://localhost:8080/api/v1/auth/social \
 ```bash
 cd server && ./mvnw test
 ```
+
+## GCP 배포
+
+GitHub Actions가 `main` 브랜치 푸시 또는 수동 실행 시 Docker 이미지를 빌드해 Artifact Registry에 푸시하고 Cloud Run의 `bookey-backend` 서비스에 배포합니다.
+
+GitHub Repository Variables:
+
+| 키 | 예시 |
+|---|---|
+| `GCP_PROJECT_ID` | `bookey-prod` |
+| `GCP_REGION` | `asia-northeast3` |
+| `GCP_ARTIFACT_REGISTRY_REPOSITORY` | `bookey` |
+| `GCP_CLOUD_RUN_SERVICE` | `bookey-backend` |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github` |
+| `GCP_SERVICE_ACCOUNT` | `github-cloud-run@bookey-prod.iam.gserviceaccount.com` |
+
+GitHub Repository Secrets:
+
+| 키 | 설명 |
+|---|---|
+| `DB_URL` | 운영 PostgreSQL JDBC URL |
+| `DB_USER` | 운영 DB 사용자 |
+| `DB_PASSWORD` | 운영 DB 비밀번호 |
+| `REDIS_HOST` | 운영 Redis 호스트 |
+| `REDIS_PORT` | 운영 Redis 포트 |
+| `JWT_SECRET` | 32바이트 이상 운영 JWT secret |
+| `KAKAO_REST_KEY` | 카카오 책 검색 API 키 |
+| `ALADIN_TTB_KEY` | 알라딘 OpenAPI 키 |
+| `GOOGLE_BOOKS_KEY` | Google Books API 키 |
+
+Bookey 전체 Cloud Run 서비스:
+
+| 서비스 | 저장소 | 역할 |
+|---|---|---|
+| `bookey-backend` | `project-bookey-backend` | 서비스 API + 관리자 API |
+| `bookey-admin` | `project-bookey-admin` | 관리자 웹 |
+
+모바일 앱(`project-bookey-app`)은 Cloud Run 서비스가 아니라 빌드된 앱에서 `bookey-backend` URL을 바라보도록 설정합니다.
