@@ -41,7 +41,26 @@ docker compose -f infra/docker-compose.yml up -d
 
 # 2) API 서버 (http://localhost:8080, 문서 /docs)
 cd server && ./mvnw spring-boot:run
+
+# 3) 앱 — 웹 미리보기 (http://localhost:8081)
+cd apps/mobile && npm install && npx expo start --web
+
+# 4) 관리자 웹 (http://localhost:3100)
+cd apps/admin && npm install && npm run dev
 ```
+
+### 앱을 실제 폰에서 보기
+
+Xcode 없이도 확인할 수 있습니다.
+
+1. App Store / Play 스토어에서 **Expo Go** 설치
+2. 맥과 폰을 같은 Wi-Fi에 연결
+3. `cd apps/mobile && npx expo start` 후 터미널의 QR 코드를 스캔
+
+API 주소는 개발 서버 호스트에서 자동으로 유추합니다(맥의 LAN IP:8080).
+다른 주소를 쓰려면 `EXPO_PUBLIC_API_URL` 을 지정하세요.
+
+> 시뮬레이터로 띄우려면 Xcode(iOS) 또는 Android Studio(Android)가 필요합니다.
 
 기동 시 로컬 프로필에서 표본 도서 4권과 관리자 계정이 시드된다.
 

@@ -9,19 +9,20 @@ import org.springframework.data.repository.query.Param;
 import java.time.Instant;
 import java.util.Optional;
 
+/** 신고 큐. 정렬은 우선순위 → SLA 마감 순으로 Pageable 에 담아 전달한다. */
 public interface ModerationTicketRepository extends JpaRepository<ModerationTicket, Long> {
 
     Optional<ModerationTicket> findBySourceTypeAndSourceId(ModerationSource sourceType, Long sourceId);
 
-    @Query("""
-            SELECT t FROM ModerationTicket t
-            WHERE (:status IS NULL OR t.status = :status)
-              AND (:sourceType IS NULL OR t.sourceType = :sourceType)
-            ORDER BY t.priority ASC, t.slaDueAt ASC
-            """)
-    Page<ModerationTicket> search(@Param("status") ModerationStatus status,
-                                  @Param("sourceType") ModerationSource sourceType,
-                                  Pageable pageable);
+    Page<ModerationTicket> findAllBy(Pageable pageable);
+
+    Page<ModerationTicket> findAllByStatus(ModerationStatus status, Pageable pageable);
+
+    Page<ModerationTicket> findAllBySourceType(ModerationSource sourceType, Pageable pageable);
+
+    Page<ModerationTicket> findAllByStatusAndSourceType(ModerationStatus status,
+                                                        ModerationSource sourceType,
+                                                        Pageable pageable);
 
     long countByStatus(ModerationStatus status);
 

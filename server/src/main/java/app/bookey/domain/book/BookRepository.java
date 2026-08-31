@@ -24,12 +24,12 @@ public interface BookRepository extends JpaRepository<Book, Long> {
             """)
     Page<Book> searchCache(@Param("keyword") String keyword, Pageable pageable);
 
+    /** 관리자 도서 검색. 키워드가 없으면 빈 문자열로 대체해 전체를 반환한다. */
     @Query("""
             SELECT b FROM Book b
-            WHERE (:keyword IS NULL
-                   OR LOWER(b.title) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR LOWER(b.author) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                   OR b.isbn13 = :keyword)
+            WHERE LOWER(b.title) LIKE LOWER(CONCAT('%', COALESCE(:keyword, ''), '%'))
+               OR LOWER(COALESCE(b.author, '')) LIKE LOWER(CONCAT('%', COALESCE(:keyword, ''), '%'))
+               OR COALESCE(b.isbn13, '') = COALESCE(:keyword, '')
             """)
     Page<Book> searchForAdmin(@Param("keyword") String keyword, Pageable pageable);
 }

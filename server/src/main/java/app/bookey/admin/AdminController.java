@@ -82,7 +82,7 @@ public class AdminController {
                 totalReviews == 0 ? 0 : (double) verifiedReviews / totalReviews,
                 moderationService.pendingCount(),
                 moderationService.overdueCount(),
-                clubRepository.searchForAdmin(null, ClubStatus.ACTIVE,
+                clubRepository.searchForAdminByStatus(null, ClubStatus.ACTIVE,
                         PageRequest.of(0, 1)).getTotalElements(),
                 sent == 0 ? 0 : (double) converted / sent);
     }
@@ -227,9 +227,13 @@ public class AdminController {
                                        @RequestParam(required = false) ClubStatus status,
                                        @RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "20") int size) {
+        String normalized = emptyToNull(keyword);
+        var pageable = PageRequest.of(page, size);
+        var clubPage = status == null
+                ? clubRepository.searchForAdmin(normalized, pageable)
+                : clubRepository.searchForAdminByStatus(normalized, status, pageable);
         return PageResponse.of(
-                clubRepository.searchForAdmin(emptyToNull(keyword), status,
-                        PageRequest.of(page, size)),
+                clubPage,
                 club -> new ClubRow(club.getId(), club.getName(), club.getJoinCode(),
                         club.getStatus(), club.getMemberCount(), club.getMemberLimit(),
                         club.getStartsAt(), club.getEndsAt(), club.getOwnerId(),
@@ -343,8 +347,19 @@ public class AdminController {
                                             @RequestParam(required = false) String action,
                                             @RequestParam(defaultValue = "0") int page,
                                             @RequestParam(defaultValue = "50") int size) {
-        return PageResponse.of(
-                auditLogRepository.search(adminId, emptyToNull(action), PageRequest.of(page, size)),
+        String normalizedAction = emptyToNull(action);
+        var pageable = PageRequest.of(page, size);
+        var logs = adminId != null && normalizedAction != null
+                ? auditLogRepository.findAllByAdminIdAndActionOrderByCreatedAtDesc(
+                        adminId, normalizedAction, pageable)
+                : adminId != null
+                        ? auditLogRepository.findAllByAdminIdOrderByCreatedAtDesc(adminId, pageable)
+                        : normalizedAction != null
+                                ? auditLogRepository.findAllByActionOrderByCreatedAtDesc(
+                                        normalizedAction, pageable)
+                                : auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);
+
+        return PageResponse.of(logs,
                 log -> new AuditRow(log.getId(), log.getAdminId(), log.getAction(),
                         log.getTargetType(), log.getTargetId(), log.getReason(), log.getIp(),
                         log.getCreatedAt()));

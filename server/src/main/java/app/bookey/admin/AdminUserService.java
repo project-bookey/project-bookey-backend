@@ -44,7 +44,11 @@ public class AdminUserService {
     @Transactional(readOnly = true)
     public PageResponse<UserRow> search(AuthAdmin admin, String keyword, UserStatus status,
                                         int page, int size) {
-        var result = userRepository.search(emptyToNull(keyword), status, PageRequest.of(page, size));
+        String normalized = emptyToNull(keyword);
+        var pageable = PageRequest.of(page, size);
+        var result = status == null
+                ? userRepository.searchByKeyword(normalized, pageable)
+                : userRepository.searchByKeywordAndStatus(normalized, status, pageable);
         return PageResponse.of(result, user -> new UserRow(
                 user.getId(), user.getHandle(), user.getNickname(),
                 PrivacyMasker.email(user.getEmail()), user.getStatus(), user.getCreatedAt(),

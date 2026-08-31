@@ -29,11 +29,18 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
 
     @Query("""
             SELECT c FROM Club c
-            WHERE (:keyword IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
-              AND (:status IS NULL OR c.status = :status)
+            WHERE LOWER(c.name) LIKE LOWER(CONCAT('%', COALESCE(:keyword, ''), '%'))
             ORDER BY c.createdAt DESC
             """)
-    Page<Club> searchForAdmin(@Param("keyword") String keyword,
-                              @Param("status") ClubStatus status,
-                              Pageable pageable);
+    Page<Club> searchForAdmin(@Param("keyword") String keyword, Pageable pageable);
+
+    @Query("""
+            SELECT c FROM Club c
+            WHERE c.status = :status
+              AND LOWER(c.name) LIKE LOWER(CONCAT('%', COALESCE(:keyword, ''), '%'))
+            ORDER BY c.createdAt DESC
+            """)
+    Page<Club> searchForAdminByStatus(@Param("keyword") String keyword,
+                                      @Param("status") ClubStatus status,
+                                      Pageable pageable);
 }

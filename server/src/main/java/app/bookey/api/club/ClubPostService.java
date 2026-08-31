@@ -67,8 +67,9 @@ public class ClubPostService {
         ViewerState viewer = viewerState(me);
 
         // "내 진도까지만 보기"가 켜지면 앞선 앵커 글은 목록에서 아예 빼준다.
-        Integer maxAnchor = onlyMyRange && !viewer.finished() ? viewer.currentPage() : null;
-        Page<ClubPost> page = postRepository.findFeed(clubId, maxAnchor, pageable);
+        Page<ClubPost> page = onlyMyRange && !viewer.finished()
+                ? postRepository.findFeedUpTo(clubId, viewer.currentPage(), pageable)
+                : postRepository.findFeed(clubId, pageable);
 
         List<ClubPost> posts = page.getContent();
         List<Long> postIds = posts.stream().map(ClubPost::getId).toList();

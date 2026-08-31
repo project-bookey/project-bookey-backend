@@ -59,7 +59,9 @@ public class LibraryService {
 
     @Transactional(readOnly = true)
     public PageResponse<ReadingRecordView> list(Long userId, ReadingStatus status, Pageable pageable) {
-        Page<ReadingRecord> page = recordRepository.findLibrary(userId, status, pageable);
+        Page<ReadingRecord> page = status == null
+                ? recordRepository.findLibrary(userId, pageable)
+                : recordRepository.findLibraryByStatus(userId, status, pageable);
         Map<Long, Book> books = loadBooks(page.getContent());
         return PageResponse.of(page, record -> toView(record, books.get(record.getBookId())));
     }

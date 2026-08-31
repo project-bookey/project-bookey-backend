@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/*
+ * 관리자 백오피스 테마.
+ * 사용자 앱과 같은 잉크/종이 계열을 쓰되, 운영 도구답게 정보 밀도를 높였다.
+ * 본문은 세리프, 숫자·라벨은 타자기 등폭.
+ */
+@theme {
+  --color-paper: #FBFAF7;
+  --color-surface: #FFFFFF;
+  --color-surface-alt: #F2F0EA;
+  --color-ink: #14110E;
+  --color-muted: #5C574F;
+  --color-faint: #8E887E;
+  --color-line: #DAD5CB;
+  --color-accent: #1B3A5C;
+  --color-accent-soft: #E8EDF3;
+  --color-warn: #8A5A12;
+  --color-warn-soft: #F5EBDA;
+  --color-danger: #8C3323;
+  --color-danger-soft: #F5E3DF;
+
+  --font-serif: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+  --font-mono: "Courier New", Courier, ui-monospace, monospace;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 숫자·코드·라벨은 타자기체로 고정해 줄이 흔들리지 않게 한다. */
+.numeral {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--color-muted);
+}
+
+table {
+  border-collapse: collapse;
+}

@@ -15,7 +15,9 @@ import app.bookey.domain.review.ReviewRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,9 +41,21 @@ public class AdminModerationService {
     @Transactional(readOnly = true)
     public PageResponse<ModerationRow> queue(ModerationStatus status, ModerationSource sourceType,
                                              int page, int size) {
-        return PageResponse.of(
-                ticketRepository.search(status, sourceType, PageRequest.of(page, size)),
-                this::toRow);
+        // 우선순위가 높고 마감이 가까운 건을 위로 올린다.
+        var pageable = PageRequest.of(page, size,
+                Sort.by(Sort.Order.asc("priority"), Sort.Order.asc("slaDueAt")));
+
+        Page<ModerationTicket> tickets;
+        if (status != null && sourceType != null) {
+            tickets = ticketRepository.findAllByStatusAndSourceType(status, sourceType, pageable);
+        } else if (status != null) {
+            tickets = ticketRepository.findAllByStatus(status, pageable);
+        } else if (sourceType != null) {
+            tickets = ticketRepository.findAllBySourceType(sourceType, pageable);
+        } else {
+            tickets = ticketRepository.findAllBy(pageable);
+        }
+        return PageResponse.of(tickets, this::toRow);
     }
 
     private ModerationRow toRow(ModerationTicket ticket) {

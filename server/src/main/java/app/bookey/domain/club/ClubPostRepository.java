@@ -20,14 +20,22 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
             WHERE p.clubId = :clubId
               AND p.parentId IS NULL
               AND p.status = 'VISIBLE'
-              AND (:maxAnchorPage IS NULL
-                   OR p.anchorPage IS NULL
-                   OR p.anchorPage <= :maxAnchorPage)
             ORDER BY p.pinned DESC, p.createdAt DESC
             """)
-    Page<ClubPost> findFeed(@Param("clubId") Long clubId,
-                            @Param("maxAnchorPage") Integer maxAnchorPage,
-                            Pageable pageable);
+    Page<ClubPost> findFeed(@Param("clubId") Long clubId, Pageable pageable);
+
+    /** "내 진도까지만 보기" — 앵커가 없는 글과 내 진도 이하의 글만 가져온다. */
+    @Query("""
+            SELECT p FROM ClubPost p
+            WHERE p.clubId = :clubId
+              AND p.parentId IS NULL
+              AND p.status = 'VISIBLE'
+              AND (p.anchorPage IS NULL OR p.anchorPage <= :maxAnchorPage)
+            ORDER BY p.pinned DESC, p.createdAt DESC
+            """)
+    Page<ClubPost> findFeedUpTo(@Param("clubId") Long clubId,
+                                @Param("maxAnchorPage") int maxAnchorPage,
+                                Pageable pageable);
 
     List<ClubPost> findAllByParentIdAndStatusOrderByCreatedAtAsc(Long parentId, String status);
 

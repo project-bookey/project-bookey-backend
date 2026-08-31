@@ -22,12 +22,18 @@ public interface ReadingRecordRepository extends JpaRepository<ReadingRecord, Lo
     @Query("""
             SELECT r FROM ReadingRecord r
             WHERE r.userId = :userId
-              AND (:status IS NULL OR r.status = :status)
             ORDER BY COALESCE(r.lastReadAt, r.createdAt) DESC
             """)
-    Page<ReadingRecord> findLibrary(@Param("userId") Long userId,
-                                    @Param("status") ReadingStatus status,
-                                    Pageable pageable);
+    Page<ReadingRecord> findLibrary(@Param("userId") Long userId, Pageable pageable);
+
+    @Query("""
+            SELECT r FROM ReadingRecord r
+            WHERE r.userId = :userId AND r.status = :status
+            ORDER BY COALESCE(r.lastReadAt, r.createdAt) DESC
+            """)
+    Page<ReadingRecord> findLibraryByStatus(@Param("userId") Long userId,
+                                            @Param("status") ReadingStatus status,
+                                            Pageable pageable);
 
     List<ReadingRecord> findAllByUserIdAndStatus(Long userId, ReadingStatus status);
 
