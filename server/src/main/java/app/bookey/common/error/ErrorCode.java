@@ -61,7 +61,12 @@ public enum ErrorCode {
     ADMIN_TOTP_REQUIRED(HttpStatus.UNAUTHORIZED, "2단계 인증이 필요합니다."),
     ADMIN_TOTP_INVALID(HttpStatus.UNAUTHORIZED, "인증 코드가 올바르지 않습니다."),
     ADMIN_FORBIDDEN(HttpStatus.FORBIDDEN, "이 작업에 필요한 관리자 권한이 없습니다."),
-    ADMIN_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "처리 사유를 입력해야 합니다.");
+    ADMIN_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "처리 사유를 입력해야 합니다."),
+
+    // 홈 콘텐츠 (배너 / 에디터 픽)
+    BANNER_NOT_FOUND(HttpStatus.NOT_FOUND, "배너를 찾을 수 없습니다."),
+    EDITOR_PICK_NOT_FOUND(HttpStatus.NOT_FOUND, "에디터 픽을 찾을 수 없습니다."),
+    EDITOR_PICK_DUPLICATE(HttpStatus.CONFLICT, "이미 추천 목록에 있는 책입니다.");
 
     private final HttpStatus status;
     private final String message;
