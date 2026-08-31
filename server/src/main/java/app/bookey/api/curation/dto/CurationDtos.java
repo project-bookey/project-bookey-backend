@@ -2,6 +2,7 @@ package app.bookey.api.curation.dto;
 
 import app.bookey.api.book.dto.BookDtos.BookSummary;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 public final class CurationDtos {
     private CurationDtos() {}
@@ -14,7 +15,7 @@ public final class CurationDtos {
             String note
     ) {}
 
-    public record EditorPickCreateRequest(@NotNull Long bookId, int sortOrder, String note) {}
+    public record EditorPickCreateRequest(@NotNull Long bookId, int sortOrder, @Size(max = 200) String note) {}
 
-    public record EditorPickUpdateRequest(int sortOrder, String note) {}
+    public record EditorPickUpdateRequest(int sortOrder, @Size(max = 200) String note) {}
 }

@@ -3,6 +3,7 @@ package app.bookey.api.banner.dto;
 import app.bookey.domain.banner.Banner;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 
@@ -47,11 +48,11 @@ public final class BannerDtos {
 
     /** 어드민 생성/수정 요청 — 전체 필드 교체. */
     public record BannerUpsertRequest(
-            @NotBlank String title,
-            String subtitle,
-            String imageUrl,
-            String bgColor,
-            String linkUrl,
+            @NotBlank @Size(max = 100) String title,
+            @Size(max = 200) String subtitle,
+            @Size(max = 500) String imageUrl,
+            @Size(max = 20) String bgColor,
+            @Size(max = 500) String linkUrl,
             int sortOrder,
             boolean enabled,
             @NotNull Instant startsAt,
