@@ -1,7 +1,5 @@
 # 홈 콘텐츠 API (배너·인기·추천) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** 앱 홈 리디자인이 소비할 배너·인기 도서·에디터 픽 API 3종(공개/사용자용)과 그 관리용 어드민 API를 추가한다.
 
 **Architecture:** 기존 피처 레이어링(`domain/<feature>` 엔티티+리포지토리, `api/<feature>` 컨트롤러+서비스+`XxxDtos` 홀더)을 그대로 따른다. 배너는 새 피처 `banner`, 에디터 픽은 새 피처 `curation`, 인기/추천 조회는 기존 `book` 피처에 얹는다. 스키마는 Flyway `V5` 마이그레이션 하나로 추가한다(`ddl-auto: validate`이므로 엔티티와 정확히 일치해야 함).
@@ -16,7 +14,7 @@
 - DTO 스키마 이름은 앱이 OpenAPI 코드젠으로 소비한다 — record 이름 `BannerView`, `PopularBookView`는 확정 후 변경 금지.
 - 응답 계약(스펙 표 그대로): `GET /api/v1/banners` → `BannerView[]` (인증 불필요), `GET /api/v1/books/popular?size=20` → `PopularBookView[]`, `GET /api/v1/books/recommended?size=20` → `BookSummary[]` (둘은 USER 인증).
 - 어드민 관리 API는 `/admin/v1/**` 체인 — 권한은 기존 관례대로 컨트롤러에서 `admin.role().canManageOps()` 수동 체크, 실패 시 `ApiException.of(ErrorCode.ADMIN_FORBIDDEN)`.
-- `@Operation(summary)` · `@DisplayName` · 주석은 한국어. 커밋 메시지는 짧은 명령형(이 저장소 관례, 접두사 없음) + 끝에 `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>` 푸터.
+- `@Operation(summary)` · `@DisplayName` · 주석은 한국어. 커밋 메시지는 짧은 명령형.
 - 이 저장소에는 MockMvc/@SpringBootTest 선례가 없다 — 컨트롤러 테스트는 만들지 않고, 순수 로직(기간 필터·정렬·조립)을 단위 테스트한다. 최종 태스크에서 서버 기동 스모크로 라우팅을 검증한다.
 - 엔티티 애너테이션 세트(@Getter/@Builder 등)는 `domain/reading/ReadingRecord.java`의 실제 스타일과 일치시킨다 — 아래 코드와 다르면 기존 스타일이 우선.
 
