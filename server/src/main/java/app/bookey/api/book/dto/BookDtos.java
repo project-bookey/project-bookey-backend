@@ -37,7 +37,9 @@ public final class BookDtos {
             String description,
             RatingSummary verifiedRating,
             RatingSummary overallRating,
-            long verifiedReviewCount
+            long verifiedReviewCount,
+            boolean liked,
+            long likeCount
     ) {}
 
     public record RatingSummary(Double average, long count) {
@@ -63,4 +65,7 @@ public final class BookDtos {
 
     /** 인기 도서 — 서재에 담긴 수 순. */
     public record PopularBookView(@NotNull BookSummary book, long savedCount) {}
+
+    /** 좋아요 토글 결과. */
+    public record BookLikeView(boolean liked, long likeCount) {}
 }

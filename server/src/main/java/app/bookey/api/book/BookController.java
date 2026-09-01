@@ -37,8 +37,14 @@ public class BookController {
 
     @Operation(summary = "도서 상세 — 검증 평점과 전체 평점을 분리해 제공")
     @GetMapping("/{bookId}")
-    public BookDetail detail(@PathVariable Long bookId) {
-        return bookService.detail(bookId);
+    public BookDetail detail(@AuthenticationPrincipal AuthUser user, @PathVariable Long bookId) {
+        return bookService.detail(user.id(), bookId);
+    }
+
+    @Operation(summary = "좋아요 토글")
+    @PostMapping("/{bookId}/like")
+    public BookLikeView like(@AuthenticationPrincipal AuthUser user, @PathVariable Long bookId) {
+        return bookService.toggleLike(user.id(), bookId);
     }
 
     @Operation(summary = "도서 수동 등록 — 독립출판·해외서 등")

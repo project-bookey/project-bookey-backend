@@ -44,7 +44,8 @@ public class PublicController {
     @Operation(summary = "도서 공개 정보 — 검증 평점 포함")
     @GetMapping("/books/{bookId}")
     public BookDetail book(@PathVariable Long bookId) {
-        return bookService.detail(bookId);
+        // 비회원 공개 API — 로그인 사용자가 없으므로 liked 는 항상 false.
+        return bookService.detail(null, bookId);
     }
 
     @Operation(summary = "도서의 검증 리뷰")

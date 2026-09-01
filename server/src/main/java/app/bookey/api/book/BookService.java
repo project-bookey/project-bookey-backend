@@ -6,6 +6,8 @@ import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.book.*;
 import app.bookey.domain.curation.EditorPick;
 import app.bookey.domain.curation.EditorPickRepository;
+import app.bookey.domain.like.BookLike;
+import app.bookey.domain.like.BookLikeRepository;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingRecordRepository.BookSavedCount;
 import app.bookey.domain.review.ReviewRepository;
@@ -31,6 +33,7 @@ public class BookService {
     private final BookSearchService searchService;
     private final ReadingRecordRepository readingRecordRepository;
     private final EditorPickRepository editorPickRepository;
+    private final BookLikeRepository bookLikeRepository;
 
     @Transactional
     public List<BookSummary> search(String keyword, int size) {
@@ -47,14 +50,32 @@ public class BookService {
     }
 
     @Transactional(readOnly = true)
-    public BookDetail detail(Long bookId) {
+    public BookDetail detail(Long userId, Long bookId) {
         Book book = getBook(bookId);
         return new BookDetail(
                 BookSummary.from(book),
                 book.getDescription(),
                 toRating(reviewRepository.verifiedRating(bookId)),
                 toRating(reviewRepository.overallRating(bookId)),
-                toRating(reviewRepository.verifiedRating(bookId)).count());
+                toRating(reviewRepository.verifiedRating(bookId)).count(),
+                bookLikeRepository.existsByUserIdAndBookId(userId, bookId),
+                bookLikeRepository.countByBookId(bookId));
+    }
+
+    /** 좋아요 토글 — 있으면 해제, 없으면 등록. */
+    @Transactional
+    public BookLikeView toggleLike(Long userId, Long bookId) {
+        getBook(bookId);
+        var existing = bookLikeRepository.findByUserIdAndBookId(userId, bookId);
+        boolean liked;
+        if (existing.isPresent()) {
+            bookLikeRepository.delete(existing.get());
+            liked = false;
+        } else {
+            bookLikeRepository.save(BookLike.builder().userId(userId).bookId(bookId).build());
+            liked = true;
+        }
+        return new BookLikeView(liked, bookLikeRepository.countByBookId(bookId));
     }
 
     private RatingSummary toRating(List<Object[]> rows) {
