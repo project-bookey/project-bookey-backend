@@ -11,7 +11,8 @@ import java.time.Instant;
 public final class ChallengeDtos {
     private ChallengeDtos() {}
 
-    public record CreateChallengeRequest(@NotNull Long readingRecordId, @Min(600) int budgetSec) {}
+    /** readingRecordId 또는 bookId 중 하나 — 둘 다 null이면 서비스에서 CHALLENGE_INVALID_RECORD. */
+    public record CreateChallengeRequest(Long readingRecordId, Long bookId, @Min(600) int budgetSec) {}
 
     public record ChallengeProgressRequest(@Min(0) int currentPage) {}
 

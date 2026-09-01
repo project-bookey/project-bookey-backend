@@ -5,6 +5,7 @@ import app.bookey.api.challenge.dto.ChallengeDtos.ChallengeProgressRequest;
 import app.bookey.api.challenge.dto.ChallengeDtos.ChallengeView;
 import app.bookey.api.challenge.dto.ChallengeDtos.CreateChallengeRequest;
 import app.bookey.api.library.LibraryService;
+import app.bookey.api.library.dto.LibraryDtos.AddBookRequest;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.book.Book;
@@ -33,7 +34,7 @@ public class ChallengeService {
 
     @Transactional
     public ChallengeView create(Long userId, CreateChallengeRequest req) {
-        ReadingRecord record = ownedRecord(userId, req.readingRecordId());
+        ReadingRecord record = resolveRecord(userId, req);
         if (record.getStatus() != ReadingStatus.READING) {
             throw ApiException.of(ErrorCode.CHALLENGE_INVALID_RECORD);
         }
@@ -142,6 +143,39 @@ public class ChallengeService {
     private ReadingRecord ownedRecord(Long userId, Long recordId) {
         return recordRepository.findById(recordId)
                 .filter(r -> r.getUserId().equals(userId))
+                .orElseThrow(() -> ApiException.of(ErrorCode.RECORD_NOT_FOUND));
+    }
+
+    /** readingRecordId 또는 bookId 중 하나로 대상 기록을 해석한다 — 둘 다 없으면 거부. */
+    private ReadingRecord resolveRecord(Long userId, CreateChallengeRequest req) {
+        if (req.readingRecordId() != null) {
+            return ownedRecord(userId, req.readingRecordId());
+        }
+        if (req.bookId() != null) {
+            return resolveByBook(userId, req.bookId());
+        }
+        throw ApiException.of(ErrorCode.CHALLENGE_INVALID_RECORD);
+    }
+
+    /** bookId로 내 최신 기록을 찾아 READING으로 전환하거나, 없으면 서재에 새로 담는다. */
+    private ReadingRecord resolveByBook(Long userId, Long bookId) {
+        return recordRepository.findFirstByUserIdAndBookIdOrderByRoundDesc(userId, bookId)
+                .map(this::startOrValidate)
+                .orElseGet(() -> addToLibraryReading(userId, bookId));
+    }
+
+    private ReadingRecord startOrValidate(ReadingRecord record) {
+        switch (record.getStatus()) {
+            case READING -> { }
+            case WANT_TO_READ, PAUSED -> record.startReading(Instant.now());
+            case FINISHED, ABANDONED -> throw ApiException.of(ErrorCode.CHALLENGE_INVALID_RECORD);
+        }
+        return record;
+    }
+
+    private ReadingRecord addToLibraryReading(Long userId, Long bookId) {
+        libraryService.addBook(userId, new AddBookRequest(bookId, ReadingStatus.READING, null, null, null));
+        return recordRepository.findFirstByUserIdAndBookIdOrderByRoundDesc(userId, bookId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.RECORD_NOT_FOUND));
     }
 
