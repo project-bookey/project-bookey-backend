@@ -29,3 +29,6 @@ logs/
 tmp/
 coverage/
 
+# ── 로컬 작업 노트 (커밋 금지)
+.superpowers/
+
