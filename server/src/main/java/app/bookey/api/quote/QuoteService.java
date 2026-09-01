@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -78,15 +79,17 @@ public class QuoteService {
     @Transactional(readOnly = true)
     public PageResponse<BookQuoteView> myQuotes(Long userId, Pageable pageable) {
         Page<BookQuote> page = quoteRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(userId, pageable);
-        return toPageResponse(page, userId);
+        return toPageResponse(page, userId, Map.of());
     }
 
     /** 책별 오려둔 문장 목록 — 최신순. */
     @Transactional(readOnly = true)
     public PageResponse<BookQuoteView> byBook(Long userId, Long bookId, Pageable pageable) {
-        bookRepository.findById(bookId).orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
+        Book book = bookRepository.findById(bookId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
         Page<BookQuote> page = quoteRepository.findAllByBookIdOrderByCreatedAtDescIdDesc(bookId, pageable);
-        return toPageResponse(page, userId);
+        // 존재 확인에서 이미 가져온 책을 시드로 넘겨 loadBooks의 재조회를 피한다(페이지당 쿼리 5개 고정).
+        return toPageResponse(page, userId, Map.of(book.getId(), book));
     }
 
     @Transactional
@@ -121,9 +124,10 @@ public class QuoteService {
                 .orElseThrow(() -> ApiException.of(ErrorCode.QUOTE_NOT_FOUND));
     }
 
-    private PageResponse<BookQuoteView> toPageResponse(Page<BookQuote> page, Long userId) {
+    private PageResponse<BookQuoteView> toPageResponse(Page<BookQuote> page, Long userId,
+                                                       Map<Long, Book> knownBooks) {
         List<BookQuote> quotes = page.getContent();
-        Map<Long, Book> books = loadBooks(quotes);
+        Map<Long, Book> books = loadBooks(quotes, knownBooks);
         Map<Long, User> authors = loadAuthors(quotes);
         Map<Long, Long> agreeCounts = loadAgreeCounts(quotes);
         Set<Long> myAgreed = loadMyAgreed(userId, quotes);
@@ -132,13 +136,17 @@ public class QuoteService {
                 page.getTotalElements(), page.getTotalPages(), page.hasNext());
     }
 
-    private Map<Long, Book> loadBooks(List<BookQuote> quotes) {
-        List<Long> ids = quotes.stream().map(BookQuote::getBookId).distinct().toList();
+    /** knownBooks에 이미 있는 책은 재조회하지 않는다(byBook 경로 — 존재 확인 때 가져온 책을 재사용). */
+    private Map<Long, Book> loadBooks(List<BookQuote> quotes, Map<Long, Book> knownBooks) {
+        List<Long> ids = quotes.stream().map(BookQuote::getBookId).distinct()
+                .filter(id -> !knownBooks.containsKey(id))
+                .toList();
         if (ids.isEmpty()) {
-            return Map.of();
+            return knownBooks;
         }
-        return bookRepository.findAllById(ids).stream()
-                .collect(Collectors.toMap(Book::getId, Function.identity()));
+        Map<Long, Book> books = new HashMap<>(knownBooks);
+        bookRepository.findAllById(ids).forEach(book -> books.put(book.getId(), book));
+        return books;
     }
 
     private Map<Long, User> loadAuthors(List<BookQuote> quotes) {
