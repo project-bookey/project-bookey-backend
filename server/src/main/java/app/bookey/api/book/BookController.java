@@ -1,12 +1,16 @@
 package app.bookey.api.book;
 
 import app.bookey.api.book.dto.BookDtos.*;
+import app.bookey.api.quote.QuoteService;
+import app.bookey.api.quote.dto.QuoteDtos.BookQuoteView;
 import app.bookey.common.security.AuthUser;
+import app.bookey.common.support.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +25,7 @@ import java.util.List;
 public class BookController {
 
     private final BookService bookService;
+    private final QuoteService quoteService;
 
     @Operation(summary = "도서 검색 (캐시 → 카카오 → 알라딘 보강 → 구글 폴백)")
     @GetMapping
@@ -71,5 +76,14 @@ public class BookController {
     @GetMapping("/recommended")
     public List<BookSummary> recommended(@RequestParam(defaultValue = "20") int size) {
         return bookService.recommended(size);
+    }
+
+    @Operation(summary = "책별 오려둔 문장 목록 — 최신순")
+    @GetMapping("/{bookId}/quotes")
+    public PageResponse<BookQuoteView> quotes(@AuthenticationPrincipal AuthUser user,
+                                              @PathVariable Long bookId,
+                                              @RequestParam(defaultValue = "0") int page,
+                                              @RequestParam(defaultValue = "20") int size) {
+        return quoteService.byBook(user.id(), bookId, PageRequest.of(page, size));
     }
 }
