@@ -56,7 +56,9 @@ public class ChallengeService {
         Instant now = Instant.now();
         return challengeRepository.findAllByUserIdAndStatusOrderByCreatedAtDesc(userId, ChallengeStatus.ACTIVE)
                 .stream()
-                .map(c -> { lazyExpire(c, now); return view(c, ownedRecord(userId, c.getReadingRecordId()), now); })
+                .map(c -> { lazyExpire(c, now); return c; })
+                .filter(c -> c.getStatus() == ChallengeStatus.ACTIVE)
+                .map(c -> view(c, ownedRecord(userId, c.getReadingRecordId()), now))
                 .toList();
     }
 
@@ -86,10 +88,13 @@ public class ChallengeService {
         if (c.getStatus() != ChallengeStatus.ACTIVE) {
             throw ApiException.of(ErrorCode.CHALLENGE_NOT_ACTIVE);
         }
-        // 서재 진도 갱신 재사용
-        libraryService.updateProgress(userId, c.getReadingRecordId(), req.currentPage());
+        // 총쪽수 초과 입력은 총쪽수로 클램프 — 스펙: 도달이면 성공
         ReadingRecord record = ownedRecord(userId, c.getReadingRecordId());
-        if (req.currentPage() >= totalPages(record)) {
+        int total = totalPages(record);
+        int page = Math.min(req.currentPage(), total);
+        // 서재 진도 갱신 재사용
+        libraryService.updateProgress(userId, c.getReadingRecordId(), page);
+        if (page >= total) {
             c.succeed(now);
             libraryService.finish(userId, c.getReadingRecordId(), null); // 완독 처리 재사용
             record = ownedRecord(userId, c.getReadingRecordId());
