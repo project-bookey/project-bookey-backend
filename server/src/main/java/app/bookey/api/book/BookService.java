@@ -8,6 +8,7 @@ import app.bookey.domain.curation.EditorPick;
 import app.bookey.domain.curation.EditorPickRepository;
 import app.bookey.domain.like.BookLike;
 import app.bookey.domain.like.BookLikeRepository;
+import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingRecordRepository.BookSavedCount;
 import app.bookey.domain.review.ReviewRepository;
@@ -52,6 +53,10 @@ public class BookService {
     @Transactional(readOnly = true)
     public BookDetail detail(Long userId, Long bookId) {
         Book book = getBook(bookId);
+        Long myRecordId = userId == null ? null
+                : readingRecordRepository.findFirstByUserIdAndBookIdOrderByRoundDesc(userId, bookId)
+                        .map(ReadingRecord::getId)
+                        .orElse(null);
         return new BookDetail(
                 BookSummary.from(book),
                 book.getDescription(),
@@ -59,7 +64,8 @@ public class BookService {
                 toRating(reviewRepository.overallRating(bookId)),
                 toRating(reviewRepository.verifiedRating(bookId)).count(),
                 bookLikeRepository.existsByUserIdAndBookId(userId, bookId),
-                bookLikeRepository.countByBookId(bookId));
+                bookLikeRepository.countByBookId(bookId),
+                myRecordId);
     }
 
     /** 좋아요 토글 — 있으면 해제, 없으면 등록. */

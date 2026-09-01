@@ -39,7 +39,8 @@ public final class BookDtos {
             RatingSummary overallRating,
             long verifiedReviewCount,
             boolean liked,
-            long likeCount
+            long likeCount,
+            Long myRecordId
     ) {}
 
     public record RatingSummary(Double average, long count) {

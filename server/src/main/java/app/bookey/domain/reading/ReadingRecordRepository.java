@@ -17,6 +17,8 @@ public interface ReadingRecordRepository extends JpaRepository<ReadingRecord, Lo
 
     List<ReadingRecord> findAllByUserIdAndBookIdOrderByRoundDesc(Long userId, Long bookId);
 
+    Optional<ReadingRecord> findFirstByUserIdAndBookIdOrderByRoundDesc(Long userId, Long bookId);
+
     List<ReadingRecord> findAllByIdIn(Collection<Long> ids);
 
     @Query("""
