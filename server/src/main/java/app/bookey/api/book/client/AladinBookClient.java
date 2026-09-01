@@ -8,6 +8,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.time.LocalDate;
 import java.util.Optional;
 
@@ -20,6 +22,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class AladinBookClient {
 
+    private static final String SEARCH_URL = "https://www.aladin.co.kr/ttb/api/ItemSearch.aspx";
     private static final String LOOKUP_URL = "https://www.aladin.co.kr/ttb/api/ItemLookUp.aspx";
 
     private final RestClient bookApiRestClient;
@@ -75,6 +78,62 @@ public class AladinBookClient {
             log.warn("Aladin lookup failed for {}: {}", isbn13, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    public List<ExternalBook> search(String keyword, int size) {
+        if (!isConfigured() || keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+        try {
+            String uri = UriComponentsBuilder.fromUriString(SEARCH_URL)
+                    .queryParam("ttbkey", properties.bookApi().aladinTtbKey())
+                    .queryParam("Query", keyword)
+                    .queryParam("QueryType", "Keyword")
+                    .queryParam("MaxResults", Math.min(size, 50))
+                    .queryParam("start", 1)
+                    .queryParam("SearchTarget", "Book")
+                    .queryParam("output", "js")
+                    .queryParam("Version", "20131101")
+                    .queryParam("OptResult", "packing")
+                    .build()
+                    .encode()
+                    .toUriString();
+
+            JsonNode response = bookApiRestClient.get().uri(uri).retrieve().body(JsonNode.class);
+            if (response == null) {
+                return List.of();
+            }
+            List<ExternalBook> results = new ArrayList<>();
+            for (JsonNode item : response.path("item")) {
+                ExternalBook book = toExternalBook(item);
+                if (book.title() != null && !book.title().isBlank()) {
+                    results.add(book);
+                }
+            }
+            return results;
+        } catch (Exception e) {
+            log.warn("Aladin search failed: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private ExternalBook toExternalBook(JsonNode item) {
+        Integer itemPage = item.path("subInfo").path("itemPage").isNumber()
+                ? item.path("subInfo").path("itemPage").asInt()
+                : null;
+
+        return new ExternalBook(
+                emptyToNull(item.path("isbn13").asText(null)),
+                item.path("title").asText(null),
+                null,
+                item.path("author").asText(null),
+                null,
+                item.path("publisher").asText(null),
+                parseDate(item.path("pubDate").asText(null)),
+                itemPage != null && itemPage > 0 ? itemPage : null,
+                emptyToNull(item.path("cover").asText(null)),
+                emptyToNull(item.path("categoryName").asText(null)),
+                emptyToNull(item.path("description").asText(null)));
     }
 
     private static LocalDate parseDate(String value) {
