@@ -72,7 +72,10 @@ public enum ErrorCode {
     CHALLENGE_ALREADY_ACTIVE(HttpStatus.CONFLICT, "이 책에는 진행 중인 챌린지가 이미 있습니다."),
     CHALLENGE_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "이미 종료된 챌린지입니다."),
     CHALLENGE_REQUIRES_PAGES(HttpStatus.BAD_REQUEST, "총 쪽수가 있는 책에만 챌린지를 걸 수 있습니다."),
-    CHALLENGE_INVALID_RECORD(HttpStatus.BAD_REQUEST, "읽는 중인 책에만 챌린지를 걸 수 있습니다.");
+    CHALLENGE_INVALID_RECORD(HttpStatus.BAD_REQUEST, "읽는 중인 책에만 챌린지를 걸 수 있습니다."),
+
+    // 오려둔 문장(밑줄)
+    QUOTE_NOT_FOUND(HttpStatus.NOT_FOUND, "문장을 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String message;
