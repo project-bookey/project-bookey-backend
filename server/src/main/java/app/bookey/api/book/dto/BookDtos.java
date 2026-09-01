@@ -60,4 +60,7 @@ public final class BookDtos {
     public record PageSuggestionRequest(@NotNull @Min(1) @Max(20000) Integer totalPages) {}
 
     public record PageSuggestionResponse(Integer appliedTotalPages, int votes, boolean applied) {}
+
+    /** 인기 도서 — 서재에 담긴 수 순. */
+    public record PopularBookView(@NotNull BookSummary book, long savedCount) {}
 }

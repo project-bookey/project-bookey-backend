@@ -75,6 +75,7 @@ public class SecurityConfig {
                         .requestMatchers("/docs/**", "/swagger-ui/**", "/openapi.json").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // 공개 웹(SEO)용 읽기 전용 엔드포인트
+                        .requestMatchers(HttpMethod.GET, "/api/v1/banners").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
@@ -101,7 +102,7 @@ public class SecurityConfig {
     private CorsConfigurationSource adminCorsSource() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(List.of("http://localhost:3100", "https://admin.bookey.app"));
-        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

@@ -59,10 +59,8 @@ public class ReviewService {
         if (reviewRepository.existsByUserIdAndReadingRecordId(userId, record.getId())) {
             throw ApiException.of(ErrorCode.REVIEW_ALREADY_EXISTS);
         }
-        // 별점은 완독 후에만 (§F6). 부분 검증은 "중간 감상"으로 평균에 반영하지 않는다.
-        if (request.rating() != null && record.getStatus() != ReadingStatus.FINISHED) {
-            throw ApiException.of(ErrorCode.REVIEW_REQUIRES_FINISH);
-        }
+        // 별점은 완독 여부와 무관하게 허용한다 (2026-09-01 정책 변경).
+        // 신뢰 평점(검증 평점)은 VERIFIED_FULL 리뷰만 집계하므로 오염되지 않는다.
         Book book = bookRepository.findById(record.getBookId())
                 .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
 
@@ -89,13 +87,6 @@ public class ReviewService {
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         if (!review.getUserId().equals(userId)) {
             throw ApiException.of(ErrorCode.FORBIDDEN);
-        }
-        if (request.rating() != null && review.getReadingRecordId() != null) {
-            ReadingRecord record = recordRepository.findById(review.getReadingRecordId())
-                    .orElseThrow(() -> ApiException.of(ErrorCode.RECORD_NOT_FOUND));
-            if (record.getStatus() != ReadingStatus.FINISHED) {
-                throw ApiException.of(ErrorCode.REVIEW_REQUIRES_FINISH);
-            }
         }
         review.edit(request.body(), request.rating(),
                 request.tags() == null ? null : request.tags().toArray(String[]::new),

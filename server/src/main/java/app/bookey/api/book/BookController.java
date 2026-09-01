@@ -54,4 +54,16 @@ public class BookController {
                                                @Valid @RequestBody PageSuggestionRequest request) {
         return bookService.suggestTotalPages(user.id(), bookId, request.totalPages());
     }
+
+    @Operation(summary = "인기 도서 — 서재에 담긴 수 순")
+    @GetMapping("/popular")
+    public List<PopularBookView> popular(@RequestParam(defaultValue = "20") int size) {
+        return bookService.popular(size);
+    }
+
+    @Operation(summary = "추천 도서 — 에디터 픽")
+    @GetMapping("/recommended")
+    public List<BookSummary> recommended(@RequestParam(defaultValue = "20") int size) {
+        return bookService.recommended(size);
+    }
 }
