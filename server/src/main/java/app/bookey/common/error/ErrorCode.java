@@ -38,7 +38,6 @@ public enum ErrorCode {
     INVALID_PAGE_RANGE(HttpStatus.BAD_REQUEST, "페이지 범위가 올바르지 않습니다."),
 
     // 리뷰
-    REVIEW_REQUIRES_FINISH(HttpStatus.BAD_REQUEST, "별점은 완독 후에만 남길 수 있습니다."),
     REVIEW_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 작성한 리뷰가 있습니다."),
 
     // 모임
