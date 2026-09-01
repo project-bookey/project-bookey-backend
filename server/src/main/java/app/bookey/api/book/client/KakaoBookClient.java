@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -35,12 +36,12 @@ public class KakaoBookClient {
             return List.of();
         }
         try {
-            String uri = UriComponentsBuilder.fromUriString(SEARCH_URL)
+            URI uri = UriComponentsBuilder.fromUriString(SEARCH_URL)
                     .queryParam("query", keyword)
                     .queryParam("size", Math.min(size, 50))
                     .build()
                     .encode()
-                    .toUriString();
+                    .toUri();
 
             JsonNode response = bookApiRestClient.get()
                     .uri(uri)
