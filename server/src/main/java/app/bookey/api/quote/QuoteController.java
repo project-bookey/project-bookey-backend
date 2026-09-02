@@ -35,6 +35,12 @@ public class QuoteController {
         return quoteService.myQuotes(user.id(), PageRequest.of(page, size));
     }
 
+    @Operation(summary = "문장 한 건 — 상세 진입용")
+    @GetMapping("/{quoteId}")
+    public BookQuoteView get(@AuthenticationPrincipal AuthUser user, @PathVariable Long quoteId) {
+        return quoteService.get(user.id(), quoteId);
+    }
+
     @Operation(summary = "문장 삭제 — 본인만")
     @DeleteMapping("/{quoteId}")
     public ResponseEntity<Void> delete(@AuthenticationPrincipal AuthUser user,

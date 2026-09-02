@@ -58,7 +58,7 @@ class QuoteServiceTest {
         Set<Long> myAgreed = Set.of(1L);
 
         List<BookQuoteView> views = QuoteService.assembleViews(
-                List.of(quote), 10L, books, authors, agreeCounts, myAgreed);
+                List.of(quote), 10L, books, authors, agreeCounts, myAgreed, Map.of());
 
         BookQuoteView view = views.get(0);
         assertThat(view.agreeCount()).isEqualTo(3L);
@@ -74,7 +74,7 @@ class QuoteServiceTest {
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
         List<BookQuoteView> views = QuoteService.assembleViews(
-                List.of(quote), 20L, books, authors, Map.of(), Set.of());
+                List.of(quote), 20L, books, authors, Map.of(), Set.of(), Map.of());
 
         BookQuoteView view = views.get(0);
         assertThat(view.agreeCount()).isZero();
@@ -89,7 +89,7 @@ class QuoteServiceTest {
         Map<Long, Book> books = Map.of(100L, book(100L, "책"));
 
         List<BookQuoteView> views = QuoteService.assembleViews(
-                List.of(quote), 1L, books, Map.of(), Map.of(), Set.of());
+                List.of(quote), 1L, books, Map.of(), Map.of(), Set.of(), Map.of());
 
         BookQuoteView view = views.get(0);
         assertThat(view.authorNickname()).isEqualTo("알 수 없음");
@@ -106,8 +106,23 @@ class QuoteServiceTest {
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
         List<BookQuoteView> views = QuoteService.assembleViews(
-                List.of(first, second, third), 10L, books, authors, Map.of(), Set.of());
+                List.of(first, second, third), 10L, books, authors, Map.of(), Set.of(), Map.of());
 
         assertThat(views).extracting(BookQuoteView::id).containsExactly(5L, 3L, 9L);
+    }
+
+    @Test
+    @DisplayName("commentCount를 배치 맵으로 매핑하고, 없으면 0이다")
+    void mapsCommentCount() {
+        BookQuote withComments = quote(1L, 10L, 100L);
+        BookQuote without = quote(2L, 10L, 100L);
+        Map<Long, Book> books = Map.of(100L, book(100L, "책"));
+        Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
+
+        List<BookQuoteView> views = QuoteService.assembleViews(
+                List.of(withComments, without), 10L, books, authors, Map.of(), Set.of(), Map.of(1L, 4L));
+
+        assertThat(views.get(0).commentCount()).isEqualTo(4L);
+        assertThat(views.get(1).commentCount()).isZero();
     }
 }
