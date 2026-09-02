@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,8 +34,10 @@ public class GoogleBooksClient {
                 builder.queryParam("key", key);
             }
 
+            URI uri = builder.build().encode().toUri();
+
             JsonNode response = bookApiRestClient.get()
-                    .uri(builder.build().encode().toUriString())
+                    .uri(uri)
                     .retrieve()
                     .body(JsonNode.class);
 

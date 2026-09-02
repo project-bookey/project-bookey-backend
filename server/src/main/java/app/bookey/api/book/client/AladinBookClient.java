@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalDate;
@@ -38,7 +39,7 @@ public class AladinBookClient {
             return Optional.empty();
         }
         try {
-            String uri = UriComponentsBuilder.fromUriString(LOOKUP_URL)
+            URI uri = UriComponentsBuilder.fromUriString(LOOKUP_URL)
                     .queryParam("ttbkey", properties.bookApi().aladinTtbKey())
                     .queryParam("itemIdType", "ISBN13")
                     .queryParam("ItemId", isbn13)
@@ -47,7 +48,7 @@ public class AladinBookClient {
                     .queryParam("OptResult", "packing")
                     .build()
                     .encode()
-                    .toUriString();
+                    .toUri();
 
             JsonNode response = bookApiRestClient.get().uri(uri).retrieve().body(JsonNode.class);
             if (response == null) {
@@ -85,7 +86,7 @@ public class AladinBookClient {
             return List.of();
         }
         try {
-            String uri = UriComponentsBuilder.fromUriString(SEARCH_URL)
+            URI uri = UriComponentsBuilder.fromUriString(SEARCH_URL)
                     .queryParam("ttbkey", properties.bookApi().aladinTtbKey())
                     .queryParam("Query", keyword)
                     .queryParam("QueryType", "Keyword")
@@ -97,7 +98,7 @@ public class AladinBookClient {
                     .queryParam("OptResult", "packing")
                     .build()
                     .encode()
-                    .toUriString();
+                    .toUri();
 
             JsonNode response = bookApiRestClient.get().uri(uri).retrieve().body(JsonNode.class);
             if (response == null) {
