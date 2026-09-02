@@ -12,6 +12,8 @@ import app.bookey.domain.quote.BookQuoteRepository;
 import app.bookey.domain.quote.QuoteAgree;
 import app.bookey.domain.quote.QuoteAgreeRepository;
 import app.bookey.domain.quote.QuoteAgreeRepository.AgreeCount;
+import app.bookey.domain.quote.QuoteCommentRepository;
+import app.bookey.domain.quote.QuoteCommentRepository.CommentCount;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.user.User;
@@ -41,6 +43,7 @@ public class QuoteService {
 
     private final BookQuoteRepository quoteRepository;
     private final QuoteAgreeRepository agreeRepository;
+    private final QuoteCommentRepository commentRepository;
     private final BookRepository bookRepository;
     private final ReadingRecordRepository recordRepository;
     private final UserRepository userRepository;
@@ -71,8 +74,17 @@ public class QuoteService {
         List<BookQuoteView> views = assembleViews(List.of(quote), userId,
                 Map.of(book.getId(), book),
                 author == null ? Map.of() : Map.of(userId, author),
-                Map.of(), Set.of());
+                Map.of(), Set.of(), Map.of());
         return views.get(0);
+    }
+
+    /** 밑줄 한 건 — 상세 진입·새로고침·딥링크. */
+    @Transactional(readOnly = true)
+    public BookQuoteView get(Long userId, Long quoteId) {
+        List<BookQuote> quotes = List.of(getQuote(quoteId));
+        return assembleViews(quotes, userId,
+                loadBooks(quotes, Map.of()), loadAuthors(quotes),
+                loadAgreeCounts(quotes), loadMyAgreed(userId, quotes), loadCommentCounts(quotes)).get(0);
     }
 
     /** 내가 오려둔 문장 목록 — 최신순. */
@@ -131,7 +143,8 @@ public class QuoteService {
         Map<Long, User> authors = loadAuthors(quotes);
         Map<Long, Long> agreeCounts = loadAgreeCounts(quotes);
         Set<Long> myAgreed = loadMyAgreed(userId, quotes);
-        List<BookQuoteView> views = assembleViews(quotes, userId, books, authors, agreeCounts, myAgreed);
+        Map<Long, Long> commentCounts = loadCommentCounts(quotes);
+        List<BookQuoteView> views = assembleViews(quotes, userId, books, authors, agreeCounts, myAgreed, commentCounts);
         return new PageResponse<>(views, page.getNumber(), page.getSize(),
                 page.getTotalElements(), page.getTotalPages(), page.hasNext());
     }
@@ -177,13 +190,23 @@ public class QuoteService {
                 .collect(Collectors.toSet());
     }
 
+    private Map<Long, Long> loadCommentCounts(List<BookQuote> quotes) {
+        List<Long> ids = quotes.stream().map(BookQuote::getId).toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return commentRepository.countPerQuote(ids).stream()
+                .collect(Collectors.toMap(CommentCount::getQuoteId, CommentCount::getCommentCount));
+    }
+
     /**
      * 배치 맵으로 뷰를 조립한다(ClubPostService.loadAuthors·HomeContentAssembler 선례).
-     * agreeCount는 결측 시 0, 작성자가 탈퇴했으면 "알 수 없음"으로 대체한다.
+     * agreeCount·commentCount는 결측 시 0, 작성자가 탈퇴했으면 "알 수 없음"으로 대체한다.
      */
     static List<BookQuoteView> assembleViews(List<BookQuote> quotes, Long viewerId,
                                              Map<Long, Book> books, Map<Long, User> authors,
-                                             Map<Long, Long> agreeCounts, Set<Long> myAgreedQuoteIds) {
+                                             Map<Long, Long> agreeCounts, Set<Long> myAgreedQuoteIds,
+                                             Map<Long, Long> commentCounts) {
         return quotes.stream()
                 .map(quote -> {
                     Book book = books.get(quote.getBookId());
@@ -201,6 +224,7 @@ public class QuoteService {
                             agreeCounts.getOrDefault(quote.getId(), 0L),
                             myAgreedQuoteIds.contains(quote.getId()),
                             quote.isOwnedBy(viewerId),
+                            commentCounts.getOrDefault(quote.getId(), 0L),
                             quote.getCreatedAt() == null ? Instant.now() : quote.getCreatedAt());
                 })
                 .toList();

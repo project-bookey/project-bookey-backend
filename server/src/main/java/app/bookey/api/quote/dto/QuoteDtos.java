@@ -14,7 +14,8 @@ public final class QuoteDtos {
     public record BookQuoteView(@NotNull Long id, @NotNull Long bookId, @NotNull String bookTitle,
             String bookCoverUrl, Integer page, @NotNull String content,
             @NotNull Long authorId, @NotNull String authorNickname, String authorAvatarUrl,
-            long agreeCount, boolean agreedByMe, boolean mine, @NotNull Instant createdAt) {}
+            long agreeCount, boolean agreedByMe, boolean mine, long commentCount,
+            @NotNull Instant createdAt) {}
 
     /** 나도 그럼(agree) 토글 결과. */
     public record QuoteAgreeView(boolean agreed, long agreeCount) {}

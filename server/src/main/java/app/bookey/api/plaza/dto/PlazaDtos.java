@@ -15,5 +15,6 @@ public final class PlazaDtos {
             @NotNull Long authorId, @NotNull String authorNickname, String authorAvatarUrl,
             @NotNull Long bookId, @NotNull String bookTitle, String bookCoverUrl,
             @NotNull Instant occurredAt,
-            Long quoteId, String content, Integer page, Long agreeCount, Boolean agreedByMe) {}
+            Long quoteId, String content, Integer page, Long agreeCount, Boolean agreedByMe,
+            Long commentCount) {}
 }

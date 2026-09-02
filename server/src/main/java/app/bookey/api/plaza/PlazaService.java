@@ -9,6 +9,8 @@ import app.bookey.domain.quote.BookQuoteRepository;
 import app.bookey.domain.quote.QuoteAgree;
 import app.bookey.domain.quote.QuoteAgreeRepository;
 import app.bookey.domain.quote.QuoteAgreeRepository.AgreeCount;
+import app.bookey.domain.quote.QuoteCommentRepository;
+import app.bookey.domain.quote.QuoteCommentRepository.CommentCount;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.user.User;
@@ -33,6 +35,7 @@ public class PlazaService {
 
     private final BookQuoteRepository quoteRepository;
     private final QuoteAgreeRepository agreeRepository;
+    private final QuoteCommentRepository commentRepository;
     private final ReadingRecordRepository recordRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
@@ -49,7 +52,8 @@ public class PlazaService {
         Map<Long, User> authors = loadAuthors(quotes.stream().map(BookQuote::getUserId).distinct().toList());
         Map<Long, Long> agreeCounts = loadAgreeCounts(quotes);
         Set<Long> myAgreed = loadMyAgreed(userId, quotes);
-        List<PlazaItemView> items = assembleQuoteItems(quotes, books, authors, agreeCounts, myAgreed);
+        Map<Long, Long> commentCounts = loadCommentCounts(quotes);
+        List<PlazaItemView> items = assembleQuoteItems(quotes, books, authors, agreeCounts, myAgreed, commentCounts);
         return new PageResponse<>(items, page.getNumber(), page.getSize(),
                 page.getTotalElements(), page.getTotalPages(), page.hasNext());
     }
@@ -101,13 +105,22 @@ public class PlazaService {
                 .collect(Collectors.toSet());
     }
 
+    private Map<Long, Long> loadCommentCounts(List<BookQuote> quotes) {
+        List<Long> ids = quotes.stream().map(BookQuote::getId).toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return commentRepository.countPerQuote(ids).stream()
+                .collect(Collectors.toMap(CommentCount::getQuoteId, CommentCount::getCommentCount));
+    }
+
     /**
      * 밑줄(QUOTE) 아이템을 배치 맵으로 조립한다(QuoteService.assembleViews 선례).
-     * 책이 결측된 행은 필터하고, 탈퇴한 작성자는 "알 수 없음"으로 대체한다.
+     * agreeCount·commentCount 결측 0, 책이 결측된 행은 필터하고, 탈퇴한 작성자는 "알 수 없음"으로 대체한다.
      */
     static List<PlazaItemView> assembleQuoteItems(List<BookQuote> quotes, Map<Long, Book> books,
                                                   Map<Long, User> authors, Map<Long, Long> agreeCounts,
-                                                  Set<Long> myAgreedQuoteIds) {
+                                                  Set<Long> myAgreedQuoteIds, Map<Long, Long> commentCounts) {
         return quotes.stream()
                 .filter(quote -> books.containsKey(quote.getBookId()))
                 .map(quote -> {
@@ -126,7 +139,8 @@ public class PlazaService {
                             quote.getContent(),
                             quote.getPage(),
                             agreeCounts.getOrDefault(quote.getId(), 0L),
-                            myAgreedQuoteIds.contains(quote.getId()));
+                            myAgreedQuoteIds.contains(quote.getId()),
+                            commentCounts.getOrDefault(quote.getId(), 0L));
                 })
                 .toList();
     }
@@ -151,7 +165,7 @@ public class PlazaService {
                             book.getTitle(),
                             book.getCoverUrl(),
                             record.getFinishedAt(),
-                            null, null, null, null, null);
+                            null, null, null, null, null, null);
                 })
                 .toList();
     }
