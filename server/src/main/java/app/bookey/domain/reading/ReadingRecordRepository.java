@@ -39,6 +39,13 @@ public interface ReadingRecordRepository extends JpaRepository<ReadingRecord, Lo
 
     List<ReadingRecord> findAllByUserIdAndStatus(Long userId, ReadingStatus status);
 
+    /**
+     * 광장 밑줄의 완독 인증용 — 작성자들×책들 교차 범위에서 해당 상태의 기록.
+     * 교차곱이라 호출자가 (userId, bookId) 쌍으로 다시 거른다.
+     */
+    List<ReadingRecord> findAllByUserIdInAndBookIdInAndStatus(Collection<Long> userIds, Collection<Long> bookIds,
+                                                                ReadingStatus status);
+
     long countByUserIdAndStatus(Long userId, ReadingStatus status);
 
     /** 재촉 후보 조회 — 매일 새벽 배치(§F5). */
