@@ -13,6 +13,7 @@ import app.bookey.domain.quote.QuoteCommentRepository;
 import app.bookey.domain.quote.QuoteCommentRepository.CommentCount;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
+import app.bookey.domain.reading.ReadingStatus;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -52,8 +53,9 @@ public class PlazaService {
         Map<Long, User> authors = loadAuthors(quotes.stream().map(BookQuote::getUserId).distinct().toList());
         Map<Long, Long> agreeCounts = loadAgreeCounts(quotes);
         Set<Long> myAgreed = loadMyAgreed(userId, quotes);
+        Set<UserBook> finished = loadFinishedPairs(quotes);
         Map<Long, Long> commentCounts = loadCommentCounts(quotes);
-        List<PlazaItemView> items = assembleQuoteItems(quotes, books, authors, agreeCounts, myAgreed, commentCounts);
+        List<PlazaItemView> items = assembleQuoteItems(quotes, books, authors, agreeCounts, myAgreed, finished, commentCounts);
         return new PageResponse<>(items, page.getNumber(), page.getSize(),
                 page.getTotalElements(), page.getTotalPages(), page.hasNext());
     }
@@ -114,13 +116,34 @@ public class PlazaService {
                 .collect(Collectors.toMap(CommentCount::getQuoteId, CommentCount::getCommentCount));
     }
 
+    /** (작성자, 책) 쌍 — 완독 인증 판정 키. */
+    record UserBook(Long userId, Long bookId) {}
+
+    /**
+     * 작성자가 그 책을 완독한 (userId, bookId) 쌍 — 밑줄 카드의 완독 인증 마크.
+     * 작성자들×책들 교차 범위를 한 번에 읽고 쌍으로 거른다(회차가 여럿이어도 한 번만 완독했으면 true).
+     */
+    private Set<UserBook> loadFinishedPairs(List<BookQuote> quotes) {
+        if (quotes.isEmpty()) {
+            return Set.of();
+        }
+        List<Long> userIds = quotes.stream().map(BookQuote::getUserId).distinct().toList();
+        List<Long> bookIds = quotes.stream().map(BookQuote::getBookId).distinct().toList();
+        return recordRepository.findAllByUserIdInAndBookIdInAndStatus(userIds, bookIds, ReadingStatus.FINISHED)
+                .stream()
+                .map(record -> new UserBook(record.getUserId(), record.getBookId()))
+                .collect(Collectors.toSet());
+    }
+
     /**
      * 밑줄(QUOTE) 아이템을 배치 맵으로 조립한다(QuoteService.assembleViews 선례).
      * agreeCount·commentCount 결측 0, 책이 결측된 행은 필터하고, 탈퇴한 작성자는 "알 수 없음"으로 대체한다.
+     * authorFinished 는 작성자가 그 책을 완독한 쌍 집합으로 판정한다.
      */
     static List<PlazaItemView> assembleQuoteItems(List<BookQuote> quotes, Map<Long, Book> books,
                                                   Map<Long, User> authors, Map<Long, Long> agreeCounts,
-                                                  Set<Long> myAgreedQuoteIds, Map<Long, Long> commentCounts) {
+                                                  Set<Long> myAgreedQuoteIds, Set<UserBook> finishedPairs,
+                                                  Map<Long, Long> commentCounts) {
         return quotes.stream()
                 .filter(quote -> books.containsKey(quote.getBookId()))
                 .map(quote -> {
@@ -140,6 +163,7 @@ public class PlazaService {
                             quote.getPage(),
                             agreeCounts.getOrDefault(quote.getId(), 0L),
                             myAgreedQuoteIds.contains(quote.getId()),
+                            finishedPairs.contains(new UserBook(quote.getUserId(), quote.getBookId())),
                             commentCounts.getOrDefault(quote.getId(), 0L));
                 })
                 .toList();
@@ -165,7 +189,8 @@ public class PlazaService {
                             book.getTitle(),
                             book.getCoverUrl(),
                             record.getFinishedAt(),
-                            null, null, null, null, null, null);
+                            null, null, null, null, null,
+                            Boolean.TRUE, null);
                 })
                 .toList();
     }
