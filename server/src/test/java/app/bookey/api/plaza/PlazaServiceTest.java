@@ -69,7 +69,7 @@ class PlazaServiceTest {
         Set<Long> myAgreed = Set.of(1L);
 
         List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(quote), books, authors, agreeCounts, myAgreed);
+                List.of(quote), books, authors, agreeCounts, myAgreed, Set.of());
 
         PlazaItemView item = items.get(0);
         assertThat(item.type()).isEqualTo(PlazaItemType.QUOTE);
@@ -90,7 +90,7 @@ class PlazaServiceTest {
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
         List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(quote), books, authors, Map.of(), Set.of());
+                List.of(quote), books, authors, Map.of(), Set.of(), Set.of());
 
         PlazaItemView item = items.get(0);
         assertThat(item.agreeCount()).isZero();
@@ -107,7 +107,7 @@ class PlazaServiceTest {
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
         List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(first, second, third), books, authors, Map.of(), Set.of());
+                List.of(first, second, third), books, authors, Map.of(), Set.of(), Set.of());
 
         assertThat(items).extracting(PlazaItemView::quoteId).containsExactly(5L, 3L, 9L);
     }
@@ -119,7 +119,7 @@ class PlazaServiceTest {
         Map<Long, Book> books = Map.of(100L, book(100L, "책"));
 
         List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(quote), books, Map.of(), Map.of(), Set.of());
+                List.of(quote), books, Map.of(), Map.of(), Set.of(), Set.of());
 
         PlazaItemView item = items.get(0);
         assertThat(item.authorNickname()).isEqualTo("알 수 없음");
@@ -135,9 +135,36 @@ class PlazaServiceTest {
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
         List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(withBook, withoutBook), books, authors, Map.of(), Set.of());
+                List.of(withBook, withoutBook), books, authors, Map.of(), Set.of(), Set.of());
 
         assertThat(items).extracting(PlazaItemView::quoteId).containsExactly(1L);
+    }
+
+    @Test
+    @DisplayName("assembleQuoteItems: 작성자가 그 책을 완독한 밑줄만 authorFinished 가 true 다")
+    void assembleQuoteItemsMarksAuthorFinished() {
+        BookQuote finishedOne = quote(1L, 10L, 100L);
+        BookQuote notFinished = quote(2L, 10L, 200L);
+        BookQuote otherAuthor = quote(3L, 20L, 100L);
+        Map<Long, Book> books = Map.of(100L, book(100L, "책"), 200L, book(200L, "다른 책"));
+        Map<Long, User> authors = Map.of(10L, user(10L, "작가"), 20L, user(20L, "이웃"));
+        Set<PlazaService.UserBook> finished = Set.of(new PlazaService.UserBook(10L, 100L));
+
+        List<PlazaItemView> items = PlazaService.assembleQuoteItems(
+                List.of(finishedOne, notFinished, otherAuthor), books, authors, Map.of(), Set.of(), finished);
+
+        assertThat(items).extracting(PlazaItemView::authorFinished).containsExactly(true, false, false);
+    }
+
+    @Test
+    @DisplayName("assembleFinishItems: 완독 자랑은 authorFinished 가 항상 true 다")
+    void assembleFinishItemsAlwaysAuthorFinished() {
+        ReadingRecord record = finishedRecord(1L, 10L, 100L, Instant.parse("2026-08-01T00:00:00Z"));
+
+        List<PlazaItemView> items = PlazaService.assembleFinishItems(
+                List.of(record), Map.of(100L, book(100L, "책")), Map.of(10L, user(10L, "작가")));
+
+        assertThat(items.get(0).authorFinished()).isTrue();
     }
 
     // ────────────────────────────── assembleFinishItems ──────────────────────────────
