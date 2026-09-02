@@ -14,8 +14,6 @@ public interface QuoteCommentRepository extends JpaRepository<QuoteComment, Long
     /** 밑줄 하나의 댓글 — 오래된 순(대화 흐름). */
     Page<QuoteComment> findAllByQuoteIdOrderByCreatedAtAscIdAsc(Long quoteId, Pageable pageable);
 
-    long countByQuoteId(Long quoteId);
-
     /** 문장별 댓글 수 — 목록 배치 로딩용 GROUP BY 프로젝션(QuoteAgreeRepository.countPerQuote 미러). */
     @Query("""
             SELECT c.quoteId AS quoteId, COUNT(c) AS commentCount
