@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.Map;
+import java.util.UUID;
 
 @Component
 public class JwtTokenProvider {
@@ -46,9 +47,14 @@ public class JwtTokenProvider {
                 Map.of(CLAIM_HANDLE, email, CLAIM_ROLE, role));
     }
 
+    /**
+     * iat·exp 는 초 단위라 같은 초 안에 같은 사용자에게 두 번 발급하면 토큰이 바이트 단위로 같아진다.
+     * 리프레시 토큰은 sha256 을 유니크 키로 저장하므로 jti(난수)를 넣어 매 발급을 유일하게 만든다.
+     */
     private String build(Long subject, TokenType type, Duration ttl, Map<String, ?> extra) {
         Instant now = Instant.now();
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(String.valueOf(subject))
                 .claim(CLAIM_TYPE, type.name())
                 .claims(extra)

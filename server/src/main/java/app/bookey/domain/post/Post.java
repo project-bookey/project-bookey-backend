@@ -96,7 +96,28 @@ public class Post extends BaseTimeEntity {
         this.viewCount++;
     }
 
+    /**
+     * 책을 바꾼다 — null 은 무시한다(연결한 책을 지울 수는 없다).
+     * 책이 실제로 바뀌면 독서 기록 연결은 끊는다 — 이전 책의 기록이 새 책에 남으면 안 된다.
+     */
+    public void changeBook(Long bookId) {
+        if (bookId == null || bookId.equals(this.bookId)) {
+            return;
+        }
+        this.bookId = bookId;
+        this.readingRecordId = null;
+    }
+
+    public boolean hasBook() {
+        return bookId != null;
+    }
+
     public boolean isOwnedBy(Long userId) {
         return this.userId.equals(userId);
+    }
+
+    /** 비공개는 작성자만, 공개·링크 공개는 누구나(비로그인 포함) 읽을 수 있다. */
+    public boolean isReadableBy(Long viewerId) {
+        return isOwnedBy(viewerId) || visibility != PostVisibility.PRIVATE;
     }
 }

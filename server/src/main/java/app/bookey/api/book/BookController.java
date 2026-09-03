@@ -1,6 +1,8 @@
 package app.bookey.api.book;
 
 import app.bookey.api.book.dto.BookDtos.*;
+import app.bookey.api.post.PostService;
+import app.bookey.api.post.dto.PostDtos.PostView;
 import app.bookey.api.quote.QuoteService;
 import app.bookey.api.quote.dto.QuoteDtos.BookQuoteView;
 import app.bookey.common.security.AuthUser;
@@ -26,6 +28,7 @@ public class BookController {
 
     private final BookService bookService;
     private final QuoteService quoteService;
+    private final PostService postService;
 
     @Operation(summary = "도서 검색 (캐시 → 카카오 → 알라딘 보강 → 구글 폴백)")
     @GetMapping
@@ -85,5 +88,14 @@ public class BookController {
                                               @RequestParam(defaultValue = "0") int page,
                                               @RequestParam(defaultValue = "20") int size) {
         return quoteService.byBook(user.id(), bookId, PageRequest.of(page, size));
+    }
+
+    @Operation(summary = "책별 공개 독후감 목록 — 최신순")
+    @GetMapping("/{bookId}/posts")
+    public PageResponse<PostView> posts(@AuthenticationPrincipal AuthUser user,
+                                        @PathVariable Long bookId,
+                                        @RequestParam(defaultValue = "0") int page,
+                                        @RequestParam(defaultValue = "5") int size) {
+        return postService.listByBook(user.id(), bookId, PageRequest.of(page, size));
     }
 }

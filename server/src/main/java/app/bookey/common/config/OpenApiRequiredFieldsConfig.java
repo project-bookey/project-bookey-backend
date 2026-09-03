@@ -1,5 +1,6 @@
 package app.bookey.common.config;
 
+import io.swagger.v3.oas.annotations.media.Schema.RequiredMode;
 import io.swagger.v3.oas.models.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -33,6 +34,10 @@ import java.util.Map;
  *
  * <p>그 밖의 참조 타입은 널일 수 있으므로 선택 항목으로 남긴다. 특정 필드를 필수로 알리고 싶으면
  * 레코드 컴포넌트에 {@code @NotNull} 을 붙이면 된다.
+ *
+ * <p>반대로 컬렉션이지만 "생략 = 유지, 빈 목록 = 비움" 처럼 널에 뜻이 있는 요청 필드는
+ * {@code @Schema(requiredMode = NOT_REQUIRED)} 로 필수 표시를 거부한다(예: {@code UpdatePostRequest.tags}).
+ * 옵트아웃이 붙은 컴포넌트는 이 보정에서 제외된다 — {@code @NotNull} 과 같이 쓰면 모순이니 같이 쓰지 않는다.
  */
 @Slf4j
 @Configuration
@@ -66,7 +71,10 @@ public class OpenApiRequiredFieldsConfig {
         };
     }
 
-    private boolean isAlwaysPresent(RecordComponent component) {
+    static boolean isAlwaysPresent(RecordComponent component) {
+        if (isOptedOut(component)) {
+            return false;
+        }
         Class<?> type = component.getType();
         return type.isPrimitive()
                 || type.isArray()
@@ -74,6 +82,28 @@ public class OpenApiRequiredFieldsConfig {
                 || Map.class.isAssignableFrom(type)
                 || component.isAnnotationPresent(NotNull.class)
                 || component.isAnnotationPresent(NotBlank.class);
+    }
+
+    /**
+     * {@code @Schema(requiredMode = NOT_REQUIRED)} 가 붙은 컴포넌트는 작성자가 선택 항목임을 명시한 것이다.
+     * {@code @Schema} 는 레코드 컴포넌트 자체가 아니라 접근자·필드로 전파되므로 둘 다 본다.
+     */
+    private static boolean isOptedOut(RecordComponent component) {
+        io.swagger.v3.oas.annotations.media.Schema annotation = schemaAnnotation(component);
+        return annotation != null && annotation.requiredMode() == RequiredMode.NOT_REQUIRED;
+    }
+
+    private static io.swagger.v3.oas.annotations.media.Schema schemaAnnotation(RecordComponent component) {
+        var onAccessor = component.getAccessor().getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
+        if (onAccessor != null) {
+            return onAccessor;
+        }
+        try {
+            return component.getDeclaringRecord().getDeclaredField(component.getName())
+                    .getAnnotation(io.swagger.v3.oas.annotations.media.Schema.class);
+        } catch (NoSuchFieldException e) {
+            return null;
+        }
     }
 
     private void markRequired(Schema<?> schema, String property) {
