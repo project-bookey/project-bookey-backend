@@ -93,8 +93,14 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 | `KAKAO_REST_KEY` | 카카오 책 검색 (1차 검색) |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI (페이지 수 보강) |
 | `GOOGLE_BOOKS_KEY` | Google Books (해외서 폴백, 선택) |
+| `STORAGE_TYPE` | 독후감 사진 저장소 — `local`(기본) / `gcs`. `prod` 프로파일 기본값은 `gcs` |
+| `STORAGE_LOCAL_DIR` | `local` 일 때 파일을 둘 디렉터리 (기본 `./uploads` → `server/uploads`) |
+| `STORAGE_PUBLIC_BASE_URL` | `local` 일 때 사진 URL 의 origin (예: `http://192.168.0.10:8080`). 비우면 요청 origin |
+| `GCS_BUCKET` | `gcs` 일 때 버킷 이름 |
 
 키가 없으면 해당 프로바이더를 건너뛰고 내부 캐시로만 검색합니다 (graceful degradation).
+
+독후감 사진은 `POST /api/v1/posts/images` (multipart, `file` 파트) 로 먼저 올리고 응답의 `id` 를 독후감 `imageIds` 에 넣어 붙입니다. JPG·PNG·WebP, 파일당 10MB, 글당 10장. 24시간 안에 글에 붙지 않은 사진은 매일 04:20(KST) 배치가 파일과 행을 지웁니다.
 
 ## 테스트
 
@@ -147,6 +153,19 @@ GitHub Repository Secrets:
 ```yaml
             GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }}
 ```
+
+### GCS 준비 (운영)
+
+버킷은 아직 없다. 운영에 올리기 전에 아래를 한 번 실행한다 (`<bucket>` 은 예: `bookey-media`, GitHub Variables 의 `GCP_MEDIA_BUCKET` 에도 같은 값을 넣는다):
+
+```bash
+gcloud storage buckets create gs://<bucket> --location=asia-northeast3 --uniform-bucket-level-access
+gcloud storage buckets add-iam-policy-binding gs://<bucket> --member=allUsers --role=roles/storage.objectViewer
+# Cloud Run 런타임 서비스계정에 roles/storage.objectAdmin
+# .github/workflows/deploy-cloud-run.yml env_vars 에 STORAGE_TYPE=gcs, GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }} 추가 (이번엔 워크플로 파일을 수정하지 않는다)
+```
+
+공개 버킷이라 비공개 글의 사진도 URL 을 알면 열린다 (UUID 키로만 방어) — 서명 URL 은 백로그.
 
 Bookey 전체 Cloud Run 서비스:
 

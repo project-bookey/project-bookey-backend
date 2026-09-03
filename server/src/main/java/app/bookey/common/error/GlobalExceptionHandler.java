@@ -7,6 +7,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
@@ -54,6 +57,25 @@ public class GlobalExceptionHandler {
         log.debug("Unreadable request body - {}", e.getMessage());
         return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
                 .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "요청 본문을 해석할 수 없습니다."));
+    }
+
+    /**
+     * spring.servlet.multipart.max-file-size / max-request-size 초과.
+     * 컨트롤러에 닿기 전 multipart 해석 단계에서 터지므로 서비스의 IMAGE_TOO_LARGE 와 같은 응답으로 맞춘다.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleUploadTooLarge(MaxUploadSizeExceededException e) {
+        log.debug("Upload too large - {}", e.getMessage());
+        return ResponseEntity.status(ErrorCode.IMAGE_TOO_LARGE.getStatus())
+                .body(ErrorResponse.of(ErrorCode.IMAGE_TOO_LARGE, ErrorCode.IMAGE_TOO_LARGE.getMessage()));
+    }
+
+    /** 그 밖의 multipart 해석 실패 — boundary 가 깨졌거나 file 파트가 빠진 경우. */
+    @ExceptionHandler({MultipartException.class, MissingServletRequestPartException.class})
+    public ResponseEntity<ErrorResponse> handleMultipart(Exception e) {
+        log.debug("Multipart request rejected - {}", e.getMessage());
+        return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
+                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "업로드 형식이 올바르지 않습니다."));
     }
 
     @ExceptionHandler(Exception.class)
