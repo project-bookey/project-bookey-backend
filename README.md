@@ -60,12 +60,19 @@ cd server && ./mvnw spring-boot:run
 
 ### 개발용 로그인
 
-`prod` 프로필이 아니면 `DEV` provider 로 토큰 없이 로그인할 수 있습니다.
+로컬에서는 이메일로 가입한 뒤 로그인합니다. 가입 응답에도 토큰이 바로 담기므로 첫 호출은 `signup` 하나로 끝납니다.
+(예전의 `DEV` provider 소셜 로그인은 제거되었습니다 — `AuthProvider` 는 `APPLE`·`GOOGLE`·`KAKAO` 만.)
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/auth/social \
+# 가입 (최초 1회, 비밀번호 8자 이상) → TokenResponse
+curl -X POST http://localhost:8080/api/v1/auth/signup \
   -H 'Content-Type: application/json' \
-  -d '{"provider":"DEV","token":"tester1","nickname":"테스터"}'
+  -d '{"email":"tester1@dev.local","password":"password1234","nickname":"테스터"}'
+
+# 로그인 → TokenResponse
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"tester1@dev.local","password":"password1234"}'
 ```
 
 ## 프론트와의 계약
