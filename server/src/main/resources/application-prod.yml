@@ -3,6 +3,14 @@ spring:
     properties:
       hibernate:
         format_sql: false
+bookey:
+  storage:
+    # 운영 기본값은 GCS 로 고정한다. 배포 워크플로가 Cloud Run 환경변수를 통째로 덮어써(env_vars_update_strategy: overwrite)
+    # STORAGE_TYPE 이 빠져도 로컬 디스크로 떨어지지 않게 하기 위함 — 로컬 디스크는 인스턴스 교체 때 사진이 사라진다.
+    # 버킷(GCS_BUCKET)까지 갖췄는지는 StorageConfigValidator 가 기동 시점에 확인한다 — 배포 워크플로
+    # (.github/workflows/deploy-cloud-run.yml) env_vars 에 GCS_BUCKET 이 없으면 새 리비전이 못 떠 deploy 스텝이 실패한다.
+    # 버킷 생성·권한·워크플로 한 줄 추가 순서는 README "GCS 준비 (운영)".
+    type: ${STORAGE_TYPE:gcs}
 logging:
   level:
     app.bookey: INFO

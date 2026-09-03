@@ -20,7 +20,7 @@ class JwtTokenProviderTest {
     private final JwtTokenProvider provider = new JwtTokenProvider(new BookeyProperties(
             new BookeyProperties.Jwt("unit-test-secret-must-be-at-least-32-bytes-long",
                     Duration.ofHours(1), Duration.ofDays(30), Duration.ofMinutes(30)),
-            null, null, null));
+            null, null, null, null));
 
     @Test
     @DisplayName("같은 사용자에게 같은 초 안에 연속 발급한 리프레시 토큰은 서로 다르고, 각각 jti 를 가진다")

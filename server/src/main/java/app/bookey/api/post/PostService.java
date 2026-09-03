@@ -250,27 +250,36 @@ public class PostService {
         return readingRecordId;
     }
 
-    /**
-     * 사진을 요청 순서대로 붙인다. null·빈 목록이면 아무것도 하지 않는다.
-     * 없는 id·남의 사진·다른 독후감에 이미 붙은 사진은 모두 POST_IMAGE_NOT_FOUND — 존재를 드러내지 않는다.
-     */
+    /** 사진을 요청 순서대로 붙인다. null·빈 목록이면 아무것도 하지 않는다. 중복 id 는 첫 것만. */
     private void attachImages(Post post, Long userId, List<Long> imageIds) {
         if (imageIds == null || imageIds.isEmpty()) {
             return;
         }
         List<Long> ids = imageIds.stream().filter(Objects::nonNull).distinct().toList();
-        Map<Long, PostImage> images = imageRepository.findAllById(ids).stream()
+        List<PostImage> found = imageRepository.findAllById(ids);
+        validateImageAttachments(userId, post.getId(), ids, found);
+        Map<Long, PostImage> images = found.stream()
                 .collect(Collectors.toMap(PostImage::getId, Function.identity()));
-        if (images.size() != ids.size()) {
+        for (int order = 0; order < ids.size(); order++) {
+            images.get(ids.get(order)).attach(post.getId(), order);
+        }
+    }
+
+    /**
+     * 요청한 사진이 모두 존재하고, 전부 내 것이며, 다른 독후감에 붙어 있지 않아야 한다.
+     * 세 경우 모두 POST_IMAGE_NOT_FOUND — 없는 것·남의 것·남의 글에 붙은 것을 구분해 알리지 않는다.
+     * 같은 독후감에 이미 붙은 사진은 허용한다(수정 때 유지되는 사진).
+     */
+    static void validateImageAttachments(Long userId, Long postId, List<Long> requestedIds, List<PostImage> found) {
+        Set<Long> foundIds = found.stream().map(PostImage::getId).collect(Collectors.toSet());
+        if (!foundIds.containsAll(requestedIds)) {
             throw ApiException.of(ErrorCode.POST_IMAGE_NOT_FOUND);
         }
-        for (int order = 0; order < ids.size(); order++) {
-            PostImage image = images.get(ids.get(order));
-            boolean attachedElsewhere = image.getPostId() != null && !image.getPostId().equals(post.getId());
+        for (PostImage image : found) {
+            boolean attachedElsewhere = image.getPostId() != null && !image.getPostId().equals(postId);
             if (!image.isOwnedBy(userId) || attachedElsewhere) {
                 throw ApiException.of(ErrorCode.POST_IMAGE_NOT_FOUND);
             }
-            image.attach(post.getId(), order);
         }
     }
 

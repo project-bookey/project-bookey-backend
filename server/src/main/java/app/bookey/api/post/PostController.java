@@ -8,9 +8,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "Post", description = "독후감 — 내 기록 아카이브 · 광장 피드")
 @RestController
@@ -19,12 +21,21 @@ import org.springframework.web.bind.annotation.*;
 public class PostController {
 
     private final PostService postService;
+    private final PostImageService postImageService;
 
     @Operation(summary = "독후감 작성")
     @PostMapping
     public PostView create(@AuthenticationPrincipal AuthUser user,
                            @Valid @RequestBody CreatePostRequest request) {
         return postService.create(user.id(), request);
+    }
+
+    /** 리터럴 {@code images} 는 {@code /{postId}} 보다 먼저 매칭된다. */
+    @Operation(summary = "독후감 사진 업로드 — 글에 붙이기 전 임시 저장, 24시간 안에 안 붙이면 삭제")
+    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public PostImageView upload(@AuthenticationPrincipal AuthUser user,
+                                @RequestPart("file") MultipartFile file) {
+        return postImageService.upload(user.id(), file);
     }
 
     @Operation(summary = "내 독후감 목록")

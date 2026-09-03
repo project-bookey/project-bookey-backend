@@ -77,6 +77,8 @@ public class SecurityConfig {
                         // 공개 웹(SEO)용 읽기 전용 엔드포인트
                         .requestMatchers(HttpMethod.GET, "/api/v1/banners").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
+                        // 업로드한 사진(로컬 디스크 저장소일 때만 서빙)
+                        .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(entryPoint)

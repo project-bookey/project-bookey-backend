@@ -23,6 +23,9 @@ node_modules/
 google-services.json
 GoogleService-Info.plist
 
+# ── 로컬 업로드 파일 (bookey.storage.type=local)
+server/uploads/
+
 # ── logs / tmp
 *.log
 logs/
