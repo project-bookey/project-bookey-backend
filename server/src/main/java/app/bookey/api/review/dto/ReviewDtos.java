@@ -41,6 +41,8 @@ public final class ReviewDtos {
             @NotNull VerificationLevel verificationLevel,
             Map<String, Object> verificationSnapshot,
             int helpfulCount,
+            /** 답글 포함 전체 댓글 수. */
+            long commentCount,
             @NotNull Instant createdAt
     ) {}
 

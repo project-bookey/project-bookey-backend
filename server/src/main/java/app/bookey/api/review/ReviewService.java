@@ -15,6 +15,8 @@ import app.bookey.domain.reading.ReadingStatus;
 import app.bookey.domain.report.AbuseReport;
 import app.bookey.domain.report.AbuseReportRepository;
 import app.bookey.domain.review.Review;
+import app.bookey.domain.review.ReviewCommentRepository;
+import app.bookey.domain.review.ReviewCommentRepository.CommentCount;
 import app.bookey.domain.review.ReviewRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
@@ -36,6 +38,7 @@ import java.util.stream.Collectors;
 public class ReviewService {
 
     private final ReviewRepository reviewRepository;
+    private final ReviewCommentRepository reviewCommentRepository;
     private final ReadingRecordRepository recordRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
@@ -78,7 +81,7 @@ public class ReviewService {
                 .verificationSnapshot(verification.toSnapshot())
                 .build());
 
-        return toView(review, userRepository.findById(userId).orElse(null));
+        return toView(review, userRepository.findById(userId).orElse(null), 0L);
     }
 
     @Transactional
@@ -91,7 +94,8 @@ public class ReviewService {
         review.edit(request.body(), request.rating(),
                 request.tags() == null ? null : request.tags().toArray(String[]::new),
                 request.hasSpoiler());
-        return toView(review, userRepository.findById(userId).orElse(null));
+        return toView(review, userRepository.findById(userId).orElse(null),
+                loadCommentCounts(List.of(review)).getOrDefault(review.getId(), 0L));
     }
 
     @Transactional
@@ -104,11 +108,23 @@ public class ReviewService {
         review.softDelete();
     }
 
+    /** 리뷰 단건 — 숨겨지거나 지워진 리뷰는 없는 것으로 본다. */
+    @Transactional(readOnly = true)
+    public ReviewView detail(Long reviewId) {
+        Review review = reviewRepository.findById(reviewId)
+                .filter(Review::isVisible)
+                .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
+        return toView(review, userRepository.findById(review.getUserId()).orElse(null),
+                loadCommentCounts(List.of(review)).getOrDefault(reviewId, 0L));
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<ReviewView> listByBook(Long bookId, boolean verifiedOnly, Pageable pageable) {
         Page<Review> page = reviewRepository.findByBook(bookId, verifiedOnly, pageable);
         Map<Long, User> authors = loadAuthors(page.getContent());
-        return PageResponse.of(page, review -> toView(review, authors.get(review.getUserId())));
+        Map<Long, Long> commentCounts = loadCommentCounts(page.getContent());
+        return PageResponse.of(page, review -> toView(review, authors.get(review.getUserId()),
+                commentCounts.getOrDefault(review.getId(), 0L)));
     }
 
     @Transactional(readOnly = true)
@@ -116,7 +132,9 @@ public class ReviewService {
         Page<Review> page = reviewRepository
                 .findAllByUserIdAndStatusOrderByCreatedAtDesc(userId, "VISIBLE", pageable);
         User user = userRepository.findById(userId).orElse(null);
-        return PageResponse.of(page, review -> toView(review, user));
+        Map<Long, Long> commentCounts = loadCommentCounts(page.getContent());
+        return PageResponse.of(page, review -> toView(review, user,
+                commentCounts.getOrDefault(review.getId(), 0L)));
     }
 
     @Transactional
@@ -171,7 +189,18 @@ public class ReviewService {
                 .collect(Collectors.toMap(User::getId, Function.identity()));
     }
 
-    public ReviewView toView(Review review, User author) {
+    /** 리뷰별 댓글 수 — 답글까지 포함한 전체 수를 한 번에 모은다(QuoteService.loadCommentCounts 선례). */
+    private Map<Long, Long> loadCommentCounts(List<Review> reviews) {
+        List<Long> ids = reviews.stream().map(Review::getId).toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return reviewCommentRepository.countPerReview(ids).stream()
+                .collect(Collectors.toMap(CommentCount::getReviewId, CommentCount::getCommentCount));
+    }
+
+    /** 탈퇴한 작성자는 "알 수 없음", 댓글 수는 배치 맵에서 결측 시 0으로 채워 넣는다. */
+    public static ReviewView toView(Review review, User author, long commentCount) {
         return new ReviewView(
                 review.getId(), review.getBookId(), review.getUserId(),
                 author == null ? "알 수 없음" : author.getNickname(),
@@ -179,6 +208,6 @@ public class ReviewService {
                 review.getRating(), review.getBody(),
                 Arrays.asList(review.getTags()), review.isHasSpoiler(),
                 review.getVerificationLevel(), review.getVerificationSnapshot(),
-                review.getHelpfulCount(), review.getCreatedAt());
+                review.getHelpfulCount(), commentCount, review.getCreatedAt());
     }
 }

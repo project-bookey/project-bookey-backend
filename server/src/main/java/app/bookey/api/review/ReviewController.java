@@ -51,6 +51,12 @@ public class ReviewController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "리뷰 단건 조회")
+    @GetMapping("/reviews/{reviewId}")
+    public ReviewView detail(@PathVariable Long reviewId) {
+        return reviewService.detail(reviewId);
+    }
+
     @Operation(summary = "도서별 리뷰 목록 — 완독 검증 > 부분 검증 > 미검증 순")
     @GetMapping("/books/{bookId}/reviews")
     public PageResponse<ReviewView> listByBook(@PathVariable Long bookId,
