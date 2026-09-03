@@ -257,6 +257,50 @@ class PostServiceTest {
                 .doesNotThrowAnyException();
     }
 
+    // ────────────────────────────── validateImageAttachments ──────────────────────────────
+
+    @Test
+    @DisplayName("남의 사진은 붙일 수 없다 — POST_IMAGE_NOT_FOUND 로 존재를 드러내지 않는다")
+    void rejectsImagesOwnedByOthers() {
+        List<PostImage> found = List.of(image(1L, 10L, "u1"), image(2L, 99L, "u2"));
+
+        assertThatThrownBy(() -> PostService.validateImageAttachments(10L, 1L, List.of(1L, 2L), found))
+                .isInstanceOfSatisfying(ApiException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.POST_IMAGE_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("없는 사진 id 가 섞여 개수가 맞지 않으면 거부한다")
+    void rejectsWhenSomeImagesAreMissing() {
+        List<PostImage> found = List.of(image(1L, 10L, "u1"));
+
+        assertThatThrownBy(() -> PostService.validateImageAttachments(10L, 1L, List.of(1L, 404L), found))
+                .isInstanceOfSatisfying(ApiException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.POST_IMAGE_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("다른 독후감에 이미 붙은 사진은 내 것이라도 거부한다")
+    void rejectsImagesAttachedToAnotherPost() {
+        PostImage attachedElsewhere = image(1L, 10L, "u1");
+        attachedElsewhere.attach(2L, 0);
+
+        assertThatThrownBy(() -> PostService.validateImageAttachments(10L, 1L, List.of(1L), List.of(attachedElsewhere)))
+                .isInstanceOfSatisfying(ApiException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.POST_IMAGE_NOT_FOUND));
+    }
+
+    @Test
+    @DisplayName("같은 독후감에 이미 붙은 사진과 아직 안 붙은 사진은 허용한다 — 수정 때 유지되는 사진")
+    void allowsDetachedAndSamePostImages() {
+        PostImage alreadyMine = image(1L, 10L, "u1");
+        alreadyMine.attach(1L, 0);
+        PostImage fresh = image(2L, 10L, "u2");
+
+        assertThatCode(() -> PostService.validateImageAttachments(10L, 1L, List.of(1L, 2L), List.of(alreadyMine, fresh)))
+                .doesNotThrowAnyException();
+    }
+
     // ────────────────────────────── slugify ──────────────────────────────
 
     @Test
