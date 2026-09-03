@@ -13,24 +13,41 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "QuoteComment", description = "밑줄에 덧붙인 말(댓글) — 목록 · 작성 · 삭제")
+@Tag(name = "QuoteComment", description = "밑줄에 덧붙인 말(댓글) — 목록 · 답글 · 작성 · 삭제")
 @RestController
 @RequestMapping("/api/v1/quotes/{quoteId}/comments")
 @RequiredArgsConstructor
 public class QuoteCommentController {
 
+    /** 0·음수 size 가 500 으로 새지 않게 1~100 으로 묶는다. */
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final QuoteCommentService commentService;
 
-    @Operation(summary = "댓글 목록 — 오래된 순")
+    @Operation(summary = "댓글 목록 — 최상위만, 오래된 순")
     @GetMapping
     public PageResponse<QuoteCommentView> list(@AuthenticationPrincipal AuthUser user,
                                                @PathVariable Long quoteId,
                                                @RequestParam(defaultValue = "0") int page,
                                                @RequestParam(defaultValue = "30") int size) {
-        return commentService.list(user.id(), quoteId, PageRequest.of(page, size));
+        // 음수 page 가 500 으로 새지 않게 0 아래로는 묶는다.
+        return commentService.list(user.id(), quoteId,
+                PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, MAX_PAGE_SIZE)));
     }
 
-    @Operation(summary = "댓글 작성")
+    @Operation(summary = "답글 목록 — 오래된 순")
+    @GetMapping("/{commentId}/replies")
+    public PageResponse<QuoteCommentView> replies(@AuthenticationPrincipal AuthUser user,
+                                                  @PathVariable Long quoteId,
+                                                  @PathVariable Long commentId,
+                                                  @RequestParam(defaultValue = "0") int page,
+                                                  @RequestParam(defaultValue = "20") int size) {
+        // 음수 page 가 500 으로 새지 않게 0 아래로는 묶는다.
+        return commentService.replies(user.id(), quoteId, commentId,
+                PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, MAX_PAGE_SIZE)));
+    }
+
+    @Operation(summary = "댓글 작성 — parentId 를 주면 답글(1단계)")
     @PostMapping
     public QuoteCommentView create(@AuthenticationPrincipal AuthUser user,
                                    @PathVariable Long quoteId,

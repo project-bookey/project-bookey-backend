@@ -1,4 +1,4 @@
-package app.bookey.domain.quote;
+package app.bookey.domain.review;
 
 import app.bookey.common.support.BaseTimeEntity;
 import jakarta.persistence.*;
@@ -7,19 +7,24 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 밑줄에 덧붙인 말(댓글) — 1단계 답글까지, 본인만 삭제한다. */
+/**
+ * 리뷰에 덧붙인 말(댓글) — 1단계 답글까지, 본인만 삭제한다(QuoteComment 미러).
+ *
+ * 리뷰는 소프트 삭제(status)라 review_id 의 ON DELETE CASCADE 는 하드 삭제 때만 발동한다.
+ * 지워진 리뷰의 댓글은 테이블에 남지만 API 로는 닿을 수 없다 — 모든 조회 경로가 isVisible 로 거른다.
+ */
 @Getter
 @Entity
-@Table(name = "quote_comments")
+@Table(name = "review_comments")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class QuoteComment extends BaseTimeEntity {
+public class ReviewComment extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "quote_id", nullable = false)
-    private Long quoteId;
+    @Column(name = "review_id", nullable = false)
+    private Long reviewId;
 
     @Column(name = "user_id", nullable = false)
     private Long userId;
@@ -32,8 +37,8 @@ public class QuoteComment extends BaseTimeEntity {
     private String body;
 
     @Builder
-    private QuoteComment(Long quoteId, Long userId, Long parentId, String body) {
-        this.quoteId = quoteId;
+    private ReviewComment(Long reviewId, Long userId, Long parentId, String body) {
+        this.reviewId = reviewId;
         this.userId = userId;
         this.parentId = parentId;
         this.body = body;
@@ -43,9 +48,9 @@ public class QuoteComment extends BaseTimeEntity {
         return this.userId.equals(userId);
     }
 
-    /** 경로의 밑줄과 댓글의 밑줄이 같은지 — 다른 밑줄 경로로 남의 댓글을 지우는 것을 막는다. */
-    public boolean belongsTo(Long quoteId) {
-        return this.quoteId.equals(quoteId);
+    /** 경로의 리뷰와 댓글의 리뷰가 같은지 — 다른 리뷰 경로로 남의 댓글을 지우는 것을 막는다. */
+    public boolean belongsTo(Long reviewId) {
+        return this.reviewId.equals(reviewId);
     }
 
     /** 답글인지 — 답글에는 다시 답글을 달 수 없다(1단계). */

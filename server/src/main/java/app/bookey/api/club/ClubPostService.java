@@ -139,7 +139,7 @@ public class ClubPostService {
         if (request.parentId() != null) {
             parent = getPost(clubId, request.parentId());
             if (parent.isComment()) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST, "대댓글은 1단계까지만 가능합니다.");
+                throw ApiException.of(ErrorCode.COMMENT_REPLY_DEPTH);
             }
         }
 

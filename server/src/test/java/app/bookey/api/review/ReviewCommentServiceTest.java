@@ -1,9 +1,9 @@
-package app.bookey.api.quote;
+package app.bookey.api.review;
 
-import app.bookey.api.quote.dto.QuoteDtos.QuoteCommentView;
+import app.bookey.api.review.dto.ReviewDtos.ReviewCommentView;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
-import app.bookey.domain.quote.QuoteComment;
+import app.bookey.domain.review.ReviewComment;
 import app.bookey.domain.user.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,19 +15,19 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-class QuoteCommentServiceTest {
+class ReviewCommentServiceTest {
 
-    private QuoteComment comment(long id, long quoteId, long userId) {
-        QuoteComment comment = QuoteComment.builder()
-                .quoteId(quoteId).userId(userId).body("덧붙임 " + id)
+    private ReviewComment comment(long id, long reviewId, long userId) {
+        ReviewComment comment = ReviewComment.builder()
+                .reviewId(reviewId).userId(userId).body("덧붙임 " + id)
                 .build();
         set(comment, "id", id);
         return comment;
     }
 
-    private QuoteComment reply(long id, long quoteId, long userId, long parentId) {
-        QuoteComment reply = QuoteComment.builder()
-                .quoteId(quoteId).userId(userId).parentId(parentId).body("답글 " + id)
+    private ReviewComment reply(long id, long reviewId, long userId, long parentId) {
+        ReviewComment reply = ReviewComment.builder()
+                .reviewId(reviewId).userId(userId).parentId(parentId).body("답글 " + id)
                 .build();
         set(reply, "id", id);
         return reply;
@@ -52,15 +52,15 @@ class QuoteCommentServiceTest {
     @Test
     @DisplayName("작성자·본문·mine을 매핑한다 — 조회자가 작성자면 mine=true")
     void mapsAuthorBodyAndMine() {
-        QuoteComment comment = comment(1L, 7L, 10L);
+        ReviewComment comment = comment(1L, 7L, 10L);
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
-        List<QuoteCommentView> views =
-                QuoteCommentService.assembleViews(List.of(comment), 10L, authors, Map.of());
+        List<ReviewCommentView> views =
+                ReviewCommentService.assembleViews(List.of(comment), 10L, authors, Map.of());
 
-        QuoteCommentView view = views.get(0);
+        ReviewCommentView view = views.get(0);
         assertThat(view.id()).isEqualTo(1L);
-        assertThat(view.quoteId()).isEqualTo(7L);
+        assertThat(view.reviewId()).isEqualTo(7L);
         assertThat(view.authorId()).isEqualTo(10L);
         assertThat(view.authorNickname()).isEqualTo("작가");
         assertThat(view.body()).isEqualTo("덧붙임 1");
@@ -71,9 +71,9 @@ class QuoteCommentServiceTest {
     @Test
     @DisplayName("조회자가 작성자와 다르면 mine=false")
     void mineIsFalseForOtherViewer() {
-        QuoteComment comment = comment(1L, 7L, 10L);
+        ReviewComment comment = comment(1L, 7L, 10L);
 
-        List<QuoteCommentView> views = QuoteCommentService.assembleViews(
+        List<ReviewCommentView> views = ReviewCommentService.assembleViews(
                 List.of(comment), 20L, Map.of(10L, user(10L, "작가")), Map.of());
 
         assertThat(views.get(0).mine()).isFalse();
@@ -82,10 +82,10 @@ class QuoteCommentServiceTest {
     @Test
     @DisplayName("탈퇴한 작성자는 '알 수 없음'으로 대체한다")
     void withdrawnAuthorFallsBackToUnknown() {
-        QuoteComment comment = comment(1L, 7L, 99L);
+        ReviewComment comment = comment(1L, 7L, 99L);
 
-        List<QuoteCommentView> views =
-                QuoteCommentService.assembleViews(List.of(comment), 1L, Map.of(), Map.of());
+        List<ReviewCommentView> views =
+                ReviewCommentService.assembleViews(List.of(comment), 1L, Map.of(), Map.of());
 
         assertThat(views.get(0).authorNickname()).isEqualTo("알 수 없음");
         assertThat(views.get(0).authorAvatarUrl()).isNull();
@@ -94,20 +94,20 @@ class QuoteCommentServiceTest {
     @Test
     @DisplayName("입력 순서를 그대로 유지한다")
     void preservesInputOrder() {
-        List<QuoteComment> comments = List.of(comment(5L, 7L, 10L), comment(3L, 7L, 10L), comment(9L, 7L, 10L));
+        List<ReviewComment> comments = List.of(comment(5L, 7L, 10L), comment(3L, 7L, 10L), comment(9L, 7L, 10L));
 
-        List<QuoteCommentView> views = QuoteCommentService.assembleViews(
+        List<ReviewCommentView> views = ReviewCommentService.assembleViews(
                 comments, 10L, Map.of(10L, user(10L, "작가")), Map.of());
 
-        assertThat(views).extracting(QuoteCommentView::id).containsExactly(5L, 3L, 9L);
+        assertThat(views).extracting(ReviewCommentView::id).containsExactly(5L, 3L, 9L);
     }
 
     @Test
     @DisplayName("최상위 댓글은 parentId가 없고 답글 수를 배치 맵에서 채운다")
     void mapsParentIdAndReplyCount() {
-        QuoteComment comment = comment(1L, 7L, 10L);
+        ReviewComment comment = comment(1L, 7L, 10L);
 
-        List<QuoteCommentView> views = QuoteCommentService.assembleViews(
+        List<ReviewCommentView> views = ReviewCommentService.assembleViews(
                 List.of(comment), 10L, Map.of(10L, user(10L, "작가")), Map.of(1L, 3L));
 
         assertThat(views.get(0).parentId()).isNull();
@@ -117,9 +117,9 @@ class QuoteCommentServiceTest {
     @Test
     @DisplayName("답글 행은 parentId를 싣고 답글 수는 항상 0이다")
     void replyRowCarriesParentIdAndZeroReplyCount() {
-        QuoteComment reply = reply(2L, 7L, 10L, 1L);
+        ReviewComment reply = reply(2L, 7L, 10L, 1L);
 
-        List<QuoteCommentView> views = QuoteCommentService.assembleViews(
+        List<ReviewCommentView> views = ReviewCommentService.assembleViews(
                 List.of(reply), 10L, Map.of(10L, user(10L, "작가")), Map.of());
 
         assertThat(views.get(0).parentId()).isEqualTo(1L);
@@ -127,30 +127,11 @@ class QuoteCommentServiceTest {
     }
 
     @Test
-    @DisplayName("답글 수가 없는 댓글은 0으로 채운다")
-    void missingReplyCountDefaultsToZero() {
-        QuoteComment comment = comment(1L, 7L, 10L);
-
-        List<QuoteCommentView> views = QuoteCommentService.assembleViews(
-                List.of(comment), 10L, Map.of(10L, user(10L, "작가")), Map.of(99L, 5L));
-
-        assertThat(views.get(0).replyCount()).isZero();
-    }
-
-    @Test
-    @DisplayName("최상위 댓글에는 답글을 달 수 있다")
-    void requireRepliableAllowsTopLevelComment() {
-        QuoteComment parent = comment(1L, 7L, 10L);
-
-        assertThat(QuoteCommentService.requireRepliable(parent)).isSameAs(parent);
-    }
-
-    @Test
     @DisplayName("답글에는 답글을 달 수 없다 — 1단계까지만")
     void requireRepliableRejectsReply() {
-        QuoteComment reply = reply(2L, 7L, 10L, 1L);
+        ReviewComment reply = reply(2L, 7L, 10L, 1L);
 
-        assertThatThrownBy(() -> QuoteCommentService.requireRepliable(reply))
+        assertThatThrownBy(() -> ReviewCommentService.requireRepliable(reply))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("답글에는 답글을 달 수 없습니다.")
                 .extracting(e -> ((ApiException) e).getErrorCode())

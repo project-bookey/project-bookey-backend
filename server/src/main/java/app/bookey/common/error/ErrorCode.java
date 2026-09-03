@@ -39,6 +39,8 @@ public enum ErrorCode {
 
     // 리뷰
     REVIEW_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 작성한 리뷰가 있습니다."),
+    REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),
+    REVIEW_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."),
 
     // 모임
     CLUB_NOT_FOUND(HttpStatus.NOT_FOUND, "모임을 찾을 수 없습니다."),
@@ -73,6 +75,9 @@ public enum ErrorCode {
     CHALLENGE_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "이미 종료된 챌린지입니다."),
     CHALLENGE_REQUIRES_PAGES(HttpStatus.BAD_REQUEST, "총 쪽수가 있는 책에만 챌린지를 걸 수 있습니다."),
     CHALLENGE_INVALID_RECORD(HttpStatus.BAD_REQUEST, "읽는 중인 책에만 챌린지를 걸 수 있습니다."),
+
+    // 댓글
+    COMMENT_REPLY_DEPTH(HttpStatus.BAD_REQUEST, "답글에는 답글을 달 수 없습니다."),
 
     // 오려둔 문장(밑줄)
     QUOTE_NOT_FOUND(HttpStatus.NOT_FOUND, "문장을 찾을 수 없습니다."),

@@ -41,8 +41,18 @@ public final class ReviewDtos {
             @NotNull VerificationLevel verificationLevel,
             Map<String, Object> verificationSnapshot,
             int helpfulCount,
+            /** 답글 포함 전체 댓글 수. */
+            long commentCount,
             @NotNull Instant createdAt
     ) {}
+
+    /** parentId 가 있으면 그 댓글의 답글이 된다. 답글에는 답글을 달 수 없다(1단계). */
+    public record CreateReviewCommentRequest(@NotBlank @Size(max = 300) String body, Long parentId) {}
+
+    /** 리뷰에 덧붙인 말(댓글). 탈퇴한 작성자는 "알 수 없음". replyCount 는 답글 행에서 항상 0. */
+    public record ReviewCommentView(@NotNull Long id, @NotNull Long reviewId, Long parentId,
+            @NotNull Long authorId, @NotNull String authorNickname, String authorAvatarUrl,
+            @NotNull String body, boolean mine, long replyCount, @NotNull Instant createdAt) {}
 
     /** 리뷰 작성 전 미리 보여주는 예상 등급 — "지금 쓰면 어떤 배지를 받는지" */
     public record VerificationPreview(
