@@ -1,6 +1,6 @@
 package app.bookey.api.post;
 
-import app.bookey.api.post.PostService.*;
+import app.bookey.api.post.dto.PostDtos.*;
 import app.bookey.common.security.AuthUser;
 import app.bookey.common.support.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -20,7 +20,7 @@ public class PostController {
 
     private final PostService postService;
 
-    @Operation(summary = "독후감 작성 — 기본 비공개")
+    @Operation(summary = "독후감 작성")
     @PostMapping
     public PostView create(@AuthenticationPrincipal AuthUser user,
                            @Valid @RequestBody CreatePostRequest request) {

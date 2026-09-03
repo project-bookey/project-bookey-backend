@@ -76,7 +76,15 @@ public enum ErrorCode {
 
     // 오려둔 문장(밑줄)
     QUOTE_NOT_FOUND(HttpStatus.NOT_FOUND, "문장을 찾을 수 없습니다."),
-    QUOTE_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다.");
+    QUOTE_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."),
+
+    // 독후감
+    POST_NOT_FOUND(HttpStatus.NOT_FOUND, "독후감을 찾을 수 없습니다."),
+    POST_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."),
+    POST_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "이미지를 찾을 수 없습니다."),
+    IMAGE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "이미지는 10MB 이하만 올릴 수 있습니다."),
+    UNSUPPORTED_IMAGE_TYPE(HttpStatus.BAD_REQUEST, "JPG·PNG·WebP 이미지만 올릴 수 있습니다."),
+    STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "이미지를 저장하지 못했습니다.");
 
     private final HttpStatus status;
     private final String message;
