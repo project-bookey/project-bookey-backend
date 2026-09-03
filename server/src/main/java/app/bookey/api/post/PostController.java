@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Post", description = "독후감 — 내 기록 아카이브")
+@Tag(name = "Post", description = "독후감 — 내 기록 아카이브 · 광장 피드")
 @RestController
 @RequestMapping("/api/v1/posts")
 @RequiredArgsConstructor
@@ -35,6 +35,20 @@ public class PostController {
         return postService.listMine(user.id(), PageRequest.of(page, size));
     }
 
+    @Operation(summary = "광장 독후감 피드 — 공개 독후감 최신순")
+    @GetMapping("/feed")
+    public PageResponse<PostView> feed(@AuthenticationPrincipal AuthUser user,
+                                       @RequestParam(defaultValue = "0") int page,
+                                       @RequestParam(defaultValue = "10") int size) {
+        return postService.feed(user.id(), PageRequest.of(page, size));
+    }
+
+    @Operation(summary = "독후감 한 건 — 비공개는 작성자만, 남의 글은 조회수를 올린다")
+    @GetMapping("/{postId}")
+    public PostView get(@AuthenticationPrincipal AuthUser user, @PathVariable Long postId) {
+        return postService.get(user.id(), postId);
+    }
+
     @Operation(summary = "독후감 수정 · 공개 범위 변경")
     @PatchMapping("/{postId}")
     public PostView update(@AuthenticationPrincipal AuthUser user,
@@ -49,5 +63,11 @@ public class PostController {
                                        @PathVariable Long postId) {
         postService.delete(user.id(), postId);
         return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "좋아요 토글")
+    @PostMapping("/{postId}/like")
+    public PostLikeView like(@AuthenticationPrincipal AuthUser user, @PathVariable Long postId) {
+        return postService.toggleLike(user.id(), postId);
     }
 }
