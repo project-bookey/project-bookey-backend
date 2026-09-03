@@ -2,12 +2,15 @@ package app.bookey.api.post.dto;
 
 import app.bookey.api.quote.dto.QuoteDtos.BookQuoteView;
 import app.bookey.domain.post.PostVisibility;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.util.List;
+
+import static io.swagger.v3.oas.annotations.media.Schema.RequiredMode.NOT_REQUIRED;
 
 public final class PostDtos {
 
@@ -18,10 +21,18 @@ public final class PostDtos {
             @NotNull PostVisibility visibility, List<@Size(max = 30) String> tags,
             @Size(max = 10) List<Long> imageIds, @Size(max = 10) List<Long> quoteIds) {}
 
-    /** null = 유지, 빈 리스트 = 비움. bookId 는 바꿀 수만 있고 없앨 수는 없다. */
+    /**
+     * null = 유지, 빈 리스트 = 비움. bookId 는 바꿀 수만 있고 없앨 수는 없다.
+     * 컬렉션 셋은 생략에 뜻이 있으므로 {@code NOT_REQUIRED} 로 문서에서도 선택 항목으로 내보낸다
+     * — 생성 타입이 필수로 나가면 클라이언트가 {@code []} 를 채워 보내 첨부가 전부 지워진다.
+     */
     public record UpdatePostRequest(Long bookId, @Size(max = 300) String title, @Size(max = 20000) String bodyMd,
-            List<String> tags, PostVisibility visibility,
-            @Size(max = 10) List<Long> imageIds, @Size(max = 10) List<Long> quoteIds) {}
+            @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지, 빈 목록이면 비움") List<String> tags,
+            PostVisibility visibility,
+            @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지, 빈 목록이면 사진을 전부 뗌")
+            @Size(max = 10) List<Long> imageIds,
+            @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지, 빈 목록이면 밑줄 연결을 전부 지움")
+            @Size(max = 10) List<Long> quoteIds) {}
 
     /** 기존 13필드는 이름·순서 그대로, 새 필드는 뒤에. */
     public record PostView(@NotNull Long id, @NotNull String slug, @NotNull String title, @NotNull String bodyMd,
