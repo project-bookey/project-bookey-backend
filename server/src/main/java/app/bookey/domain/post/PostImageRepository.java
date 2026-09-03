@@ -17,8 +17,13 @@ public interface PostImageRepository extends JpaRepository<PostImage, Long> {
     /** 독후감에 붙지 못하고 남은 임시 업로드 — 정리 배치용. */
     List<PostImage> findAllByPostIdIsNullAndCreatedAtBefore(Instant before);
 
-    /** 독후감의 사진 연결을 모두 끊는다(사진 자체는 남긴다). */
-    @Modifying
-    @Query("UPDATE PostImage i SET i.postId = null, i.sortOrder = 0 WHERE i.postId = :postId")
+    /**
+     * 독후감의 사진 연결을 모두 끊는다(사진 자체는 남긴다).
+     * 벌크 UPDATE 라 감사(@LastModifiedDate)가 걸리지 않으므로 updatedAt 을 직접 올린다 — 정리 배치가 시각을 본다.
+     * flushAutomatically 로 앞선 변경을 먼저 내보내고, clearAutomatically 는 쓰지 않는다
+     * — 영속성 컨텍스트를 비우면 바로 뒤의 post 삭제가 준영속 엔티티를 지우려다 실패한다.
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE PostImage i SET i.postId = null, i.sortOrder = 0, i.updatedAt = CURRENT_TIMESTAMP WHERE i.postId = :postId")
     int detachAllByPostId(@Param("postId") Long postId);
 }

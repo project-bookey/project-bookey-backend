@@ -27,7 +27,8 @@ public final class PostDtos {
      * — 생성 타입이 필수로 나가면 클라이언트가 {@code []} 를 채워 보내 첨부가 전부 지워진다.
      */
     public record UpdatePostRequest(Long bookId, @Size(max = 300) String title, @Size(max = 20000) String bodyMd,
-            @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지, 빈 목록이면 비움") List<String> tags,
+            @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지, 빈 목록이면 비움")
+            List<@Size(max = 30) String> tags,
             PostVisibility visibility,
             @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지, 빈 목록이면 사진을 전부 뗌")
             @Size(max = 10) List<Long> imageIds,

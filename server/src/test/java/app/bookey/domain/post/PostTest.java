@@ -13,6 +13,7 @@ class PostTest {
         return Post.builder()
                 .userId(OWNER)
                 .bookId(5L)
+                .readingRecordId(50L)
                 .slug("독후감")
                 .title("제목")
                 .bodyMd("본문")
@@ -60,6 +61,40 @@ class PostTest {
 
         post.changeBook(null);
         assertThat(post.getBookId()).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("changeBook 으로 책이 실제로 바뀌면 이전 책의 독서 기록 연결을 끊는다")
+    void changeBookClearsReadingRecord() {
+        Post post = post(PostVisibility.PRIVATE);
+        assertThat(post.getReadingRecordId()).isEqualTo(50L);
+
+        post.changeBook(7L);
+
+        assertThat(post.getBookId()).isEqualTo(7L);
+        assertThat(post.getReadingRecordId()).isNull();
+    }
+
+    @Test
+    @DisplayName("changeBook 에 같은 책을 주면 독서 기록 연결을 그대로 둔다")
+    void changeBookKeepsReadingRecordForSameBook() {
+        Post post = post(PostVisibility.PRIVATE);
+
+        post.changeBook(5L);
+
+        assertThat(post.getBookId()).isEqualTo(5L);
+        assertThat(post.getReadingRecordId()).isEqualTo(50L);
+    }
+
+    @Test
+    @DisplayName("changeBook 에 null 을 주면 책도 독서 기록도 건드리지 않는다")
+    void changeBookIgnoresNullEntirely() {
+        Post post = post(PostVisibility.PRIVATE);
+
+        post.changeBook(null);
+
+        assertThat(post.getBookId()).isEqualTo(5L);
+        assertThat(post.getReadingRecordId()).isEqualTo(50L);
     }
 
     @Test

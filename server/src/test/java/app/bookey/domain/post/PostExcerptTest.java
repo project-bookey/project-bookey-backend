@@ -85,6 +85,41 @@ class PostExcerptTest {
     }
 
     @Test
+    @DisplayName("짝이 없는 밑줄은 지우지 않는다 — snake_case 가 뭉개지지 않는다")
+    void keepsLoneUnderscore() {
+        assertThat(PostExcerpt.of("snake_case 로 적었다", 100))
+                .isEqualTo("snake_case 로 적었다");
+        assertThat(PostExcerpt.of("on_message_received 를 고쳤다", 100))
+                .isEqualTo("on_message_received 를 고쳤다");
+    }
+
+    @Test
+    @DisplayName("짝이 없는 별표는 지우지 않는다 — 2*3 이 살아남는다")
+    void keepsLoneAsterisk() {
+        assertThat(PostExcerpt.of("2*3 은 6이다", 100)).isEqualTo("2*3 은 6이다");
+        assertThat(PostExcerpt.of("가격은 3~5만원", 100)).isEqualTo("가격은 3~5만원");
+    }
+
+    @Test
+    @DisplayName("닫히지 않은 코드펜스는 시작부터 끝까지 지운다")
+    void removesUnclosedCodeFence() {
+        String body = """
+                앞 문장
+                ```java
+                System.out.println("hi");
+                남은 코드""";
+
+        assertThat(PostExcerpt.of(body, 100)).isEqualTo("앞 문장");
+    }
+
+    @Test
+    @DisplayName("max 가 0 이하면 빈 문자열이다")
+    void emptyForNonPositiveMax() {
+        assertThat(PostExcerpt.of("가나다라마", 0)).isEmpty();
+        assertThat(PostExcerpt.of("가나다라마", -1)).isEmpty();
+    }
+
+    @Test
     @DisplayName("빈 본문이나 null 은 빈 문자열이다")
     void emptyForBlankBody() {
         assertThat(PostExcerpt.of(null, 100)).isEmpty();

@@ -6,10 +6,8 @@ import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
-import app.bookey.domain.post.Post;
 import app.bookey.domain.post.PostComment;
 import app.bookey.domain.post.PostCommentRepository;
-import app.bookey.domain.post.PostRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +33,8 @@ public class PostCommentService {
     private static final int CREATE_RATE_LIMIT = 20;
 
     private final PostCommentRepository commentRepository;
-    private final PostRepository postRepository;
+    /** 읽기 권한 규칙은 PostService.readable 하나만 쓴다 — 규칙이 둘로 갈라지지 않게. */
+    private final PostService postService;
     private final UserRepository userRepository;
     private final RateLimiter rateLimiter;
 
@@ -45,7 +44,7 @@ public class PostCommentService {
      */
     @Transactional(readOnly = true)
     public PageResponse<PostCommentView> list(Long viewerId, Long postId, Pageable pageable) {
-        requireReadable(viewerId, postId);
+        postService.readable(viewerId, postId);
         Page<PostComment> page =
                 commentRepository.findAllByPostIdAndParentIdIsNullOrderByCreatedAtAscIdAsc(postId, pageable);
         List<PostComment> roots = page.getContent();
@@ -64,7 +63,7 @@ public class PostCommentService {
     /** parentId 가 있으면 답글 — 답글의 답글은 막는다(2단계까지). */
     @Transactional
     public PostCommentView create(Long userId, Long postId, CreatePostCommentRequest request) {
-        requireReadable(userId, postId);
+        postService.readable(userId, postId);
         rateLimiter.require("post:comment:" + userId, CREATE_RATE_LIMIT, Duration.ofMinutes(1));
 
         Long parentId = null;
@@ -103,15 +102,6 @@ public class PostCommentService {
     }
 
     // ────────────────────────────── 내부 ──────────────────────────────
-
-    /** 없는 글과 읽을 수 없는 글은 똑같이 POST_NOT_FOUND — 비공개 글의 존재를 드러내지 않는다(PostService 선례). */
-    private void requireReadable(Long viewerId, Long postId) {
-        Post post = postRepository.findById(postId)
-                .orElseThrow(() -> ApiException.of(ErrorCode.POST_NOT_FOUND));
-        if (!post.isReadableBy(viewerId)) {
-            throw ApiException.of(ErrorCode.POST_NOT_FOUND);
-        }
-    }
 
     /** 루트 id 들로 답글을 한 번에 읽어 부모별로 묶는다 — 각 목록은 오래된 순 그대로다. */
     private Map<Long, List<PostComment>> loadReplies(List<PostComment> roots) {

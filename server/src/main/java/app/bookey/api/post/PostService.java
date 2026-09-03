@@ -218,8 +218,11 @@ public class PostService {
         return post;
     }
 
-    /** 없는 글과 읽을 수 없는 글은 똑같이 POST_NOT_FOUND — 비공개 글의 존재를 드러내지 않는다. */
-    private Post readable(Long viewerId, Long postId) {
+    /**
+     * 없는 글과 읽을 수 없는 글은 똑같이 POST_NOT_FOUND — 비공개 글의 존재를 드러내지 않는다.
+     * 댓글도 같은 규칙을 써야 하므로 package-private 로 열어 {@link PostCommentService} 가 함께 쓴다.
+     */
+    Post readable(Long viewerId, Long postId) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.POST_NOT_FOUND));
         if (!post.isReadableBy(viewerId)) {

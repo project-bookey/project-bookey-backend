@@ -26,8 +26,6 @@ public interface PostCommentRepository extends JpaRepository<PostComment, Long> 
             """)
     List<PostCommentCount> countPerPost(@Param("postIds") Collection<Long> postIds);
 
-    long countByPostId(Long postId);
-
     interface PostCommentCount {
         Long getPostId();
         long getCommentCount();
