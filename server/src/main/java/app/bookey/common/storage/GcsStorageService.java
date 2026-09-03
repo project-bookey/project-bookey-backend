@@ -16,7 +16,11 @@ import java.io.InputStream;
 
 /**
  * 운영용 GCS 저장소. 버킷은 공개 읽기(allUsers: objectViewer)로 두고 URL 을 그대로 내려준다.
- * 자격증명은 ADC(Cloud Run 서비스계정)로 잡는다 — 로컬에서는 보통 없으므로 @Lazy 로 첫 사용 시점까지 생성을 미룬다.
+ * 자격증명은 ADC(Cloud Run 서비스계정)로 잡는다.
+ *
+ * <p>{@code @Lazy} 를 달아 두었지만 {@code PostImageService}·{@code PostImageCleanupJob} 이 저장소를 생성자 주입하므로
+ * 실제로는 기동 시점에 만들어진다. 그래서 버킷이 비면 {@link StorageConfigValidator} 보다 이 생성자가 먼저 기동을 막는다 —
+ * 검사와 안내 메시지는 {@link StorageConfigValidator#requireBucket} 을 같이 써서 어느 쪽이 먼저든 로그가 같다.
  */
 @Slf4j
 @Service
@@ -31,11 +35,7 @@ public class GcsStorageService implements StorageService {
     private final Storage storage;
 
     public GcsStorageService(BookeyProperties properties) {
-        String bucket = properties.storage().gcs().bucket();
-        if (bucket == null || bucket.isBlank()) {
-            throw new IllegalStateException("bookey.storage.gcs.bucket 이 비어 있습니다.");
-        }
-        this.bucket = bucket;
+        this.bucket = StorageConfigValidator.requireBucket(properties.storage());
         this.storage = StorageOptions.getDefaultInstance().getService();
         log.info("GCS 업로드 저장소: gs://{}", bucket);
     }

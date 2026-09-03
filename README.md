@@ -122,6 +122,7 @@ GitHub Repository Variables:
 | `GCP_CLOUD_RUN_SERVICE` | `bookey-backend` |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github` |
 | `GCP_SERVICE_ACCOUNT` | `github-cloud-run@bookey-prod.iam.gserviceaccount.com` |
+| `GCP_MEDIA_BUCKET` | `bookey-media` — 독후감 사진 GCS 버킷. 워크플로 `env_vars` 가 `GCS_BUCKET` 으로 넘긴다 (아래 "업로드 저장소" 참고) |
 
 GitHub Repository Secrets:
 
@@ -141,7 +142,7 @@ GitHub Repository Secrets:
 
 독후감 사진은 운영에서 **반드시 GCS** 에 저장한다. Cloud Run 컨테이너의 파일시스템은 쓰기가 되지만 인스턴스가 교체·확장될 때마다 사라지므로, 로컬 디스크 저장소로 뜨면 업로드는 성공해 놓고 나중에 사진이 없어지고 다른 인스턴스에서는 `/uploads/{key}` 가 404 가 된다.
 
-그래서 `prod` 프로파일은 `bookey.storage.type` 기본값을 `gcs` 로 두고(`application-prod.yml`), 기동 시 `StorageConfigValidator` 가 아래를 확인해 어긋나면 **서버를 띄우지 않는다**(새 리비전이 못 뜨면 Cloud Run 은 이전 리비전을 계속 서빙한다).
+그래서 `prod` 프로파일은 `bookey.storage.type` 기본값을 `gcs` 로 두고(`application-prod.yml`), 기동 시 `StorageConfigValidator`(버킷이 비면 `GcsStorageService` 생성자가 먼저)가 아래를 확인해 어긋나면 **서버를 띄우지 않는다**(새 리비전이 못 뜨면 Cloud Run 은 이전 리비전을 계속 서빙한다). 실패 메시지에 고칠 파일과 넣을 줄이 그대로 적혀 있다.
 
 | 확인 | 값 | 환경변수 |
 |---|---|---|
@@ -154,16 +155,23 @@ GitHub Repository Secrets:
             GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }}
 ```
 
-### GCS 준비 (운영)
+> **이 줄이 워크플로에 없는 채로 `main` 을 푸시하면 배포가 실패한다.** 워크플로는 `SPRING_PROFILES_ACTIVE=prod` 만 넘기고 `GCS_BUCKET` 은 넘기지 않으므로 기동 검사(`GcsStorageService` 생성자·`StorageConfigValidator`)가 서버를 막고, startup probe 가 실패해 Actions 의 `Deploy to Cloud Run` 스텝이 빨갛게 된다. 이전 리비전이 계속 서빙되므로 장애는 아니지만, 아래 "GCS 준비" 를 끝낼 때까지 `main` 은 **배포 불가** 상태다. 사진 업로드가 처음 `main` 에 들어갈 때는 반드시 **머지 → GCS 준비 → 워크플로 한 줄 커밋 → 푸시** 순서를 지킨다.
 
-버킷은 아직 없다. 운영에 올리기 전에 아래를 한 번 실행한다 (`<bucket>` 은 예: `bookey-media`, GitHub Variables 의 `GCP_MEDIA_BUCKET` 에도 같은 값을 넣는다):
+### GCS 준비 (운영) — `main` 푸시 전에 한 번
 
-```bash
-gcloud storage buckets create gs://<bucket> --location=asia-northeast3 --uniform-bucket-level-access
-gcloud storage buckets add-iam-policy-binding gs://<bucket> --member=allUsers --role=roles/storage.objectViewer
-# Cloud Run 런타임 서비스계정에 roles/storage.objectAdmin
-# .github/workflows/deploy-cloud-run.yml env_vars 에 STORAGE_TYPE=gcs, GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }} 추가 (이번엔 워크플로 파일을 수정하지 않는다)
-```
+버킷은 아직 없다. 사진 업로드가 들어간 `main` 을 푸시하기 **전에** 아래를 순서대로 한 번 실행한다 (`<bucket>` 은 예: `bookey-media`).
+
+1. 버킷 생성 + 공개 읽기 + Cloud Run 런타임 서비스계정의 쓰기 권한. `<runtime-sa>` 는 `bookey-backend` 서비스의 런타임 서비스계정(따로 지정하지 않았다면 Compute Engine 기본 SA `<project-number>-compute@developer.gserviceaccount.com`):
+
+   ```bash
+   gcloud storage buckets create gs://<bucket> --location=asia-northeast3 --uniform-bucket-level-access
+   gcloud storage buckets add-iam-policy-binding gs://<bucket> --member=allUsers --role=roles/storage.objectViewer
+   gcloud storage buckets add-iam-policy-binding gs://<bucket> --member=serviceAccount:<runtime-sa> --role=roles/storage.objectAdmin
+   ```
+
+2. GitHub Repository Variables 에 `GCP_MEDIA_BUCKET=<bucket>` 등록.
+3. `main` 에서 **별도 커밋**으로 `.github/workflows/deploy-cloud-run.yml` 의 `env_vars` 에 `GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }}` 한 줄 추가 (`STORAGE_TYPE` 은 prod 기본값이 `gcs` 라 생략해도 되고, 명시하려면 `STORAGE_TYPE=gcs`).
+4. 푸시. Actions 의 `Deploy to Cloud Run` 이 초록이고 새 리비전 로그에 `운영 업로드 저장소 확인: gs://<bucket>` 이 찍히면 끝. 실패했다면 리비전 로그의 `IllegalStateException` 메시지가 빠진 환경변수를 알려 준다.
 
 공개 버킷이라 비공개 글의 사진도 URL 을 알면 열린다 (UUID 키로만 방어) — 서명 URL 은 백로그.
 
