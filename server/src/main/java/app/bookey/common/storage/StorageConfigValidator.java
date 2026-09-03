@@ -5,8 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
-import java.util.Locale;
-
 /**
  * 운영(prod) 프로파일에서 업로드 저장소가 GCS 로 잡혔는지 기동 시점에 확인한다.
  *
@@ -37,14 +35,18 @@ public class StorageConfigValidator {
         log.info("운영 업로드 저장소 확인: gs://{}", properties.storage().gcs().bucket());
     }
 
-    /** 운영에서 허용하는 조합은 type=gcs + 비어 있지 않은 버킷, 이 하나뿐이다. */
+    /**
+     * 운영에서 허용하는 조합은 type=gcs + 비어 있지 않은 버킷, 이 하나뿐이다.
+     * 판정 규칙은 실제로 빈을 고르는 {@code @ConditionalOnProperty} 와 똑같이 맞춘다 —
+     * 대소문자만 무시하고 공백은 다듬지 않는다. 여기서만 " gcs " 를 통과시키면
+     * 검사는 통과했는데 로컬 디스크 구현이 뜨는, 정확히 이 검사가 막으려던 상태가 된다.
+     */
     static void validate(BookeyProperties.Storage storage) {
         String type = storage == null ? null : storage.type();
-        String normalized = type == null ? "" : type.trim().toLowerCase(Locale.ROOT);
-        if (!"gcs".equals(normalized)) {
+        if (!"gcs".equalsIgnoreCase(type)) {
             throw new IllegalStateException(
                     "운영 프로파일에서는 bookey.storage.type 이 gcs 여야 합니다(현재: "
-                            + (normalized.isEmpty() ? "(비어 있음)" : normalized)
+                            + (type == null || type.isBlank() ? "(비어 있음)" : type)
                             + "). 로컬 디스크로 뜨면 인스턴스가 교체될 때마다 업로드한 사진이 사라집니다. "
                             + WORKFLOW_ENV_VARS + " 에 STORAGE_TYPE=gcs 를 넣으세요.");
         }

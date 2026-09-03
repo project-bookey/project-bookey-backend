@@ -60,9 +60,22 @@ public class LocalDiskStorageService implements StorageService {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
             log.warn("업로드 파일 저장 실패: key={}", key, e);
+            deletePartialFile(target);
             throw ApiException.of(ErrorCode.STORAGE_ERROR);
         }
         return publicUrl(publicBase(), key);
+    }
+
+    /**
+     * 복사가 중간에 끊기면 반쪽짜리 파일이 남는다 — 행은 만들어지지 않으므로 정리 배치도 회수하지 못한다.
+     * 여기서 지우되, 그 삭제마저 실패하면 무시한다(원래의 저장 실패를 가리지 않는 것이 더 중요하다).
+     */
+    private static void deletePartialFile(Path target) {
+        try {
+            Files.deleteIfExists(target);
+        } catch (IOException ignored) {
+            // 무시 — 남은 파일은 같은 키로 다시 저장될 때 덮어써진다
+        }
     }
 
     @Override

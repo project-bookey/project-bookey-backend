@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Collection;
@@ -26,4 +27,15 @@ public interface PostImageRepository extends JpaRepository<PostImage, Long> {
     @Modifying(flushAutomatically = true)
     @Query("UPDATE PostImage i SET i.postId = null, i.sortOrder = 0, i.updatedAt = CURRENT_TIMESTAMP WHERE i.postId = :postId")
     int detachAllByPostId(@Param("postId") Long postId);
+
+    /**
+     * 아직 어떤 독후감에도 붙지 않은 상태일 때만 행을 지운다 — 지운 행 수(0 또는 1)를 돌려준다.
+     * 정리 배치가 고아를 조회한 뒤 지우기 전에 사용자가 그 사진을 독후감에 붙일 수 있으므로,
+     * post_id IS NULL 을 삭제 조건에 함께 넣어 그 경합에서 방금 붙인 사진을 지우지 않게 한다.
+     * 잡에는 트랜잭션이 없으므로 여기서 한 건씩 커밋한다 — 다른 건의 실패가 앞선 삭제를 되돌리지 않는다.
+     */
+    @Transactional
+    @Modifying
+    @Query("DELETE FROM PostImage i WHERE i.id = :id AND i.postId IS NULL")
+    int deleteIfDetached(@Param("id") Long id);
 }

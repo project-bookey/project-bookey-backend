@@ -67,11 +67,17 @@ public final class ImageSniffer {
                 break;
             }
             if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) {
+                if (length < 7) {
+                    break;                       // 선언 길이(자기 2 + 정밀도 1 + 높이 2 + 너비 2)가 모자라다 — 깨진 헤더
+                }
                 if (i + 8 >= head.length) {
                     break;                       // SOF 를 만났지만 헤더가 잘려 크기를 못 읽는다
                 }
                 int height = (u(head, i + 5) << 8) | u(head, i + 6);
                 int width = (u(head, i + 7) << 8) | u(head, i + 8);
+                if (width <= 0 || height <= 0) {
+                    break;                       // 0 짜리 크기는 쓰지 않는다 — 형식만 인정하고 크기는 비운다
+                }
                 return new ImageType("image/jpeg", "jpg", width, height);
             }
             i += 2 + length;
@@ -96,9 +102,16 @@ public final class ImageSniffer {
         return true;
     }
 
-    /** IHDR 은 시그니처 바로 뒤에 오도록 규격이 강제한다 — 오프셋 16~23 이 너비·높이. */
+    private static boolean isIhdr(byte[] head) {
+        return u(head, 12) == 'I' && u(head, 13) == 'H' && u(head, 14) == 'D' && u(head, 15) == 'R';
+    }
+
+    /**
+     * IHDR 은 시그니처 바로 뒤에 오도록 규격이 강제한다 — 12~15 가 청크 이름, 16~23 이 너비·높이.
+     * 청크 이름이 IHDR 이 아니면 규격을 벗어난 파일이니 엉뚱한 바이트를 크기로 읽지 않고 비운다(형식 판정은 유지).
+     */
     private static ImageType png(byte[] head) {
-        if (head.length < 24) {
+        if (head.length < 24 || !isIhdr(head)) {
             return new ImageType("image/png", "png", null, null);
         }
         int width = int32(head, 16);

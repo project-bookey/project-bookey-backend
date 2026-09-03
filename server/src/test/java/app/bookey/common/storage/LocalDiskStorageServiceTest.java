@@ -81,6 +81,27 @@ class LocalDiskStorageServiceTest {
     }
 
     @Test
+    @DisplayName("절대경로 키는 저장·삭제 모두 거부한다 — 업로드 루트 밖을 가리킨다")
+    void rejectsAbsolutePathKey(@TempDir Path dir) {
+        LocalDiskStorageService service = service(dir, "http://cdn.example");
+
+        assertThatThrownBy(() -> service.store("/etc/x", content("x"), 1, "image/png"))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getErrorCode())
+                .isEqualTo(ErrorCode.STORAGE_ERROR);
+        assertThatThrownBy(() -> service.delete("/etc/x"))
+                .isInstanceOf(ApiException.class);
+
+        // POSIX 에서 "C:\x" 는 백슬래시가 들어간 평범한 파일 이름이라 루트 안에 들어온다 — 절대경로인 곳에서만 검증한다
+        if (Path.of("C:\\x").isAbsolute()) {
+            assertThatThrownBy(() -> service.store("C:\\x", content("x"), 1, "image/png"))
+                    .isInstanceOf(ApiException.class);
+            assertThatThrownBy(() -> service.delete("C:\\x"))
+                    .isInstanceOf(ApiException.class);
+        }
+    }
+
+    @Test
     @DisplayName("루트 밖으로 나가는 키는 삭제도 거부한다")
     void rejectsPathTraversalOnDelete(@TempDir Path dir) {
         LocalDiskStorageService service = service(dir, "http://cdn.example");

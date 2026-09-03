@@ -105,6 +105,32 @@ class ImageSnifferTest {
     }
 
     @Test
+    @DisplayName("SOF 의 선언 길이가 크기 필드를 담지 못하면 형식만 판별하고 크기는 비운다")
+    void jpegWithTruncatedSofLengthHasNullSize() {
+        // 길이 0x0005 — 정밀도·높이·너비를 담기에 모자란다. 뒤 바이트는 넉넉히 있어 잘림 검사가 아니라 길이 검사가 걸린다
+        byte[] brokenSof = bytes(0xFF, 0xC0, 0x00, 0x05,
+                0x08, 0x02, 0x58, 0x03, 0x20, 0x03, 0x01, 0x22, 0x00);
+
+        ImageType type = ImageSniffer.sniff(concat(SOI, APP0_JFIF, brokenSof));
+
+        assertThat(type).isNotNull();
+        assertThat(type.contentType()).isEqualTo("image/jpeg");
+        assertThat(type.width()).isNull();
+        assertThat(type.height()).isNull();
+    }
+
+    @Test
+    @DisplayName("SOF 의 높이가 0 이면 형식만 판별하고 크기는 비운다")
+    void jpegWithZeroDimensionHasNullSize() {
+        ImageType type = ImageSniffer.sniff(concat(SOI, APP0_JFIF, sof(0xC0, 0, 640)));
+
+        assertThat(type).isNotNull();
+        assertThat(type.contentType()).isEqualTo("image/jpeg");
+        assertThat(type.width()).isNull();
+        assertThat(type.height()).isNull();
+    }
+
+    @Test
     @DisplayName("PNG 는 IHDR 에서 800×600 을 읽는다")
     void sniffsPng() {
         byte[] png = concat(
@@ -122,6 +148,25 @@ class ImageSnifferTest {
         assertThat(type.extension()).isEqualTo("png");
         assertThat(type.width()).isEqualTo(800);
         assertThat(type.height()).isEqualTo(600);
+    }
+
+    @Test
+    @DisplayName("시그니처 뒤 첫 청크가 IHDR 이 아니면 크기를 비운다 — 엉뚱한 바이트를 크기로 읽지 않는다")
+    void pngWithoutIhdrChunkHasNullSize() {
+        byte[] png = concat(
+                bytes(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A),   // 시그니처
+                bytes(0x00, 0x00, 0x00, 0x0D),
+                bytes(0x49, 0x44, 0x41, 0x54),                            // "IDAT" — 규격을 벗어난 순서
+                bytes(0x00, 0x00, 0x03, 0x20),
+                bytes(0x00, 0x00, 0x02, 0x58),
+                bytes(0x08, 0x06, 0x00, 0x00, 0x00));
+
+        ImageType type = ImageSniffer.sniff(png);
+
+        assertThat(type).isNotNull();
+        assertThat(type.contentType()).isEqualTo("image/png");
+        assertThat(type.width()).isNull();
+        assertThat(type.height()).isNull();
     }
 
     @Test

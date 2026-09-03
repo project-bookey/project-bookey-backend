@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -76,6 +77,17 @@ public class GlobalExceptionHandler {
         log.debug("Multipart request rejected - {}", e.getMessage());
         return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
                 .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "업로드 형식이 올바르지 않습니다."));
+    }
+
+    /**
+     * Content-Type 이 엔드포인트가 받는 타입이 아닌 경우 — 업로드를 multipart 가 아니라 JSON 으로 보낸 경우가 대표적이다.
+     * 클라이언트 실수이므로 폴백의 500 으로 새지 않게 400 으로 맞춘다.
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException e) {
+        log.debug("Unsupported media type - {}", e.getMessage());
+        return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
+                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "지원하지 않는 Content-Type 입니다."));
     }
 
     @ExceptionHandler(Exception.class)

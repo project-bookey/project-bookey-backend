@@ -18,7 +18,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 /**
  * 고아 이미지 정리 정책 단위 테스트. 리포지토리는 Mockito 로 대신하되 조회는 실제 쿼리 조건
  * (post_id IS NULL AND created_at < ?) 을 인메모리로 흉내 내 잡이 넘기는 기준 시각까지 검증한다.
+ * 조건부 삭제는 행 수(0/1)로 스텁해 조회~삭제 사이의 경합을 그대로 재현한다.
  */
 class PostImageCleanupJobTest {
 
@@ -99,6 +100,12 @@ class PostImageCleanupJobTest {
                     .filter(image -> image.getCreatedAt().isBefore(before))
                     .toList();
         });
+        stubStillDetached();
+    }
+
+    /** 기본값: 조회 때와 달라진 것이 없어 조건부 DELETE 가 한 행을 지운다. */
+    private void stubStillDetached() {
+        when(imageRepository.deleteIfDetached(anyLong())).thenReturn(1);
     }
 
     @Test
@@ -116,14 +123,32 @@ class PostImageCleanupJobTest {
 
         assertThat(deleted).isEqualTo(1);
         assertThat(storage.deleted).containsExactly("posts/10/2026/09/a.png");
-        verify(imageRepository).delete(staleOrphan);
-        verify(imageRepository, never()).delete(freshOrphan);
-        verify(imageRepository, never()).delete(attachedOld);
-        verify(imageRepository, never()).delete(justAtBoundary);   // 정확히 24h 는 아직 '지난' 것이 아니다
+        verify(imageRepository).deleteIfDetached(staleOrphan.getId());
+        verify(imageRepository, never()).deleteIfDetached(freshOrphan.getId());
+        verify(imageRepository, never()).deleteIfDetached(attachedOld.getId());
+        // 정확히 24h 는 아직 '지난' 것이 아니다
+        verify(imageRepository, never()).deleteIfDetached(justAtBoundary.getId());
     }
 
     @Test
-    @DisplayName("저장소 삭제가 실패해도 그 행은 지우고 나머지를 계속 처리한다 — 다음 실행에서 다시 찾을 수 없으므로")
+    @DisplayName("조회 뒤 독후감에 붙은 사진은 행 삭제가 0 행이라 파일도 지우지 않는다")
+    void keepsFileWhenRowWasAttachedInBetween() {
+        PostImage raced = image(1L, "posts/10/2026/09/a.png", null, NOW.minus(Duration.ofDays(2)));
+        PostImage plain = image(2L, "posts/10/2026/09/b.png", null, NOW.minus(Duration.ofDays(2)));
+        stubOrphanQuery(List.of(raced, plain));
+        // 목록을 읽은 뒤 사용자가 raced 를 독후감에 붙였다 — post_id IS NULL 조건이 걸려 0 행이 지워진다
+        when(imageRepository.deleteIfDetached(raced.getId())).thenReturn(0);
+        RecordingStorage storage = new RecordingStorage(Set.of());
+
+        int deleted = new PostImageCleanupJob(imageRepository, storage).run(NOW);
+
+        assertThat(deleted).isEqualTo(1);
+        assertThat(storage.deleted).containsExactly("posts/10/2026/09/b.png");   // 붙은 사진의 파일은 살아 있다
+        verify(imageRepository).deleteIfDetached(raced.getId());
+    }
+
+    @Test
+    @DisplayName("행을 지운 뒤 저장소 삭제가 실패해도 되돌리지 않고 나머지를 계속 처리한다")
     void deletesRowEvenWhenStorageDeleteFailsAndContinues() {
         PostImage first = image(1L, "posts/10/2026/09/a.png", null, NOW.minus(Duration.ofDays(2)));
         PostImage broken = image(2L, "posts/10/2026/09/b.png", null, NOW.minus(Duration.ofDays(2)));
@@ -136,26 +161,27 @@ class PostImageCleanupJobTest {
 
         assertThat(deleted).isEqualTo(3);
         assertThat(storage.deleted).containsExactly("posts/10/2026/09/a.png", "posts/10/2026/09/c.png");
-        verify(imageRepository).delete(first);
-        verify(imageRepository).delete(broken);
-        verify(imageRepository).delete(last);
+        verify(imageRepository).deleteIfDetached(first.getId());
+        verify(imageRepository).deleteIfDetached(broken.getId());
+        verify(imageRepository).deleteIfDetached(last.getId());
     }
 
     @Test
-    @DisplayName("행 삭제가 실패해도 나머지는 계속 처리한다")
+    @DisplayName("행 삭제가 예외로 실패하면 그 파일은 건드리지 않고 나머지는 계속 처리한다")
     void continuesWhenRowDeleteFails() {
         PostImage first = image(1L, "posts/10/2026/09/a.png", null, NOW.minus(Duration.ofDays(2)));
         PostImage last = image(2L, "posts/10/2026/09/b.png", null, NOW.minus(Duration.ofDays(2)));
         stubOrphanQuery(List.of(first, last));
-        doThrow(new RuntimeException("DB 끊김")).when(imageRepository).delete(first);
+        when(imageRepository.deleteIfDetached(first.getId())).thenThrow(new RuntimeException("DB 끊김"));
         RecordingStorage storage = new RecordingStorage(Set.of());
         PostImageCleanupJob job = new PostImageCleanupJob(imageRepository, storage);
 
         int deleted = job.run(NOW);
 
         assertThat(deleted).isEqualTo(1);
-        assertThat(storage.deleted).containsExactly("posts/10/2026/09/a.png", "posts/10/2026/09/b.png");
-        verify(imageRepository).delete(last);
+        // 행이 남았으므로 파일도 남겨야 다음 실행에서 다시 회수된다
+        assertThat(storage.deleted).containsExactly("posts/10/2026/09/b.png");
+        verify(imageRepository).deleteIfDetached(last.getId());
     }
 
     @Test
@@ -168,6 +194,6 @@ class PostImageCleanupJobTest {
 
         assertThat(deleted).isZero();
         assertThat(storage.deleted).isEmpty();
-        verify(imageRepository, never()).delete(any(PostImage.class));
+        verify(imageRepository, never()).deleteIfDetached(anyLong());
     }
 }

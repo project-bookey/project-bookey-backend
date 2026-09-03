@@ -27,9 +27,9 @@ class StorageConfigValidatorTest {
     }
 
     @Test
-    @DisplayName("대소문자·공백이 섞인 gcs 도 통과한다")
-    void acceptsTypeIgnoringCaseAndSpaces() {
-        assertThatCode(() -> StorageConfigValidator.validate(storage(" GCS ", "bookey-media")))
+    @DisplayName("대소문자만 다른 gcs 도 통과한다 — @ConditionalOnProperty 와 같은 규칙")
+    void acceptsTypeIgnoringCase() {
+        assertThatCode(() -> StorageConfigValidator.validate(storage("GCS", "bookey-media")))
                 .doesNotThrowAnyException();
     }
 

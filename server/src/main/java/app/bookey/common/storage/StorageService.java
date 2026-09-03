@@ -8,6 +8,6 @@ public interface StorageService {
     /** 저장 후 공개 읽기 URL 을 돌려준다. 실패는 ApiException(STORAGE_ERROR). */
     String store(String key, InputStream in, long size, String contentType);
 
-    /** 없는 키는 조용히 무시한다. */
+    /** 없는 키는 무시한다. 키가 저장소 규칙에 어긋나면 ApiException(STORAGE_ERROR) 을 던질 수 있다. */
     void delete(String key);
 }

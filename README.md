@@ -149,13 +149,9 @@ GitHub Repository Secrets:
 | `bookey.storage.type` | `gcs` | `STORAGE_TYPE` (prod 기본값이 `gcs`) |
 | `bookey.storage.gcs.bucket` | 비어 있으면 안 됨 | `GCS_BUCKET` |
 
-`.github/workflows/deploy-cloud-run.yml` 의 `env_vars` 는 `env_vars_update_strategy: overwrite` 라 배포할 때마다 Cloud Run 의 환경변수를 통째로 덮어쓴다. **콘솔에서 손으로 넣은 값은 다음 배포에서 지워지므로** 워크플로의 `env_vars` 목록에 직접 넣어야 한다:
+`.github/workflows/deploy-cloud-run.yml` 의 `env_vars` 는 `env_vars_update_strategy: overwrite` 라 배포할 때마다 Cloud Run 의 환경변수를 통째로 덮어쓴다 — **콘솔에서 손으로 넣은 값은 다음 배포에서 지워지므로** 워크플로의 `env_vars` 목록에 직접 넣어야 한다.
 
-```yaml
-            GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }}
-```
-
-> **이 줄이 워크플로에 없는 채로 `main` 을 푸시하면 배포가 실패한다.** 워크플로는 `SPRING_PROFILES_ACTIVE=prod` 만 넘기고 `GCS_BUCKET` 은 넘기지 않으므로 기동 검사(`GcsStorageService` 생성자·`StorageConfigValidator`)가 서버를 막고, startup probe 가 실패해 Actions 의 `Deploy to Cloud Run` 스텝이 빨갛게 된다. 이전 리비전이 계속 서빙되므로 장애는 아니지만, 아래 "GCS 준비" 를 끝낼 때까지 `main` 은 **배포 불가** 상태다. 사진 업로드가 처음 `main` 에 들어갈 때는 반드시 **머지 → GCS 준비 → 워크플로 한 줄 커밋 → 푸시** 순서를 지킨다.
+> **워크플로에는 아직 `GCS_BUCKET` 줄이 없다.** 그대로 `main` 을 푸시하면 기동 검사(`GcsStorageService` 생성자·`StorageConfigValidator`)가 서버를 막아 startup probe 가 실패하고 Actions 의 `Deploy to Cloud Run` 스텝이 빨갛게 된다. 이전 리비전이 계속 서빙되므로 장애는 아니지만 `main` 은 **배포 불가** 상태다. 버킷 생성부터 워크플로 한 줄 추가까지의 순서는 바로 아래 "GCS 준비 (운영)" 에만 적어 둔다 — 사진 업로드가 처음 `main` 에 들어갈 때는 반드시 **머지 → GCS 준비 → 워크플로 한 줄 커밋 → 푸시** 순서를 지킨다.
 
 ### GCS 준비 (운영) — `main` 푸시 전에 한 번
 
