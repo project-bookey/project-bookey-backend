@@ -58,7 +58,11 @@ public class QuoteCommentService {
     @Transactional(readOnly = true)
     public PageResponse<QuoteCommentView> replies(Long userId, Long quoteId, Long commentId, Pageable pageable) {
         requireQuote(quoteId);
-        requireComment(quoteId, commentId);
+        QuoteComment comment = requireComment(quoteId, commentId);
+        if (comment.isReply()) {
+            // 1단계 모델 — 답글은 답글을 가질 수 없으니 없는 것으로 본다.
+            throw ApiException.of(ErrorCode.QUOTE_COMMENT_NOT_FOUND);
+        }
         Page<QuoteComment> page = commentRepository.findAllByParentIdOrderByCreatedAtAscIdAsc(commentId, pageable);
         List<QuoteComment> replies = page.getContent();
         List<QuoteCommentView> views = assembleViews(replies, userId, loadAuthors(replies), Map.of());
@@ -136,7 +140,7 @@ public class QuoteCommentService {
     /** 1단계까지만 — 답글에 다시 답글을 달려 하면 막는다(ClubPostService.create 선례). */
     static QuoteComment requireRepliable(QuoteComment parent) {
         if (parent.isReply()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "답글에는 답글을 달 수 없습니다.");
+            throw ApiException.of(ErrorCode.COMMENT_REPLY_DEPTH);
         }
         return parent;
     }

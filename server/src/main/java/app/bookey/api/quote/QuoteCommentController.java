@@ -19,8 +19,8 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class QuoteCommentController {
 
-    /** 답글은 한 번에 다 펼치는 화면이라 상한만 둔다. */
-    private static final int MAX_REPLY_PAGE_SIZE = 100;
+    /** 0·음수 size 가 500 으로 새지 않게 1~100 으로 묶는다. */
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final QuoteCommentService commentService;
 
@@ -30,7 +30,7 @@ public class QuoteCommentController {
                                                @PathVariable Long quoteId,
                                                @RequestParam(defaultValue = "0") int page,
                                                @RequestParam(defaultValue = "30") int size) {
-        return commentService.list(user.id(), quoteId, PageRequest.of(page, size));
+        return commentService.list(user.id(), quoteId, PageRequest.of(page, Math.clamp(size, 1, MAX_PAGE_SIZE)));
     }
 
     @Operation(summary = "답글 목록 — 오래된 순")
@@ -41,7 +41,7 @@ public class QuoteCommentController {
                                                   @RequestParam(defaultValue = "0") int page,
                                                   @RequestParam(defaultValue = "20") int size) {
         return commentService.replies(user.id(), quoteId, commentId,
-                PageRequest.of(page, Math.min(size, MAX_REPLY_PAGE_SIZE)));
+                PageRequest.of(page, Math.clamp(size, 1, MAX_PAGE_SIZE)));
     }
 
     @Operation(summary = "댓글 작성 — parentId 를 주면 답글(1단계)")

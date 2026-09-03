@@ -7,6 +7,8 @@ CREATE INDEX idx_quote_comments_parent
     ON quote_comments(parent_id, created_at, id) WHERE parent_id IS NOT NULL;
 
 -- 2) 리뷰 댓글 — quote_comments 와 같은 모양(본문 300자, 1단계 답글).
+-- 리뷰는 소프트 삭제(status)라 review_id ... ON DELETE CASCADE 는 하드 삭제 때만 발동한다.
+-- 지워진 리뷰의 댓글은 테이블에 남지만 API 로는 닿을 수 없다 — 모든 조회 경로가 isVisible 로 거른다.
 CREATE TABLE review_comments (
     id         BIGSERIAL PRIMARY KEY,
     review_id  BIGINT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,

@@ -135,6 +135,6 @@ class ReviewCommentServiceTest {
                 .isInstanceOf(ApiException.class)
                 .hasMessage("답글에는 답글을 달 수 없습니다.")
                 .extracting(e -> ((ApiException) e).getErrorCode())
-                .isEqualTo(ErrorCode.INVALID_REQUEST);
+                .isEqualTo(ErrorCode.COMMENT_REPLY_DEPTH);
     }
 }

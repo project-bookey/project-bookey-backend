@@ -76,6 +76,9 @@ public enum ErrorCode {
     CHALLENGE_REQUIRES_PAGES(HttpStatus.BAD_REQUEST, "총 쪽수가 있는 책에만 챌린지를 걸 수 있습니다."),
     CHALLENGE_INVALID_RECORD(HttpStatus.BAD_REQUEST, "읽는 중인 책에만 챌린지를 걸 수 있습니다."),
 
+    // 댓글
+    COMMENT_REPLY_DEPTH(HttpStatus.BAD_REQUEST, "답글에는 답글을 달 수 없습니다."),
+
     // 오려둔 문장(밑줄)
     QUOTE_NOT_FOUND(HttpStatus.NOT_FOUND, "문장을 찾을 수 없습니다."),
     QUOTE_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다.");

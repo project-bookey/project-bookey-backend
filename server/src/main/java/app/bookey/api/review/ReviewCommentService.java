@@ -59,7 +59,11 @@ public class ReviewCommentService {
     @Transactional(readOnly = true)
     public PageResponse<ReviewCommentView> replies(Long userId, Long reviewId, Long commentId, Pageable pageable) {
         requireVisibleReview(reviewId);
-        requireComment(reviewId, commentId);
+        ReviewComment comment = requireComment(reviewId, commentId);
+        if (comment.isReply()) {
+            // 1단계 모델 — 답글은 답글을 가질 수 없으니 없는 것으로 본다.
+            throw ApiException.of(ErrorCode.REVIEW_COMMENT_NOT_FOUND);
+        }
         Page<ReviewComment> page = commentRepository.findAllByParentIdOrderByCreatedAtAscIdAsc(commentId, pageable);
         List<ReviewComment> replies = page.getContent();
         List<ReviewCommentView> views = assembleViews(replies, userId, loadAuthors(replies), Map.of());
@@ -106,8 +110,8 @@ public class ReviewCommentService {
     // ────────────────────────────── 내부 ──────────────────────────────
 
     /** 숨겨지거나 지워진 리뷰는 없는 것으로 본다 — 댓글도 달 수 없다. */
-    private Review requireVisibleReview(Long reviewId) {
-        return reviewRepository.findById(reviewId)
+    private void requireVisibleReview(Long reviewId) {
+        reviewRepository.findById(reviewId)
                 .filter(Review::isVisible)
                 .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
     }
@@ -140,7 +144,7 @@ public class ReviewCommentService {
     /** 1단계까지만 — 답글에 다시 답글을 달려 하면 막는다(ClubPostService.create 선례). */
     static ReviewComment requireRepliable(ReviewComment parent) {
         if (parent.isReply()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "답글에는 답글을 달 수 없습니다.");
+            throw ApiException.of(ErrorCode.COMMENT_REPLY_DEPTH);
         }
         return parent;
     }
