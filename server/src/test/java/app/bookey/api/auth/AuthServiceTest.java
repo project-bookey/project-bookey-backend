@@ -17,6 +17,7 @@ import app.bookey.domain.user.UserStatus;
 import io.jsonwebtoken.Claims;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.lang.reflect.Field;
@@ -29,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -135,6 +137,26 @@ class AuthServiceTest {
         Claims refresh = tokenProvider.parse(res.refreshToken(), TokenType.USER_REFRESH);
         assertThat(tokenProvider.subjectId(refresh)).isEqualTo(7L);
         verify(refreshTokenRepository).save(any(RefreshToken.class));
+    }
+
+    @Test
+    @DisplayName("이메일 로그인 — 같은 초에 연속 로그인해도 저장되는 리프레시 토큰 해시가 서로 달라 token_hash 유니크 제약에 걸리지 않는다")
+    void emailLoginTwiceInSameSecondStoresDistinctHashes() {
+        User user = user(7L, "tester1@dev.local", "password1234");
+        when(userRepository.findByEmailIgnoreCase("tester1@dev.local")).thenReturn(Optional.of(user));
+        AuthService service = service(List.of());
+        EmailLoginRequest request = new EmailLoginRequest("tester1@dev.local", "password1234");
+
+        // 세 번 연속이면 초 경계를 넘더라도 최소 두 번은 같은 초에 발급된다.
+        TokenResponse first = service.emailLogin(request);
+        TokenResponse second = service.emailLogin(request);
+        TokenResponse third = service.emailLogin(request);
+
+        ArgumentCaptor<RefreshToken> saved = ArgumentCaptor.forClass(RefreshToken.class);
+        verify(refreshTokenRepository, times(3)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(RefreshToken::getUserId).containsOnly(7L);
+        assertThat(saved.getAllValues()).extracting(RefreshToken::getTokenHash).doesNotHaveDuplicates();
+        assertThat(List.of(first.refreshToken(), second.refreshToken(), third.refreshToken())).doesNotHaveDuplicates();
     }
 
     @Test
