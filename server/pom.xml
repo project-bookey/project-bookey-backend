@@ -23,6 +23,7 @@
     <springdoc.version>3.1.0</springdoc.version>
     <jjwt.version>0.13.0</jjwt.version>
     <testcontainers.version>1.21.4</testcontainers.version>
+    <google-cloud-libraries.version>26.87.0</google-cloud-libraries.version>
   </properties>
 
   <dependencyManagement>
@@ -31,6 +32,13 @@
         <groupId>org.testcontainers</groupId>
         <artifactId>testcontainers-bom</artifactId>
         <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.google.cloud</groupId>
+        <artifactId>libraries-bom</artifactId>
+        <version>${google-cloud-libraries.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -70,6 +78,12 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <scope>runtime</scope>
+    </dependency>
+
+    <!-- 파일 저장소 (bookey.storage.type=gcs 일 때만 사용) -->
+    <dependency>
+      <groupId>com.google.cloud</groupId>
+      <artifactId>google-cloud-storage</artifactId>
     </dependency>
 
     <!-- cache / queue -->

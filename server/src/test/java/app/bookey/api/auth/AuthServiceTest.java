@@ -58,7 +58,7 @@ class AuthServiceTest {
     private final JwtTokenProvider tokenProvider = new JwtTokenProvider(new BookeyProperties(
             new BookeyProperties.Jwt("unit-test-secret-must-be-at-least-32-bytes-long",
                     Duration.ofHours(1), Duration.ofDays(30), Duration.ofMinutes(30)),
-            null, null, null));
+            null, null, null, null));
 
     private AuthService service(List<SocialTokenVerifier> verifiers) {
         return new AuthService(userRepository, null, null, refreshTokenRepository, null,

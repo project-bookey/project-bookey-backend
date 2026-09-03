@@ -2,6 +2,7 @@
 .github
 infra
 server/target
+server/uploads
 server/.mvn/wrapper/maven-wrapper.jar
 node_modules
 .DS_Store
