@@ -20,10 +20,11 @@ public final class QuoteDtos {
     /** 나도 그럼(agree) 토글 결과. */
     public record QuoteAgreeView(boolean agreed, long agreeCount) {}
 
-    public record CreateQuoteCommentRequest(@NotBlank @Size(max = 300) String body) {}
+    /** parentId 가 있으면 그 댓글의 답글이 된다. 답글에는 답글을 달 수 없다(1단계). */
+    public record CreateQuoteCommentRequest(@NotBlank @Size(max = 300) String body, Long parentId) {}
 
-    /** 밑줄에 덧붙인 말(댓글). 탈퇴한 작성자는 "알 수 없음". */
-    public record QuoteCommentView(@NotNull Long id, @NotNull Long quoteId,
+    /** 밑줄에 덧붙인 말(댓글). 탈퇴한 작성자는 "알 수 없음". replyCount 는 답글 행에서 항상 0. */
+    public record QuoteCommentView(@NotNull Long id, @NotNull Long quoteId, Long parentId,
             @NotNull Long authorId, @NotNull String authorNickname, String authorAvatarUrl,
-            @NotNull String body, boolean mine, @NotNull Instant createdAt) {}
+            @NotNull String body, boolean mine, long replyCount, @NotNull Instant createdAt) {}
 }

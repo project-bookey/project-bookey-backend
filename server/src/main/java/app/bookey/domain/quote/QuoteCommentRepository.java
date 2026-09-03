@@ -11,10 +11,16 @@ import java.util.List;
 
 public interface QuoteCommentRepository extends JpaRepository<QuoteComment, Long> {
 
-    /** 밑줄 하나의 댓글 — 오래된 순(대화 흐름). */
-    Page<QuoteComment> findAllByQuoteIdOrderByCreatedAtAscIdAsc(Long quoteId, Pageable pageable);
+    /** 최상위 댓글만 — 오래된 순(대화 흐름). 답글은 접어두고 별도 엔드포인트로 편다. */
+    Page<QuoteComment> findAllByQuoteIdAndParentIdIsNullOrderByCreatedAtAscIdAsc(Long quoteId, Pageable pageable);
 
-    /** 문장별 댓글 수 — 목록 배치 로딩용 GROUP BY 프로젝션(QuoteAgreeRepository.countPerQuote 미러). */
+    /** 한 댓글의 답글 — 오래된 순. */
+    Page<QuoteComment> findAllByParentIdOrderByCreatedAtAscIdAsc(Long parentId, Pageable pageable);
+
+    /**
+     * 문장별 댓글 수 — 목록 배치 로딩용 GROUP BY 프로젝션(QuoteAgreeRepository.countPerQuote 미러).
+     * 답글도 함께 센다 — BookQuoteView·PlazaItemView 의 commentCount 는 "이 밑줄에 달린 말 전체 수"다.
+     */
     @Query("""
             SELECT c.quoteId AS quoteId, COUNT(c) AS commentCount
             FROM QuoteComment c
@@ -23,8 +29,22 @@ public interface QuoteCommentRepository extends JpaRepository<QuoteComment, Long
             """)
     List<CommentCount> countPerQuote(@Param("quoteIds") Collection<Long> quoteIds);
 
+    /** 부모별 답글 수 — 목록 배치 로딩용 GROUP BY 프로젝션(countPerQuote 미러). */
+    @Query("""
+            SELECT c.parentId AS parentId, COUNT(c) AS replyCount
+            FROM QuoteComment c
+            WHERE c.parentId IN :parentIds
+            GROUP BY c.parentId
+            """)
+    List<ReplyCount> countPerParent(@Param("parentIds") Collection<Long> parentIds);
+
     interface CommentCount {
         Long getQuoteId();
         long getCommentCount();
+    }
+
+    interface ReplyCount {
+        Long getParentId();
+        long getReplyCount();
     }
 }

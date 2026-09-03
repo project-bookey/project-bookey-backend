@@ -28,4 +28,15 @@ class QuoteCommentTest {
         assertThat(comment.belongsTo(1L)).isTrue();
         assertThat(comment.belongsTo(2L)).isFalse();
     }
+
+    @Test
+    @DisplayName("parentId가 있으면 답글, 없으면 최상위 댓글이다")
+    void isReplyChecksParent() {
+        QuoteComment topLevel = comment(1L, 10L);
+        QuoteComment reply = QuoteComment.builder()
+                .quoteId(1L).userId(10L).parentId(5L).body("답글").build();
+
+        assertThat(topLevel.isReply()).isFalse();
+        assertThat(reply.isReply()).isTrue();
+    }
 }
