@@ -13,7 +13,6 @@ import app.bookey.domain.post.PostImageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
@@ -42,7 +41,11 @@ public class PostImageService {
     private final RateLimiter rateLimiter;
     private final BookeyProperties properties;
 
-    @Transactional
+    /**
+     * 일부러 @Transactional 을 두지 않는다 — DB 작업은 마지막 save 하나뿐이라 리포지토리 자체 트랜잭션으로 충분하고,
+     * 파일 업로드(GCS 면 네트워크로 수 초)를 DB 트랜잭션 안에 두면 그동안 커넥션(풀 15)을 붙들게 된다.
+     * 대신 파일을 올린 뒤 행 저장이 실패하면 파일을 바로 지운다 — 행 없는 파일은 정리 배치도 못 찾는 고아가 되므로.
+     */
     public PostImageView upload(Long userId, MultipartFile file) {
         rateLimiter.require("post:image:" + userId, UPLOAD_RATE_LIMIT, Duration.ofMinutes(1));
         if (file == null || file.isEmpty()) {
@@ -68,16 +71,33 @@ public class PostImageService {
             throw ApiException.of(ErrorCode.STORAGE_ERROR);
         }
 
-        PostImage image = imageRepository.save(PostImage.builder()
-                .userId(userId)
-                .storageKey(key)
-                .url(url)
-                .contentType(type.contentType())
-                .byteSize((int) size)
-                .width(type.width())
-                .height(type.height())
-                .build());
+        PostImage image;
+        try {
+            image = imageRepository.save(PostImage.builder()
+                    .userId(userId)
+                    .storageKey(key)
+                    .url(url)
+                    .contentType(type.contentType())
+                    .byteSize((int) size)
+                    .width(type.width())
+                    .height(type.height())
+                    .build());
+        } catch (RuntimeException e) {
+            deleteOrphan(key, e);
+            throw e;
+        }
         return new PostImageView(image.getId(), image.getUrl(), image.getWidth(), image.getHeight());
+    }
+
+    /** 행 저장 실패의 보상 — 올린 파일을 지운다. 삭제까지 실패하면 키를 남기고 원래 예외에 suppressed 로 붙인다. */
+    private void deleteOrphan(String key, RuntimeException cause) {
+        log.warn("사진 행 저장 실패 — 올린 파일을 지웁니다: key={}", key);
+        try {
+            storage.delete(key);
+        } catch (RuntimeException e) {
+            log.warn("보상 삭제도 실패 — 수동 정리가 필요합니다: key={}", key, e);
+            cause.addSuppressed(e);
+        }
     }
 
     /** 파일 앞 최대 64KB — 매직넘버·크기 헤더는 이 안에 있다. */

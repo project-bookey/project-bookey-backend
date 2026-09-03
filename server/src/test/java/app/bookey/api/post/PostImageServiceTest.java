@@ -12,6 +12,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,13 +41,14 @@ class PostImageServiceTest {
     private static final long USER_ID = 10L;
     private static final long MAX_BYTES = 1024;
 
-    /** 저장 호출 인자를 기록하고 고정 URL 을 돌려주는 페이크. */
+    /** 저장·삭제 호출 인자를 기록하고 고정 URL 을 돌려주는 페이크. */
     private static final class RecordingStorage implements StorageService {
         String key;
         String contentType;
         long size;
         byte[] content;
         int storeCalls;
+        final List<String> deletedKeys = new ArrayList<>();
 
         @Override
         public String store(String key, InputStream in, long size, String contentType) {
@@ -63,6 +66,7 @@ class PostImageServiceTest {
 
         @Override
         public void delete(String key) {
+            deletedKeys.add(key);
         }
     }
 
@@ -270,5 +274,50 @@ class PostImageServiceTest {
                 .isInstanceOfSatisfying(ApiException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.STORAGE_ERROR));
         verify(imageRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("행 저장이 실패하면 방금 올린 파일을 지우고(보상) 예외를 그대로 올린다 — 행 없는 파일은 정리 배치도 못 찾는다")
+    void deletesStoredFileWhenRowSaveFails() {
+        IllegalStateException dbDown = new IllegalStateException("db down");
+        when(imageRepository.save(any())).thenThrow(dbDown);
+
+        assertThatThrownBy(() -> service.upload(USER_ID, file("x.png", "image/png", png(1, 1, 32))))
+                .isSameAs(dbDown);
+        assertThat(storage.storeCalls).isEqualTo(1);
+        assertThat(storage.deletedKeys).containsExactly(storage.key);
+    }
+
+    @Test
+    @DisplayName("보상 삭제까지 실패해도 행 저장 예외를 삼키지 않고 그대로 올린다(삭제 실패는 suppressed)")
+    void keepsSaveFailureWhenCompensationAlsoFails() {
+        IllegalStateException dbDown = new IllegalStateException("db down");
+        when(imageRepository.save(any())).thenThrow(dbDown);
+        RuntimeException deleteFailure = new RuntimeException("delete failed");
+        StorageService brokenDelete = new StorageService() {
+            @Override
+            public String store(String key, InputStream in, long size, String contentType) {
+                return "http://localhost:8098/uploads/" + key;
+            }
+
+            @Override
+            public void delete(String key) {
+                throw deleteFailure;
+            }
+        };
+        PostImageService brokenService =
+                new PostImageService(imageRepository, brokenDelete, rateLimiter, properties(MAX_BYTES));
+
+        assertThatThrownBy(() -> brokenService.upload(USER_ID, file("x.png", "image/png", png(1, 1, 32))))
+                .isSameAs(dbDown)
+                .hasSuppressedException(deleteFailure);
+    }
+
+    @Test
+    @DisplayName("upload 는 DB 트랜잭션 밖에서 파일을 쓴다 — 업로드 내내 커넥션을 붙들지 않도록 @Transactional 을 두지 않는다")
+    void uploadRunsOutsideDbTransaction() throws NoSuchMethodException {
+        assertThat(PostImageService.class.isAnnotationPresent(Transactional.class)).isFalse();
+        assertThat(PostImageService.class.getMethod("upload", Long.class, MultipartFile.class)
+                .isAnnotationPresent(Transactional.class)).isFalse();
     }
 }
