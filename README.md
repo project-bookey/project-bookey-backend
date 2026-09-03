@@ -131,6 +131,23 @@ GitHub Repository Secrets:
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI 키 |
 | `GOOGLE_BOOKS_KEY` | Google Books API 키 |
 
+### 업로드 저장소 (운영 필수)
+
+독후감 사진은 운영에서 **반드시 GCS** 에 저장한다. Cloud Run 컨테이너의 파일시스템은 쓰기가 되지만 인스턴스가 교체·확장될 때마다 사라지므로, 로컬 디스크 저장소로 뜨면 업로드는 성공해 놓고 나중에 사진이 없어지고 다른 인스턴스에서는 `/uploads/{key}` 가 404 가 된다.
+
+그래서 `prod` 프로파일은 `bookey.storage.type` 기본값을 `gcs` 로 두고(`application-prod.yml`), 기동 시 `StorageConfigValidator` 가 아래를 확인해 어긋나면 **서버를 띄우지 않는다**(새 리비전이 못 뜨면 Cloud Run 은 이전 리비전을 계속 서빙한다).
+
+| 확인 | 값 | 환경변수 |
+|---|---|---|
+| `bookey.storage.type` | `gcs` | `STORAGE_TYPE` (prod 기본값이 `gcs`) |
+| `bookey.storage.gcs.bucket` | 비어 있으면 안 됨 | `GCS_BUCKET` |
+
+`.github/workflows/deploy-cloud-run.yml` 의 `env_vars` 는 `env_vars_update_strategy: overwrite` 라 배포할 때마다 Cloud Run 의 환경변수를 통째로 덮어쓴다. **콘솔에서 손으로 넣은 값은 다음 배포에서 지워지므로** 워크플로의 `env_vars` 목록에 직접 넣어야 한다:
+
+```yaml
+            GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }}
+```
+
 Bookey 전체 Cloud Run 서비스:
 
 | 서비스 | 저장소 | 역할 |
