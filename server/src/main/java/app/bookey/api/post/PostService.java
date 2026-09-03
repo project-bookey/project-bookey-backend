@@ -107,7 +107,7 @@ public class PostService {
     public PageResponse<PostView> listPublicByHandle(String handle, Pageable pageable) {
         User user = userRepository.findByHandle(handle)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        return PageResponse.of(postRepository.findAllByUserIdAndVisibilityOrderByPublishedAtDesc(
+        return PageResponse.of(postRepository.findAllByUserIdAndVisibilityOrderByPublishedAtDescIdDesc(
                 user.getId(), PostVisibility.PUBLIC, pageable), this::toView);
     }
 
@@ -126,7 +126,7 @@ public class PostService {
 
     @Transactional(readOnly = true)
     public PageResponse<PostView> listPublicByBook(Long bookId, Pageable pageable) {
-        return PageResponse.of(postRepository.findAllByBookIdAndVisibilityOrderByPublishedAtDesc(
+        return PageResponse.of(postRepository.findAllByBookIdAndVisibilityOrderByPublishedAtDescIdDesc(
                 bookId, PostVisibility.PUBLIC, pageable), this::toView);
     }
 
