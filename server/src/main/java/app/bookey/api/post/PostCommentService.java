@@ -72,7 +72,7 @@ public class PostCommentService {
                     .filter(found -> found.belongsTo(postId))
                     .orElseThrow(() -> ApiException.of(ErrorCode.POST_COMMENT_NOT_FOUND));
             if (!PostComment.canReplyTo(parent)) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST, "답글에는 답글을 달 수 없습니다.");
+                throw ApiException.of(ErrorCode.COMMENT_REPLY_DEPTH);
             }
             parentId = parent.getId();
         }
