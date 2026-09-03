@@ -7,7 +7,12 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-/** 리뷰에 덧붙인 말(댓글) — 1단계 답글까지, 본인만 삭제한다(QuoteComment 미러). */
+/**
+ * 리뷰에 덧붙인 말(댓글) — 1단계 답글까지, 본인만 삭제한다(QuoteComment 미러).
+ *
+ * 리뷰는 소프트 삭제(status)라 review_id 의 ON DELETE CASCADE 는 하드 삭제 때만 발동한다.
+ * 지워진 리뷰의 댓글은 테이블에 남지만 API 로는 닿을 수 없다 — 모든 조회 경로가 isVisible 로 거른다.
+ */
 @Getter
 @Entity
 @Table(name = "review_comments")
