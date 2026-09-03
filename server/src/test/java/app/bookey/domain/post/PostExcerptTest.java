@@ -42,6 +42,21 @@ class PostExcerptTest {
     }
 
     @Test
+    @DisplayName("줄바꿈을 사이에 둔 강조도 지운다 — 공백을 먼저 접어야 짝이 이어진다")
+    void removesEmphasisAcrossLineBreak() {
+        assertThat(PostExcerpt.of("여러 줄\n**굵은\n문장**\n끝", 100))
+                .isEqualTo("여러 줄 굵은 문장 끝");
+    }
+
+    @Test
+    @DisplayName("수평선 줄은 기호를 흘리지 않고 통째로 지운다")
+    void removesThematicBreak() {
+        assertThat(PostExcerpt.of("구분선\n***\n뒤", 100)).isEqualTo("구분선 뒤");
+        assertThat(PostExcerpt.of("구분선\n---\n뒤", 100)).isEqualTo("구분선 뒤");
+        assertThat(PostExcerpt.of("구분선\n___\n뒤", 100)).isEqualTo("구분선 뒤");
+    }
+
+    @Test
     @DisplayName("코드펜스 블록은 통째로 지운다")
     void removesCodeFence() {
         String body = """

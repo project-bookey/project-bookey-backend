@@ -17,6 +17,9 @@ public final class PostExcerpt {
     /** 줄머리의 인용 `>`·헤딩 `#`·목록 마커(`-`,`*`,`+`,`1.`). */
     private static final Pattern LINE_MARKER =
             Pattern.compile("(?m)^[ \\t]*(?:[>#]+[ \\t]*)*(?:[-*+][ \\t]+|\\d+\\.[ \\t]+)?");
+    /** 수평선 줄(`***`·`---`·`___`) — 같은 기호 세 개 이상뿐인 줄이라 강조 규칙에 걸리기 전에 통째로 버린다. */
+    private static final Pattern THEMATIC_BREAK =
+            Pattern.compile("(?m)^[ \\t]*([-*_])(?:[ \\t]*\\1){2,}[ \\t]*$");
     /** 낱말을 이루는 글자 — 밑줄 강조가 낱말 안에서는 열리지 않게 판별하는 데 쓴다. */
     private static final String WORD = "\\p{IsAlphabetic}\\p{IsDigit}_";
     /**
@@ -24,6 +27,7 @@ public final class PostExcerpt {
      * 짝이 없이 홀로 선 `*`·`_`·`~` 는 그대로 둔다(`snake_case`·`2*3` 가 뭉개지지 않게).
      * 긴 기호(`**`,`__`,`~~`)를 먼저 벗겨야 짧은 규칙이 반쪽만 먹지 않는다.
      * 밑줄은 낱말 안(`on_message_received`)에서는 강조가 아니므로 양옆이 낱말 글자가 아닐 때만 벗긴다.
+     * `.` 는 개행을 넘지 않으므로 공백을 한 줄로 접은 뒤에 돌려야 줄바꿈을 사이에 둔 짝(`**굵은\n문장**`)도 잡힌다.
      */
     private static final List<Pattern> EMPHASIS_PAIRS = List.of(
             Pattern.compile("\\*\\*(?=\\S)(.+?)(?<=\\S)\\*\\*"),
@@ -47,10 +51,13 @@ public final class PostExcerpt {
         text = IMAGE.matcher(text).replaceAll(" ");
         text = LINK.matcher(text).replaceAll("$1");
         text = LINE_MARKER.matcher(text).replaceAll("");
+        text = THEMATIC_BREAK.matcher(text).replaceAll("");
+        // 줄 단위 규칙(`(?m)^`)을 모두 끝낸 뒤에 접는다 — 강조 짝이 줄바꿈을 넘어 이어질 수 있게.
+        text = WHITESPACE.matcher(text).replaceAll(" ");
         for (Pattern pair : EMPHASIS_PAIRS) {
             text = pair.matcher(text).replaceAll("$1");
         }
-        text = WHITESPACE.matcher(text).replaceAll(" ").trim();
+        text = text.trim();
         if (text.length() <= max) {
             return text;
         }
