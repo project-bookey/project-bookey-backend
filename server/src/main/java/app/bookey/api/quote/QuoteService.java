@@ -87,11 +87,27 @@ public class QuoteService {
                 loadAgreeCounts(quotes), loadMyAgreed(userId, quotes), loadCommentCounts(quotes)).get(0);
     }
 
-    /** 내가 오려둔 문장 목록 — 최신순. */
+    /** 내가 오려둔 문장 목록 — 최신순. bookId 를 주면 그 책에서 오려둔 것만(독후감에 인용할 밑줄 고르기). */
     @Transactional(readOnly = true)
-    public PageResponse<BookQuoteView> myQuotes(Long userId, Pageable pageable) {
-        Page<BookQuote> page = quoteRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(userId, pageable);
+    public PageResponse<BookQuoteView> mine(Long userId, Long bookId, Pageable pageable) {
+        Page<BookQuote> page = bookId == null
+                ? quoteRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(userId, pageable)
+                : quoteRepository.findAllByUserIdAndBookIdOrderByCreatedAtDescIdDesc(userId, bookId, pageable);
         return toPageResponse(page, userId, Map.of());
+    }
+
+    /**
+     * 밑줄 뷰를 id 로 찾을 수 있게 조립한다 — 독후감에 인용된 밑줄처럼 다른 도메인이 밑줄을 끼워 넣을 때 쓴다.
+     * 호출자의 트랜잭션 안에서 실행되며, knownBooks 에 없는 책만 추가로 읽는다. 비로그인 조회자(null)는 agreedByMe·mine 이 false.
+     */
+    public Map<Long, BookQuoteView> viewsOf(List<BookQuote> quotes, Long viewerId, Map<Long, Book> knownBooks) {
+        if (quotes.isEmpty()) {
+            return Map.of();
+        }
+        List<BookQuoteView> views = assembleViews(quotes, viewerId,
+                loadBooks(quotes, knownBooks), loadAuthors(quotes),
+                loadAgreeCounts(quotes), loadMyAgreed(viewerId, quotes), loadCommentCounts(quotes));
+        return views.stream().collect(Collectors.toMap(BookQuoteView::id, Function.identity()));
     }
 
     /** 책별 오려둔 문장 목록 — 최신순. */
@@ -182,7 +198,7 @@ public class QuoteService {
 
     private Set<Long> loadMyAgreed(Long userId, List<BookQuote> quotes) {
         List<Long> ids = quotes.stream().map(BookQuote::getId).toList();
-        if (ids.isEmpty()) {
+        if (userId == null || ids.isEmpty()) {
             return Set.of();
         }
         return agreeRepository.findAllByUserIdAndQuoteIdIn(userId, ids).stream()

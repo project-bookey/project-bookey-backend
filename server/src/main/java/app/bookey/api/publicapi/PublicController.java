@@ -3,7 +3,7 @@ package app.bookey.api.publicapi;
 import app.bookey.api.book.BookService;
 import app.bookey.api.book.dto.BookDtos.BookDetail;
 import app.bookey.api.post.PostService;
-import app.bookey.api.post.PostService.PostView;
+import app.bookey.api.post.dto.PostDtos.PostView;
 import app.bookey.api.review.ReviewService;
 import app.bookey.api.review.dto.ReviewDtos.ReviewView;
 import app.bookey.common.support.PageResponse;
