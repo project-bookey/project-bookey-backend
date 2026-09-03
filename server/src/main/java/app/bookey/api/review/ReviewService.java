@@ -84,7 +84,7 @@ public class ReviewService {
     @Transactional
     public ReviewView update(Long userId, Long reviewId, UpdateReviewRequest request) {
         Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+                .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
         if (!review.getUserId().equals(userId)) {
             throw ApiException.of(ErrorCode.FORBIDDEN);
         }
@@ -97,7 +97,7 @@ public class ReviewService {
     @Transactional
     public void delete(Long userId, Long reviewId) {
         Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+                .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
         if (!review.getUserId().equals(userId)) {
             throw ApiException.of(ErrorCode.FORBIDDEN);
         }
@@ -122,7 +122,7 @@ public class ReviewService {
     @Transactional
     public void toggleHelpful(Long reviewId, boolean helpful) {
         Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+                .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
         if (helpful) {
             review.addHelpful();
         } else {
@@ -133,7 +133,7 @@ public class ReviewService {
     @Transactional
     public void report(Long userId, Long reviewId, String reason, String detail) {
         Review review = reviewRepository.findById(reviewId)
-                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+                .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
         if (abuseReportRepository.existsByTargetTypeAndTargetIdAndReporterId(
                 "REVIEW", reviewId, userId)) {
             throw ApiException.of(ErrorCode.CONFLICT);
