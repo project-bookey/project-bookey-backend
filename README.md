@@ -86,6 +86,7 @@ curl -X POST http://localhost:8080/api/v1/auth/social \
 | `KAKAO_REST_KEY` | 카카오 책 검색 (1차 검색) |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI (페이지 수 보강) |
 | `GOOGLE_BOOKS_KEY` | Google Books (해외서 폴백, 선택) |
+| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | 운영 최초 관리자 생성용. 관리자 계정이 0명일 때만 사용 |
 
 키가 없으면 해당 프로바이더를 건너뛰고 내부 캐시로만 검색합니다 (graceful degradation).
 
@@ -123,6 +124,7 @@ GitHub Repository Secrets:
 | `KAKAO_REST_KEY` | 카카오 책 검색 API 키 |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI 키 |
 | `GOOGLE_BOOKS_KEY` | Google Books API 키 |
+| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | 운영 최초 관리자 생성용. 최초 로그인 후 제거 권장 |
 
 Bookey 전체 Cloud Run 서비스:
 
