@@ -12,6 +12,8 @@ public final class PostExcerpt {
     private static final Pattern UNCLOSED_CODE_FENCE = Pattern.compile("(?s)```.*");
     /** 이미지 `![대체](주소)` — 대체 텍스트까지 버린다. */
     private static final Pattern IMAGE = Pattern.compile("!\\[[^\\]]*\\]\\([^)]*\\)");
+    /** 본문 안 '오려둔 문장' 표시 — 발췌에는 남기지 않는다(앱이 그 자리에 인용 카드를 그린다). */
+    private static final Pattern QUOTE_MARKER = Pattern.compile("〖오려둔 문장 \\d+〗");
     /** 링크 `[텍스트](주소)` — 텍스트만 남긴다. */
     private static final Pattern LINK = Pattern.compile("\\[([^\\]]*)\\]\\([^)]*\\)");
     /** 줄머리의 인용 `>`·헤딩 `#`·목록 마커(`-`,`*`,`+`,`1.`). */
@@ -49,6 +51,7 @@ public final class PostExcerpt {
         String text = CODE_FENCE.matcher(bodyMd).replaceAll(" ");
         text = UNCLOSED_CODE_FENCE.matcher(text).replaceAll(" ");
         text = IMAGE.matcher(text).replaceAll(" ");
+        text = QUOTE_MARKER.matcher(text).replaceAll(" ");
         text = LINK.matcher(text).replaceAll("$1");
         text = LINE_MARKER.matcher(text).replaceAll("");
         text = THEMATIC_BREAK.matcher(text).replaceAll("");
