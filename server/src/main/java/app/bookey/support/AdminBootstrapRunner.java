@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 운영 최초 관리자 생성기.
  *
- * 관리자 계정이 하나도 없고 ADMIN_BOOTSTRAP_EMAIL/PASSWORD 가 모두 있을 때만 실행한다.
+ * ADMIN_BOOTSTRAP_EMAIL 계정이 없고 ADMIN_BOOTSTRAP_PASSWORD 가 있을 때만 실행한다.
  * 최초 로그인 후에는 Cloud Run 환경변수와 GitHub Secrets 에서 bootstrap 값을 제거한다.
  */
 @Slf4j
@@ -30,19 +30,20 @@ public class AdminBootstrapRunner implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
-        if (adminRepository.count() > 0) {
-            return;
-        }
-
         String email = System.getenv("ADMIN_BOOTSTRAP_EMAIL");
         String password = System.getenv("ADMIN_BOOTSTRAP_PASSWORD");
         if (email == null || email.isBlank() || password == null || password.isBlank()) {
-            log.warn("No admin account exists, but ADMIN_BOOTSTRAP_EMAIL/PASSWORD are not configured");
+            log.warn("ADMIN_BOOTSTRAP_EMAIL/PASSWORD are not configured");
+            return;
+        }
+
+        String normalizedEmail = email.trim().toLowerCase(java.util.Locale.ROOT);
+        if (adminRepository.existsByEmail(normalizedEmail)) {
             return;
         }
 
         Admin admin = new Admin(
-                email.trim().toLowerCase(java.util.Locale.ROOT),
+                normalizedEmail,
                 passwordEncoder.encode(password),
                 "운영 관리자",
                 AdminRole.SUPER_ADMIN);
