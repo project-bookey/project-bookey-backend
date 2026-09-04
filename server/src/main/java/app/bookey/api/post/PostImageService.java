@@ -47,6 +47,10 @@ public class PostImageService {
      * 대신 파일을 올린 뒤 행 저장이 실패하면 파일을 바로 지운다 — 행 없는 파일은 정리 배치도 못 찾는 고아가 되므로.
      */
     public PostImageView upload(Long userId, MultipartFile file) {
+        // 저장소가 꺼져 있으면(GCS 준비 전) 가장 먼저 거절한다 — 10MB 를 다 받아 놓고 버리지 않도록.
+        if (!storage.enabled()) {
+            throw ApiException.of(ErrorCode.STORAGE_DISABLED);
+        }
         rateLimiter.require("post:image:" + userId, UPLOAD_RATE_LIMIT, Duration.ofMinutes(1));
         if (file == null || file.isEmpty()) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "업로드할 파일이 비어 있습니다.");
