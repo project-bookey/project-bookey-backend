@@ -277,6 +277,47 @@ class PostImageServiceTest {
     }
 
     @Test
+    @DisplayName("저장소가 꺼져 있으면 파일을 읽기 전에 STORAGE_DISABLED — 레이트리밋도 쓰지 않는다")
+    void rejectsUploadWhenStorageDisabled() {
+        StorageService disabled = new StorageService() {
+            @Override
+            public boolean enabled() {
+                return false;
+            }
+
+            @Override
+            public String store(String key, InputStream in, long size, String contentType) {
+                throw new AssertionError("저장소가 꺼져 있으면 store 까지 오면 안 된다");
+            }
+
+            @Override
+            public void delete(String key) {
+            }
+        };
+        PostImageService disabledService =
+                new PostImageService(imageRepository, disabled, rateLimiter, properties(MAX_BYTES));
+        // 파일을 한 번이라도 읽으면 실패한다 — 10MB 를 받아 놓고 거절하는 낭비가 없어야 한다.
+        MultipartFile unreadable = new MockMultipartFile("file", "x.png", "image/png", png(1, 1, 32)) {
+            @Override
+            public InputStream getInputStream() {
+                throw new AssertionError("파일을 읽기 전에 거절해야 한다");
+            }
+        };
+
+        assertThatThrownBy(() -> disabledService.upload(USER_ID, unreadable))
+                .isInstanceOfSatisfying(ApiException.class,
+                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.STORAGE_DISABLED));
+        assertThat(rateLimiter.keys).isEmpty();
+        verify(imageRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("기본 저장소는 켜진 것으로 본다 — 로컬·GCS 구현이 따로 enabled() 를 두지 않아도 되게")
+    void storageIsEnabledByDefault() {
+        assertThat(storage.enabled()).isTrue();
+    }
+
+    @Test
     @DisplayName("행 저장이 실패하면 방금 올린 파일을 지우고(보상) 예외를 그대로 올린다 — 행 없는 파일은 정리 배치도 못 찾는다")
     void deletesStoredFileWhenRowSaveFails() {
         IllegalStateException dbDown = new IllegalStateException("db down");

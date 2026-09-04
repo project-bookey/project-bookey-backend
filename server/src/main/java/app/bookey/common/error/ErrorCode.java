@@ -89,7 +89,8 @@ public enum ErrorCode {
     POST_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "이미지를 찾을 수 없습니다."),
     IMAGE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "이미지는 10MB 이하만 올릴 수 있습니다."),
     UNSUPPORTED_IMAGE_TYPE(HttpStatus.BAD_REQUEST, "JPG·PNG·WebP 이미지만 올릴 수 있습니다."),
-    STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "이미지를 저장하지 못했습니다.");
+    STORAGE_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "이미지를 저장하지 못했습니다."),
+    STORAGE_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "사진 업로드는 아직 준비 중입니다.");
 
     private final HttpStatus status;
     private final String message;
