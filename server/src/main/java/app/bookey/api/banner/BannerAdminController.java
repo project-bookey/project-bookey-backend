@@ -5,6 +5,7 @@ import app.bookey.api.banner.dto.BannerDtos.BannerUpsertRequest;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.AuthAdmin;
+import app.bookey.domain.banner.BannerKind;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -23,11 +24,12 @@ public class BannerAdminController {
 
     private final BannerService bannerService;
 
-    @Operation(summary = "배너 전체 목록 — 비활성·기간 외 포함")
+    @Operation(summary = "배너/공지 전체 목록 — 비활성·기간 외 포함")
     @GetMapping
-    public List<BannerAdminView> list(@AuthenticationPrincipal AuthAdmin admin) {
+    public List<BannerAdminView> list(@AuthenticationPrincipal AuthAdmin admin,
+                                      @RequestParam(required = false) BannerKind kind) {
         requireOps(admin);
-        return bannerService.adminList();
+        return kind == null ? bannerService.adminList() : bannerService.adminList(kind);
     }
 
     @Operation(summary = "배너 생성")

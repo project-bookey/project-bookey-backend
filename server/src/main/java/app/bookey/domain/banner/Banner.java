@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
-/** 홈 이벤트 배너. 기간(startsAt~endsAt) 안에서만 노출한다. */
+/** 홈 이벤트 배너/공지. 기간(startsAt~endsAt) 안에서만 노출한다. */
 @Getter
 @Entity
 @Table(name = "banners")
@@ -22,6 +22,10 @@ public class Banner extends BaseTimeEntity {
 
     @Column(nullable = false, length = 100)
     private String title;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private BannerKind kind = BannerKind.AD;
 
     @Column(length = 200)
     private String subtitle;
@@ -48,9 +52,10 @@ public class Banner extends BaseTimeEntity {
     private Instant endsAt;
 
     @Builder
-    private Banner(String title, String subtitle, String imageUrl, String bgColor,
+    private Banner(String title, BannerKind kind, String subtitle, String imageUrl, String bgColor,
                    String linkUrl, int sortOrder, boolean enabled, Instant startsAt, Instant endsAt) {
         this.title = title;
+        this.kind = kind == null ? BannerKind.AD : kind;
         this.subtitle = subtitle;
         this.imageUrl = imageUrl;
         this.bgColor = bgColor;
@@ -66,9 +71,10 @@ public class Banner extends BaseTimeEntity {
         return !now.isBefore(startsAt) && now.isBefore(endsAt);
     }
 
-    public void update(String title, String subtitle, String imageUrl, String bgColor,
+    public void update(String title, BannerKind kind, String subtitle, String imageUrl, String bgColor,
                        String linkUrl, int sortOrder, boolean enabled, Instant startsAt, Instant endsAt) {
         this.title = title;
+        this.kind = kind == null ? BannerKind.AD : kind;
         this.subtitle = subtitle;
         this.imageUrl = imageUrl;
         this.bgColor = bgColor;

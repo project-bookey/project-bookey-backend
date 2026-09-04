@@ -5,6 +5,7 @@ import app.bookey.api.banner.dto.BannerDtos.BannerView;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.banner.Banner;
+import app.bookey.domain.banner.BannerKind;
 import app.bookey.domain.banner.BannerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,7 +22,12 @@ public class BannerService {
 
     @Transactional(readOnly = true)
     public List<BannerView> activeBanners() {
-        return activeAt(bannerRepository.findAllByEnabledTrueOrderBySortOrderAscIdAsc(), Instant.now());
+        return activeBanners(BannerKind.AD);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BannerView> activeBanners(BannerKind kind) {
+        return activeAt(bannerRepository.findAllByKindAndEnabledTrueOrderBySortOrderAscIdAsc(kind), Instant.now());
     }
 
     /** 기간 필터만 담당 — 정렬·enabled 필터는 쿼리가 이미 보장한다. */
@@ -39,10 +45,16 @@ public class BannerService {
                 .map(BannerDtos.BannerAdminView::from).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<BannerDtos.BannerAdminView> adminList(BannerKind kind) {
+        return bannerRepository.findAllByKindOrderBySortOrderAscIdAsc(kind).stream()
+                .map(BannerDtos.BannerAdminView::from).toList();
+    }
+
     @Transactional
     public BannerDtos.BannerAdminView create(BannerDtos.BannerUpsertRequest req) {
         Banner banner = Banner.builder()
-                .title(req.title()).subtitle(req.subtitle()).imageUrl(req.imageUrl())
+                .title(req.title()).kind(req.kind()).subtitle(req.subtitle()).imageUrl(req.imageUrl())
                 .bgColor(req.bgColor()).linkUrl(req.linkUrl()).sortOrder(req.sortOrder())
                 .enabled(req.enabled()).startsAt(req.startsAt()).endsAt(req.endsAt())
                 .build();
@@ -53,7 +65,7 @@ public class BannerService {
     public BannerDtos.BannerAdminView update(Long id, BannerDtos.BannerUpsertRequest req) {
         Banner banner = bannerRepository.findById(id)
                 .orElseThrow(() -> ApiException.of(ErrorCode.BANNER_NOT_FOUND));
-        banner.update(req.title(), req.subtitle(), req.imageUrl(), req.bgColor(),
+        banner.update(req.title(), req.kind(), req.subtitle(), req.imageUrl(), req.bgColor(),
                 req.linkUrl(), req.sortOrder(), req.enabled(), req.startsAt(), req.endsAt());
         return BannerDtos.BannerAdminView.from(banner);
     }
