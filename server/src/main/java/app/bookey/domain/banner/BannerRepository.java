@@ -6,5 +6,7 @@ import java.util.List;
 
 public interface BannerRepository extends JpaRepository<Banner, Long> {
     List<Banner> findAllByEnabledTrueOrderBySortOrderAscIdAsc();
+    List<Banner> findAllByKindAndEnabledTrueOrderBySortOrderAscIdAsc(BannerKind kind);
     List<Banner> findAllByOrderBySortOrderAscIdAsc();
+    List<Banner> findAllByKindOrderBySortOrderAscIdAsc(BannerKind kind);
 }
