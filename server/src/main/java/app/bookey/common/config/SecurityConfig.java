@@ -103,7 +103,10 @@ public class SecurityConfig {
     /** 관리자 웹은 별도 도메인에서만 호출한다. */
     private CorsConfigurationSource adminCorsSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("http://localhost:3100", "https://admin.bookey.app"));
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:3100",
+                "https://admin.bookey.app",
+                "https://bookey-admin-ubr5x3mthq-du.a.run.app"));
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

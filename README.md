@@ -93,6 +93,7 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 | `KAKAO_REST_KEY` | 카카오 책 검색 (1차 검색) |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI (페이지 수 보강) |
 | `GOOGLE_BOOKS_KEY` | Google Books (해외서 폴백, 선택) |
+| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | 운영 최초 관리자 생성용. 관리자 계정이 0명일 때만 사용 |
 | `STORAGE_TYPE` | 독후감 사진 저장소 — `local`(기본) / `gcs`. `prod` 프로파일 기본값은 `gcs` |
 | `STORAGE_LOCAL_DIR` | `local` 일 때 파일을 둘 디렉터리 (기본 `./uploads` → `server/uploads`) |
 | `STORAGE_PUBLIC_BASE_URL` | `local` 일 때 사진 URL 의 origin (예: `http://192.168.0.10:8080`). 비우면 요청 origin |
@@ -122,7 +123,6 @@ GitHub Repository Variables:
 | `GCP_CLOUD_RUN_SERVICE` | `bookey-backend` |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github` |
 | `GCP_SERVICE_ACCOUNT` | `github-cloud-run@bookey-prod.iam.gserviceaccount.com` |
-| `GCP_MEDIA_BUCKET` | `bookey-media` — 독후감 사진 GCS 버킷. 워크플로 `env_vars` 가 `GCS_BUCKET` 으로 넘긴다 (아래 "업로드 저장소" 참고) |
 
 GitHub Repository Secrets:
 
@@ -137,6 +137,7 @@ GitHub Repository Secrets:
 | `KAKAO_REST_KEY` | 카카오 책 검색 API 키 |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI 키 |
 | `GOOGLE_BOOKS_KEY` | Google Books API 키 |
+| `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | 운영 최초 관리자 생성용. 최초 로그인 후 제거 권장 |
 
 ### 업로드 저장소 (운영 필수)
 

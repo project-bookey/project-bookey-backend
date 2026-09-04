@@ -90,6 +90,8 @@ jobs:
             KAKAO_REST_KEY=${{ secrets.KAKAO_REST_KEY }}
             ALADIN_TTB_KEY=${{ secrets.ALADIN_TTB_KEY }}
             GOOGLE_BOOKS_KEY=${{ secrets.GOOGLE_BOOKS_KEY }}
+            ADMIN_BOOTSTRAP_EMAIL=${{ secrets.ADMIN_BOOTSTRAP_EMAIL }}
+            ADMIN_BOOTSTRAP_PASSWORD=${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
 
       - name: Show service URL
         run: echo "${{ steps.deploy.outputs.url }}"
