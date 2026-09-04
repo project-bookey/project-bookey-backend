@@ -5,12 +5,15 @@ spring:
         format_sql: false
 bookey:
   storage:
-    # 운영 기본값은 GCS 로 고정한다. 배포 워크플로가 Cloud Run 환경변수를 통째로 덮어써(env_vars_update_strategy: overwrite)
-    # STORAGE_TYPE 이 빠져도 로컬 디스크로 떨어지지 않게 하기 위함 — 로컬 디스크는 인스턴스 교체 때 사진이 사라진다.
-    # 버킷(GCS_BUCKET)까지 갖췄는지는 StorageConfigValidator 가 기동 시점에 확인한다 — 배포 워크플로
-    # (.github/workflows/deploy-cloud-run.yml) env_vars 에 GCS_BUCKET 이 없으면 새 리비전이 못 떠 deploy 스텝이 실패한다.
-    # 버킷 생성·권한·워크플로 한 줄 추가 순서는 README "GCS 준비 (운영)".
-    type: ${STORAGE_TYPE:gcs}
+    # 운영 기본값은 none — 사진 업로드만 꺼진 상태로 뜬다(업로드 API 는 503 STORAGE_DISABLED, 나머지 기능은 정상).
+    # GCS 버킷이 아직 없어서다. 기본값을 gcs 로 두면 버킷이 준비될 때까지 새 리비전이 아예 기동하지 못해 배포가 막힌다.
+    # 그렇다고 로컬 디스크(local)로 떨어뜨리지도 않는다 — 업로드는 200 으로 성공해 놓고 인스턴스가 교체·확장될 때
+    # 사진이 사라지고 다른 인스턴스에서는 /uploads/{key} 가 404 가 되는, 조용한 데이터 유실이기 때문이다.
+    # 그래서 StorageConfigValidator 는 운영에서 gcs(+버킷) 와 none 만 허용하고 local 은 기동을 막는다.
+    # 켜는 법: 버킷을 만든 뒤(README "GCS 준비 (운영)") 배포 워크플로(.github/workflows/deploy-cloud-run.yml)의
+    # env_vars 에 STORAGE_TYPE=gcs 와 GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }} 두 줄을 넣으면 된다.
+    # (워크플로는 env_vars_update_strategy: overwrite 라 콘솔에서 손으로 넣은 값은 다음 배포에서 지워진다.)
+    type: ${STORAGE_TYPE:none}
 logging:
   level:
     app.bookey: INFO

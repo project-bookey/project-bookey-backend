@@ -85,7 +85,7 @@ bookey:
     club-daily-cap: 3
     default-send-hour: 20
   storage:
-    type: ${STORAGE_TYPE:local}                    # local | gcs (prod 프로파일은 application-prod.yml 에서 gcs 로 뒤집는다)
+    type: ${STORAGE_TYPE:local}                    # local | gcs | none(업로드 끔). prod 기본값은 application-prod.yml 에서 none
     local:
       dir: ${STORAGE_LOCAL_DIR:./uploads}          # npm run dev 는 server/ 에서 기동 → server/uploads
       public-base-url: ${STORAGE_PUBLIC_BASE_URL:} # origin 만(예: http://192.168.0.10:8098). 비우면 요청 origin

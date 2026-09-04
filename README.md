@@ -93,7 +93,7 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 | `KAKAO_REST_KEY` | 카카오 책 검색 (1차 검색) |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI (페이지 수 보강) |
 | `GOOGLE_BOOKS_KEY` | Google Books (해외서 폴백, 선택) |
-| `STORAGE_TYPE` | 독후감 사진 저장소 — `local`(기본) / `gcs`. `prod` 프로파일 기본값은 `gcs` |
+| `STORAGE_TYPE` | 독후감 사진 저장소 — `local`(기본) / `gcs` / `none`(업로드 끔). `prod` 프로파일 기본값은 `none` |
 | `STORAGE_LOCAL_DIR` | `local` 일 때 파일을 둘 디렉터리 (기본 `./uploads` → `server/uploads`) |
 | `STORAGE_PUBLIC_BASE_URL` | `local` 일 때 사진 URL 의 origin (예: `http://192.168.0.10:8080`). 비우면 요청 origin |
 | `GCS_BUCKET` | `gcs` 일 때 버킷 이름 |
@@ -101,6 +101,8 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 키가 없으면 해당 프로바이더를 건너뛰고 내부 캐시로만 검색합니다 (graceful degradation).
 
 독후감 사진은 `POST /api/v1/posts/images` (multipart, `file` 파트) 로 먼저 올리고 응답의 `id` 를 독후감 `imageIds` 에 넣어 붙입니다. JPG·PNG·WebP, 파일당 10MB, 글당 10장. 24시간 안에 글에 붙지 않은 사진은 매일 04:20(KST) 배치가 파일과 행을 지웁니다.
+
+**현재 운영에서는 사진 업로드가 꺼져 있습니다** — GCS 버킷이 아직 없어서 `prod` 프로파일의 `STORAGE_TYPE` 기본값이 `none` 입니다. 이 상태에서 업로드 API 는 파일을 읽기 전에 `503 STORAGE_DISABLED`("사진 업로드는 아직 준비 중입니다.") 로 거절하고, 독후감·밑줄·댓글 등 나머지 기능은 모두 정상 동작합니다. 켜는 절차는 아래 ["GCS 준비 (운영)"](#gcs-준비-운영--업로드를-켤-때-한-번) 참고. 로컬 개발은 그대로 `local`(디스크) 이라 영향이 없습니다.
 
 ## 테스트
 
@@ -122,7 +124,7 @@ GitHub Repository Variables:
 | `GCP_CLOUD_RUN_SERVICE` | `bookey-backend` |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github` |
 | `GCP_SERVICE_ACCOUNT` | `github-cloud-run@bookey-prod.iam.gserviceaccount.com` |
-| `GCP_MEDIA_BUCKET` | `bookey-media` — 독후감 사진 GCS 버킷. 워크플로 `env_vars` 가 `GCS_BUCKET` 으로 넘긴다 (아래 "업로드 저장소" 참고) |
+| `GCP_MEDIA_BUCKET` | `bookey-media` — 독후감 사진 GCS 버킷. **아직 등록 전**(업로드가 꺼져 있어 필요 없다). 업로드를 켤 때 등록하고 워크플로 `env_vars` 가 `GCS_BUCKET` 으로 넘긴다 (아래 "업로드 저장소" 참고) |
 
 GitHub Repository Secrets:
 
@@ -138,24 +140,24 @@ GitHub Repository Secrets:
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI 키 |
 | `GOOGLE_BOOKS_KEY` | Google Books API 키 |
 
-### 업로드 저장소 (운영 필수)
+### 업로드 저장소 (운영) — 지금은 꺼져 있다
 
-독후감 사진은 운영에서 **반드시 GCS** 에 저장한다. Cloud Run 컨테이너의 파일시스템은 쓰기가 되지만 인스턴스가 교체·확장될 때마다 사라지므로, 로컬 디스크 저장소로 뜨면 업로드는 성공해 놓고 나중에 사진이 없어지고 다른 인스턴스에서는 `/uploads/{key}` 가 404 가 된다.
+운영에서 허용하는 저장소는 두 가지뿐이다.
 
-그래서 `prod` 프로파일은 `bookey.storage.type` 기본값을 `gcs` 로 두고(`application-prod.yml`), 기동 시 `StorageConfigValidator`(버킷이 비면 `GcsStorageService` 생성자가 먼저)가 아래를 확인해 어긋나면 **서버를 띄우지 않는다**(새 리비전이 못 뜨면 Cloud Run 은 이전 리비전을 계속 서빙한다). 실패 메시지에 고칠 파일과 넣을 줄이 그대로 적혀 있다.
-
-| 확인 | 값 | 환경변수 |
+| `bookey.storage.type` | 뜻 | 버킷 |
 |---|---|---|
-| `bookey.storage.type` | `gcs` | `STORAGE_TYPE` (prod 기본값이 `gcs`) |
-| `bookey.storage.gcs.bucket` | 비어 있으면 안 됨 | `GCS_BUCKET` |
+| `none` | **현재 기본값.** 사진 업로드만 끔 — 업로드 API 가 `503 STORAGE_DISABLED` 로 거절하고 나머지 기능은 정상 (`NoopStorageService`) | 필요 없음 |
+| `gcs` | GCS 버킷에 저장 (`GcsStorageService`) | `GCS_BUCKET` 이 비어 있으면 안 됨 |
 
-`.github/workflows/deploy-cloud-run.yml` 의 `env_vars` 는 `env_vars_update_strategy: overwrite` 라 배포할 때마다 Cloud Run 의 환경변수를 통째로 덮어쓴다 — **콘솔에서 손으로 넣은 값은 다음 배포에서 지워지므로** 워크플로의 `env_vars` 목록에 직접 넣어야 한다.
+로컬 디스크(`local`)는 운영에서 **기동을 막는다**. Cloud Run 컨테이너의 파일시스템은 쓰기가 되지만 인스턴스가 교체·확장될 때마다 사라지므로, 로컬 디스크 저장소로 뜨면 업로드는 200 으로 성공해 놓고 나중에 사진이 없어지고 다른 인스턴스에서는 `/uploads/{key}` 가 404 가 된다 — 조용히 데이터를 잃느니 안 뜨는 편이 낫다.
 
-> **워크플로에는 아직 `GCS_BUCKET` 줄이 없다.** 그대로 `main` 을 푸시하면 기동 검사(`GcsStorageService` 생성자·`StorageConfigValidator`)가 서버를 막아 startup probe 가 실패하고 Actions 의 `Deploy to Cloud Run` 스텝이 빨갛게 된다. 이전 리비전이 계속 서빙되므로 장애는 아니지만 `main` 은 **배포 불가** 상태다. 버킷 생성부터 워크플로 한 줄 추가까지의 순서는 바로 아래 "GCS 준비 (운영)" 에만 적어 둔다 — 사진 업로드가 처음 `main` 에 들어갈 때는 반드시 **머지 → GCS 준비 → 워크플로 한 줄 커밋 → 푸시** 순서를 지킨다.
+`StorageConfigValidator` 가 기동 시점에 이 규칙을 확인한다(버킷이 비면 `GcsStorageService` 생성자가 먼저 잡는다). 어긋나면 **서버를 띄우지 않고**, 실패 메시지에 고칠 파일과 넣을 줄이 그대로 적혀 있다. `none` 이면 기동은 하되 로그에 `운영 사진 업로드가 꺼져 있습니다 — GCS 준비 후 ...` warn 이 남는다.
 
-### GCS 준비 (운영) — `main` 푸시 전에 한 번
+`.github/workflows/deploy-cloud-run.yml` 의 `env_vars` 는 `env_vars_update_strategy: overwrite` 라 배포할 때마다 Cloud Run 의 환경변수를 통째로 덮어쓴다 — **콘솔에서 손으로 넣은 값은 다음 배포에서 지워지므로** 워크플로의 `env_vars` 목록에 직접 넣어야 한다. 지금 워크플로에는 `STORAGE_TYPE`·`GCS_BUCKET` 줄이 없고, 그래서 `prod` 기본값인 `none` 으로 뜬다 — 배포는 정상이고 사진 업로드만 막혀 있는 상태다.
 
-버킷은 아직 없다. 사진 업로드가 들어간 `main` 을 푸시하기 **전에** 아래를 순서대로 한 번 실행한다 (`<bucket>` 은 예: `bookey-media`).
+### GCS 준비 (운영) — 업로드를 켤 때 한 번
+
+버킷은 아직 없다. 사진 업로드를 켤 준비가 되면 아래를 순서대로 한 번 실행한다 (`<bucket>` 은 예: `bookey-media`).
 
 1. 버킷 생성 + 공개 읽기 + Cloud Run 런타임 서비스계정의 쓰기 권한. `<runtime-sa>` 는 `bookey-backend` 서비스의 런타임 서비스계정(따로 지정하지 않았다면 Compute Engine 기본 SA `<project-number>-compute@developer.gserviceaccount.com`):
 
@@ -166,8 +168,14 @@ GitHub Repository Secrets:
    ```
 
 2. GitHub Repository Variables 에 `GCP_MEDIA_BUCKET=<bucket>` 등록.
-3. `main` 에서 **별도 커밋**으로 `.github/workflows/deploy-cloud-run.yml` 의 `env_vars` 에 `GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }}` 한 줄 추가 (`STORAGE_TYPE` 은 prod 기본값이 `gcs` 라 생략해도 되고, 명시하려면 `STORAGE_TYPE=gcs`).
-4. 푸시. Actions 의 `Deploy to Cloud Run` 이 초록이고 새 리비전 로그에 `운영 업로드 저장소 확인: gs://<bucket>` 이 찍히면 끝. 실패했다면 리비전 로그의 `IllegalStateException` 메시지가 빠진 환경변수를 알려 준다.
+3. `main` 에서 **별도 커밋**으로 `.github/workflows/deploy-cloud-run.yml` 의 `env_vars` 에 두 줄 추가:
+
+   ```yaml
+            STORAGE_TYPE=gcs
+            GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }}
+   ```
+
+4. 푸시. Actions 의 `Deploy to Cloud Run` 이 초록이고 새 리비전 로그에 `운영 업로드 저장소 확인: gs://<bucket>` 이 찍히면 끝(이 줄 대신 `운영 사진 업로드가 꺼져 있습니다` warn 이 보이면 `STORAGE_TYPE` 줄이 안 들어간 것이다). 기동에 실패했다면 리비전 로그의 `IllegalStateException` 메시지가 빠진 환경변수를 알려 준다.
 
 공개 버킷이라 비공개 글의 사진도 URL 을 알면 열린다 (UUID 키로만 방어) — 서명 URL 은 백로그.
 

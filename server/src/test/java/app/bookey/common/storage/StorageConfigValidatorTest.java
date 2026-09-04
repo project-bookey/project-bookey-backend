@@ -5,7 +5,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class StorageConfigValidatorTest {
@@ -20,17 +19,35 @@ class StorageConfigValidatorTest {
     }
 
     @Test
-    @DisplayName("type=gcs 이고 버킷이 있으면 통과한다")
+    @DisplayName("type=gcs 이고 버킷이 있으면 통과하고 저장소를 켠 상태로 본다")
     void passesWithGcsAndBucket() {
-        assertThatCode(() -> StorageConfigValidator.validate(storage("gcs", "bookey-media")))
-                .doesNotThrowAnyException();
+        assertThat(StorageConfigValidator.validate(storage("gcs", "bookey-media")))
+                .isEqualTo(StorageConfigValidator.Mode.GCS);
     }
 
     @Test
     @DisplayName("대소문자만 다른 gcs 도 통과한다 — @ConditionalOnProperty 와 같은 규칙")
     void acceptsTypeIgnoringCase() {
-        assertThatCode(() -> StorageConfigValidator.validate(storage("GCS", "bookey-media")))
-                .doesNotThrowAnyException();
+        assertThat(StorageConfigValidator.validate(storage("GCS", "bookey-media")))
+                .isEqualTo(StorageConfigValidator.Mode.GCS);
+        assertThat(StorageConfigValidator.validate(storage("NONE", "")))
+                .isEqualTo(StorageConfigValidator.Mode.DISABLED);
+    }
+
+    @Test
+    @DisplayName("type=none 은 통과하되 업로드가 꺼진 상태로 본다 — 버킷이 없어도 배포는 되어야 한다")
+    void allowsDisabledStorage() {
+        assertThat(StorageConfigValidator.validate(storage("none", "")))
+                .isEqualTo(StorageConfigValidator.Mode.DISABLED);
+    }
+
+    @Test
+    @DisplayName("업로드가 꺼졌다는 경고에 켜는 방법(고칠 파일과 넣을 두 줄)이 그대로 적혀 있다")
+    void disabledWarningTellsHowToTurnItOn() {
+        assertThat(StorageConfigValidator.DISABLED_WARNING)
+                .contains(".github/workflows/deploy-cloud-run.yml")
+                .contains("STORAGE_TYPE=gcs")
+                .contains("GCS_BUCKET");
     }
 
     @Test
@@ -66,7 +83,8 @@ class StorageConfigValidatorTest {
                 .hasMessageContaining("GCP_MEDIA_BUCKET");
         assertThatThrownBy(() -> StorageConfigValidator.validate(storage("local", "bookey-media")))
                 .hasMessageContaining(".github/workflows/deploy-cloud-run.yml")
-                .hasMessageContaining("STORAGE_TYPE=gcs");
+                .hasMessageContaining("STORAGE_TYPE=gcs")
+                .hasMessageContaining("none");
     }
 
     @Test
