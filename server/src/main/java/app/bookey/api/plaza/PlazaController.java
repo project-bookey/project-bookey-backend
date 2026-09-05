@@ -21,12 +21,13 @@ public class PlazaController {
 
     private final PlazaService plazaService;
 
-    @Operation(summary = "광장 피드 — 밑줄(QUOTE) · 완독 자랑(FINISH)")
+    @Operation(summary = "광장 피드 — 밑줄(QUOTE) · 완독 자랑(FINISH), q 로 문장·책 제목 검색(QUOTE 만)")
     @GetMapping("/feed")
     public PageResponse<PlazaItemView> feed(@AuthenticationPrincipal AuthUser user,
                                             @RequestParam(defaultValue = "QUOTE") PlazaItemType type,
+                                            @RequestParam(required = false) String q,
                                             @RequestParam(defaultValue = "0") int page,
                                             @RequestParam(defaultValue = "20") int size) {
-        return plazaService.feed(user.id(), type, PageRequest.of(page, size));
+        return plazaService.feed(user.id(), type, q, PageRequest.of(page, size));
     }
 }

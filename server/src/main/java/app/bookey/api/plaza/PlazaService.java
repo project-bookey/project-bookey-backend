@@ -11,6 +11,7 @@ import app.bookey.domain.quote.QuoteAgreeRepository;
 import app.bookey.domain.quote.QuoteAgreeRepository.AgreeCount;
 import app.bookey.domain.quote.QuoteCommentRepository;
 import app.bookey.domain.quote.QuoteCommentRepository.CommentCount;
+import app.bookey.domain.quote.QuoteSearchKeyword;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingStatus;
@@ -41,13 +42,18 @@ public class PlazaService {
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
 
+    /** 광장 피드 — keyword 는 밑줄(QUOTE)에서 문장 내용·책 제목을 찾는다. 완독 자랑(FINISH)에는 문장이 없어 무시한다. */
     @Transactional(readOnly = true)
-    public PageResponse<PlazaItemView> feed(Long userId, PlazaItemType type, Pageable pageable) {
-        return type == PlazaItemType.FINISH ? finishFeed(pageable) : quoteFeed(userId, pageable);
+    public PageResponse<PlazaItemView> feed(Long userId, PlazaItemType type, String keyword, Pageable pageable) {
+        return type == PlazaItemType.FINISH
+                ? finishFeed(pageable)
+                : quoteFeed(userId, QuoteSearchKeyword.normalize(keyword), pageable);
     }
 
-    private PageResponse<PlazaItemView> quoteFeed(Long userId, Pageable pageable) {
-        Page<BookQuote> page = quoteRepository.findAllByOrderByCreatedAtDescIdDesc(pageable);
+    private PageResponse<PlazaItemView> quoteFeed(Long userId, String keyword, Pageable pageable) {
+        Page<BookQuote> page = keyword == null
+                ? quoteRepository.findAllByOrderByCreatedAtDescIdDesc(pageable)
+                : quoteRepository.searchAll(keyword, pageable);
         List<BookQuote> quotes = page.getContent();
         Map<Long, Book> books = loadBooks(quotes.stream().map(BookQuote::getBookId).distinct().toList());
         Map<Long, User> authors = loadAuthors(quotes.stream().map(BookQuote::getUserId).distinct().toList());
