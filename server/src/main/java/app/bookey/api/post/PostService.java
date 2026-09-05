@@ -95,7 +95,7 @@ public class PostService {
                 .tags(toTags(request.tags()))
                 .build());
         attachImages(post, userId, request.imageIds());
-        attachQuotes(post, userId, request.quoteIds());
+        attachQuotes(post, request.quoteIds());
         return toView(post, userId);
     }
 
@@ -120,7 +120,7 @@ public class PostService {
             // 삭제를 먼저 flush 해야 같은 밑줄을 다시 붙일 때 (post_id, quote_id) 유니크에 걸리지 않는다.
             postQuoteRepository.deleteAllByPostId(postId);
             postQuoteRepository.flush();
-            attachQuotes(post, userId, request.quoteIds());
+            attachQuotes(post, request.quoteIds());
         }
         return toView(post, userId);
     }
@@ -291,13 +291,13 @@ public class PostService {
                 .forEach(PostImage::detach);
     }
 
-    /** 밑줄을 요청 순서대로 잇는다. 소유만 검사한다 — 책이 없는 글에도, 다른 책의 밑줄도 붙일 수 있다. 중복 id 는 첫 것만. */
-    private void attachQuotes(Post post, Long userId, List<Long> quoteIds) {
+    /** 밑줄을 요청 순서대로 잇는다. 존재만 검사한다 — 책이 없는 글에도, 다른 책·남의 밑줄도 붙일 수 있다. 중복 id 는 첫 것만. */
+    private void attachQuotes(Post post, List<Long> quoteIds) {
         if (quoteIds == null || quoteIds.isEmpty()) {
             return;
         }
         List<Long> ids = quoteIds.stream().filter(Objects::nonNull).distinct().toList();
-        validateQuoteAttachments(userId, ids, quoteRepository.findAllById(ids));
+        validateQuoteAttachments(ids, quoteRepository.findAllById(ids));
         List<PostQuote> links = new ArrayList<>(ids.size());
         for (int order = 0; order < ids.size(); order++) {
             links.add(PostQuote.builder()
@@ -307,13 +307,11 @@ public class PostService {
         postQuoteRepository.saveAll(links);
     }
 
-    /** 요청한 밑줄이 모두 존재하고 전부 내 것이어야 한다 — 없는 것과 남의 것을 구분해 알리지 않는다. */
-    static void validateQuoteAttachments(Long userId, List<Long> requestedIds, List<BookQuote> found) {
+    /** 요청한 밑줄이 모두 존재해야 한다. 밑줄은 공개물이라 남이 오려둔 문장도 인용할 수 있다. */
+    static void validateQuoteAttachments(List<Long> requestedIds, List<BookQuote> found) {
         Set<Long> foundIds = found.stream().map(BookQuote::getId).collect(Collectors.toSet());
-        boolean allFound = foundIds.containsAll(requestedIds);
-        boolean allMine = found.stream().allMatch(quote -> quote.isOwnedBy(userId));
-        if (!allFound || !allMine) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "내가 오려둔 밑줄만 붙일 수 있습니다.");
+        if (!foundIds.containsAll(requestedIds)) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "없는 밑줄은 붙일 수 없습니다.");
         }
     }
 
