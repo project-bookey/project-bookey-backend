@@ -81,13 +81,14 @@ public class BookController {
         return bookService.recommended(size);
     }
 
-    @Operation(summary = "책별 오려둔 문장 목록 — 최신순")
+    @Operation(summary = "책별 오려둔 문장 목록 — 최신순, q 로 문장·책 제목 검색")
     @GetMapping("/{bookId}/quotes")
     public PageResponse<BookQuoteView> quotes(@AuthenticationPrincipal AuthUser user,
                                               @PathVariable Long bookId,
+                                              @RequestParam(required = false) String q,
                                               @RequestParam(defaultValue = "0") int page,
                                               @RequestParam(defaultValue = "20") int size) {
-        return quoteService.byBook(user.id(), bookId, PageRequest.of(page, size));
+        return quoteService.byBook(user.id(), bookId, q, PageRequest.of(page, size));
     }
 
     @Operation(summary = "책별 공개 독후감 목록 — 최신순")
