@@ -68,11 +68,21 @@ bookey:
     access-token-ttl: PT1H
     refresh-token-ttl: P30D
     admin-token-ttl: PT30M
+  auth:
+    email-code:
+      ttl: PT10M
+      cooldown: PT1M
+      max-attempts: 5
+      expose: ${AUTH_EMAIL_CODE_EXPOSE:true}   # 코드 발급 응답에 코드 동봉(로컬 개발·스모크 편의). 운영은 application-prod.yml 이 끈다
   book-api:
     kakao-key: ${KAKAO_REST_KEY:}
     aladin-ttb-key: ${ALADIN_TTB_KEY:}
     google-books-key: ${GOOGLE_BOOKS_KEY:}
     cache-ttl: PT24H
+  oauth:
+    google-client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:}
+    apple-audiences: ${APPLE_OAUTH_AUDIENCES:app.bookey.mobile}
+    kakao-app-id: ${KAKAO_APP_ID:}
   club:
     default-member-limit: 20
     max-member-limit: 50

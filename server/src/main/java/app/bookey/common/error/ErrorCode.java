@@ -22,6 +22,9 @@ public enum ErrorCode {
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "토큰이 만료되었습니다."),
     USER_SUSPENDED(HttpStatus.FORBIDDEN, "이용이 제한된 계정입니다."),
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 가입된 이메일입니다."),
+    EMAIL_CODE_INVALID(HttpStatus.BAD_REQUEST, "인증 코드가 올바르지 않습니다."),
+    EMAIL_CODE_EXPIRED(HttpStatus.BAD_REQUEST, "인증 코드가 만료되었습니다. 새 코드를 요청해 주세요."),
+    SOCIAL_SIGNUP_DISABLED(HttpStatus.FORBIDDEN, "소셜 계정으로는 가입할 수 없습니다. 이메일로 가입한 뒤 소셜 계정을 연동해 주세요."),
     SOCIAL_ACCOUNT_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 계정에 연결된 소셜 계정입니다."),
     WRITE_BANNED(HttpStatus.FORBIDDEN, "글쓰기가 제한된 계정입니다."),
 

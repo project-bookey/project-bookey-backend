@@ -18,13 +18,19 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Operation(summary = "소셜 로그인 (Apple/Google/Kakao)")
+    @Operation(summary = "소셜 로그인 (Apple/Google/Kakao) — 연동된 계정만, 신규 가입 불가")
     @PostMapping("/social")
     public TokenResponse socialLogin(@Valid @RequestBody SocialLoginRequest request) {
         return authService.socialLogin(request);
     }
 
-    @Operation(summary = "이메일 회원가입")
+    @Operation(summary = "가입 이메일 인증 코드 발급")
+    @PostMapping("/email/code")
+    public EmailCodeResponse requestEmailCode(@Valid @RequestBody EmailCodeRequest request) {
+        return authService.requestEmailCode(request);
+    }
+
+    @Operation(summary = "이메일 회원가입 — 인증 코드 필요")
     @PostMapping("/signup")
     public TokenResponse signup(@Valid @RequestBody EmailSignupRequest request) {
         return authService.emailSignup(request);
