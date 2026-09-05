@@ -1,6 +1,9 @@
 package app.bookey.api.auth;
 
+import app.bookey.api.auth.dto.AuthDtos.EmailCodeRequest;
+import app.bookey.api.auth.dto.AuthDtos.EmailCodeResponse;
 import app.bookey.api.auth.dto.AuthDtos.EmailLoginRequest;
+import app.bookey.api.auth.dto.AuthDtos.EmailSignupRequest;
 import app.bookey.api.auth.dto.AuthDtos.SocialLoginRequest;
 import app.bookey.api.auth.dto.AuthDtos.TokenResponse;
 import app.bookey.common.config.BookeyProperties;
@@ -9,9 +12,13 @@ import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
 import app.bookey.domain.user.AuthProvider;
+import app.bookey.domain.user.EmailVerification;
+import app.bookey.domain.user.EmailVerificationRepository;
 import app.bookey.domain.user.RefreshToken;
 import app.bookey.domain.user.RefreshTokenRepository;
 import app.bookey.domain.user.User;
+import app.bookey.domain.user.UserIdentity;
+import app.bookey.domain.user.UserIdentityRepository;
 import app.bookey.domain.user.UserRepository;
 import app.bookey.domain.user.UserStatus;
 import io.jsonwebtoken.Claims;
@@ -21,7 +28,11 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,7 +46,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 로그인 경로 단위 테스트 — 로컬·스모크가 쓰는 이메일 로그인과 소셜 provider 계약을 고정한다.
+ * 로그인·가입 경로 단위 테스트 — 이메일 가입은 인증 코드를 요구하고, 소셜 로그인은 연동된 계정만 통과하는 계약을 고정한다.
  * 저장소만 Mockito 로 대신하고 토큰 발급은 실제 {@link JwtTokenProvider} 를 쓴다(Spring 컨텍스트 없음).
  */
 class AuthServiceTest {
@@ -53,16 +64,27 @@ class AuthServiceTest {
         }
     };
 
+    private static final BookeyProperties.Auth AUTH = new BookeyProperties.Auth(
+            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), 5, true));
+
     private final UserRepository userRepository = mock(UserRepository.class);
+    private final UserIdentityRepository identityRepository = mock(UserIdentityRepository.class);
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
-    private final JwtTokenProvider tokenProvider = new JwtTokenProvider(new BookeyProperties(
+    private final EmailVerificationRepository emailVerificationRepository = mock(EmailVerificationRepository.class);
+    private final EmailCodeSender emailCodeSender = mock(EmailCodeSender.class);
+    private final HandleGenerator handleGenerator = mock(HandleGenerator.class);
+    private final app.bookey.domain.admin.OpsFlagRepository opsFlagRepository =
+            mock(app.bookey.domain.admin.OpsFlagRepository.class);
+    private final BookeyProperties properties = new BookeyProperties(
             new BookeyProperties.Jwt("unit-test-secret-must-be-at-least-32-bytes-long",
                     Duration.ofHours(1), Duration.ofDays(30), Duration.ofMinutes(30)),
-            null, null, null, null));
+            AUTH, null, null, null, null, null);
+    private final JwtTokenProvider tokenProvider = new JwtTokenProvider(properties);
 
     private AuthService service(List<SocialTokenVerifier> verifiers) {
-        return new AuthService(userRepository, null, null, refreshTokenRepository, null,
-                tokenProvider, null, null, verifiers, PLAIN);
+        return new AuthService(userRepository, identityRepository, null, refreshTokenRepository,
+                opsFlagRepository, emailVerificationRepository, tokenProvider, handleGenerator,
+                properties, verifiers, PLAIN, emailCodeSender);
     }
 
     private User user(long id, String email, String password) {
@@ -74,14 +96,34 @@ class AuthServiceTest {
         return user;
     }
 
-    private void set(Object target, String field, Object value) {
+    private static void set(Object target, String field, Object value) {
+        Class<?> type = target.getClass();
+        while (type != null) {
+            try {
+                Field f = type.getDeclaredField(field);
+                f.setAccessible(true);
+                f.set(target, value);
+                return;
+            } catch (NoSuchFieldException e) {
+                type = type.getSuperclass();
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        }
+        throw new IllegalStateException("필드를 찾을 수 없습니다: " + field);
+    }
+
+    private static String sha256(String value) {
         try {
-            Field f = target.getClass().getDeclaredField(field);
-            f.setAccessible(true);
-            f.set(target, value);
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
         } catch (Exception e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    private EmailVerification verification(String email, String code, Instant expiresAt) {
+        return new EmailVerification(email, sha256(code), expiresAt);
     }
 
     private static void assertApiError(Runnable call, ErrorCode expected) {
@@ -89,6 +131,15 @@ class AuthServiceTest {
                 .isInstanceOf(ApiException.class)
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(expected);
+    }
+
+    /** 가입 성공 경로 공통 — save 가 id 를 채워 돌려주게 한다. */
+    private void stubUserSave() {
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> {
+            User saved = invocation.getArgument(0);
+            set(saved, "id", 42L);
+            return saved;
+        });
     }
 
     // ───────────── 소셜 provider 계약 ─────────────
@@ -107,12 +158,200 @@ class AuthServiceTest {
     void socialLoginWithoutVerifierIsRejected() {
         AuthService service = service(List.of());
 
-        assertThatThrownBy(() -> service.socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token", null)))
+        assertThatThrownBy(() -> service.socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token")))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("지원하지 않는 로그인 방식입니다.")
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
         verify(refreshTokenRepository, never()).save(any());
+    }
+
+    // ───────────── 소셜 로그인 = 연동 계정 전용 ─────────────
+
+    private SocialTokenVerifier kakaoVerifier(String uid) {
+        return new SocialTokenVerifier() {
+            @Override
+            public AuthProvider provider() {
+                return AuthProvider.KAKAO;
+            }
+
+            @Override
+            public SocialProfile verify(String token) {
+                return new SocialProfile(AuthProvider.KAKAO, uid, null, null, null);
+            }
+        };
+    }
+
+    @Test
+    @DisplayName("소셜 로그인 — 연동되지 않은 소셜 계정은 SOCIAL_SIGNUP_DISABLED (이메일 가입 후 연동 유도, 자동 가입 없음)")
+    void socialLoginUnlinkedIdentityIsRejected() {
+        when(identityRepository.findByProviderAndProviderUid(AuthProvider.KAKAO, "kakao-1"))
+                .thenReturn(Optional.empty());
+
+        assertApiError(() -> service(List.of(kakaoVerifier("kakao-1")))
+                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token")), ErrorCode.SOCIAL_SIGNUP_DISABLED);
+        verify(userRepository, never()).save(any());
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("소셜 로그인 — 이미 연동된 계정은 newUser=false 로 로그인된다")
+    void socialLoginLinkedIdentitySucceeds() {
+        User user = user(9L, "linked@dev.local", "password1234");
+        when(identityRepository.findByProviderAndProviderUid(AuthProvider.KAKAO, "kakao-9"))
+                .thenReturn(Optional.of(new UserIdentity(9L, AuthProvider.KAKAO, "kakao-9")));
+        when(userRepository.findById(9L)).thenReturn(Optional.of(user));
+
+        TokenResponse res = service(List.of(kakaoVerifier("kakao-9")))
+                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token"));
+
+        assertThat(res.newUser()).isFalse();
+        assertThat(res.user().id()).isEqualTo(9L);
+        verify(refreshTokenRepository).save(any(RefreshToken.class));
+    }
+
+    // ───────────── 가입 인증 코드 발급 ─────────────
+
+    @Test
+    @DisplayName("코드 발급 — 6자리 코드를 해시로 저장하고 발송한다. expose=true 면 응답에 devCode 가 동봉된다")
+    void requestEmailCodeIssuesAndSends() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+                .thenReturn(Optional.empty());
+
+        EmailCodeResponse res = service(List.of())
+                .requestEmailCode(new EmailCodeRequest("  New@Dev.Local "));
+
+        assertThat(res.expiresInSec()).isEqualTo(600L);
+        assertThat(res.devCode()).hasSize(6).containsOnlyDigits();
+
+        ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
+        verify(emailVerificationRepository).save(saved.capture());
+        assertThat(saved.getValue().getEmail()).isEqualTo("new@dev.local");
+        assertThat(saved.getValue().getCodeHash()).isEqualTo(sha256(res.devCode()));
+        verify(emailCodeSender).send("new@dev.local", res.devCode(), Duration.ofMinutes(10));
+    }
+
+    @Test
+    @DisplayName("코드 발급 — 이미 가입된 이메일은 EMAIL_ALREADY_EXISTS")
+    void requestEmailCodeForRegisteredEmail() {
+        when(userRepository.existsByEmailIgnoreCase("tester1@dev.local")).thenReturn(true);
+
+        assertApiError(() -> service(List.of())
+                .requestEmailCode(new EmailCodeRequest("tester1@dev.local")), ErrorCode.EMAIL_ALREADY_EXISTS);
+        verify(emailVerificationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("코드 발급 — 쿨다운(1분) 안의 재요청은 RATE_LIMITED")
+    void requestEmailCodeWithinCooldown() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        EmailVerification latest = verification("new@dev.local", "123456", Instant.now().plus(Duration.ofMinutes(10)));
+        set(latest, "createdAt", Instant.now());
+        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+                .thenReturn(Optional.of(latest));
+
+        assertApiError(() -> service(List.of())
+                .requestEmailCode(new EmailCodeRequest("new@dev.local")), ErrorCode.RATE_LIMITED);
+        verify(emailVerificationRepository, never()).save(any());
+    }
+
+    // ───────────── 이메일 가입 (인증 코드 필수) ─────────────
+
+    private EmailSignupRequest signupRequest(String code) {
+        return new EmailSignupRequest("new@dev.local", "password1234", "새 독서가", code);
+    }
+
+    @Test
+    @DisplayName("가입 — 올바른 코드면 코드를 소진하고 email_verified_at 을 채워 가입시킨다")
+    void emailSignupWithValidCode() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        when(handleGenerator.generate("new")).thenReturn("newbie");
+        stubUserSave();
+        EmailVerification verification = verification("new@dev.local", "123456",
+                Instant.now().plus(Duration.ofMinutes(10)));
+        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+                .thenReturn(Optional.of(verification));
+
+        TokenResponse res = service(List.of()).emailSignup(signupRequest("123456"));
+
+        assertThat(res.newUser()).isTrue();
+        assertThat(res.user().handle()).isEqualTo("newbie");
+        assertThat(verification.isConsumed()).isTrue();
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getEmailVerifiedAt()).isNotNull();
+        Claims access = tokenProvider.parse(res.accessToken(), TokenType.USER_ACCESS);
+        assertThat(tokenProvider.subjectId(access)).isEqualTo(42L);
+    }
+
+    @Test
+    @DisplayName("가입 — 코드가 틀리면 EMAIL_CODE_INVALID, 실패 횟수가 누적된다")
+    void emailSignupWithWrongCode() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        EmailVerification verification = verification("new@dev.local", "123456",
+                Instant.now().plus(Duration.ofMinutes(10)));
+        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+                .thenReturn(Optional.of(verification));
+
+        assertApiError(() -> service(List.of()).emailSignup(signupRequest("999999")), ErrorCode.EMAIL_CODE_INVALID);
+        assertThat(verification.getAttemptCount()).isEqualTo((short) 1);
+        assertThat(verification.isConsumed()).isFalse();
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("가입 — 코드를 발급받은 적이 없으면 EMAIL_CODE_INVALID")
+    void emailSignupWithoutIssuedCode() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+                .thenReturn(Optional.empty());
+
+        assertApiError(() -> service(List.of()).emailSignup(signupRequest("123456")), ErrorCode.EMAIL_CODE_INVALID);
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("가입 — 만료·소진·시도 초과 코드는 EMAIL_CODE_EXPIRED (재발급 유도)")
+    void emailSignupWithUnusableCode() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        AuthService service = service(List.of());
+
+        // 만료
+        EmailVerification expired = verification("new@dev.local", "123456", Instant.now().minusSeconds(1));
+        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+                .thenReturn(Optional.of(expired));
+        assertApiError(() -> service.emailSignup(signupRequest("123456")), ErrorCode.EMAIL_CODE_EXPIRED);
+
+        // 이미 소진
+        EmailVerification consumed = verification("new@dev.local", "123456",
+                Instant.now().plus(Duration.ofMinutes(10)));
+        consumed.consume(Instant.now());
+        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+                .thenReturn(Optional.of(consumed));
+        assertApiError(() -> service.emailSignup(signupRequest("123456")), ErrorCode.EMAIL_CODE_EXPIRED);
+
+        // 시도 초과 — 올바른 코드라도 무효
+        EmailVerification tried = verification("new@dev.local", "123456",
+                Instant.now().plus(Duration.ofMinutes(10)));
+        for (int i = 0; i < 5; i++) {
+            tried.recordFailedAttempt();
+        }
+        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+                .thenReturn(Optional.of(tried));
+        assertApiError(() -> service.emailSignup(signupRequest("123456")), ErrorCode.EMAIL_CODE_EXPIRED);
+
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("가입 — 이미 가입된 이메일은 코드 검증 전에 EMAIL_ALREADY_EXISTS")
+    void emailSignupDuplicatedEmail() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(true);
+
+        assertApiError(() -> service(List.of()).emailSignup(signupRequest("123456")), ErrorCode.EMAIL_ALREADY_EXISTS);
+        verify(emailVerificationRepository, never()).findTopByEmailOrderByIdDesc(any());
     }
 
     // ───────────── 이메일 로그인 ─────────────

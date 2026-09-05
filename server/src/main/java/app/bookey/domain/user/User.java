@@ -26,6 +26,9 @@ public class User extends BaseTimeEntity {
     @Column(name = "password_hash", length = 100)
     private String passwordHash;
 
+    @Column(name = "email_verified_at")
+    private java.time.Instant emailVerifiedAt;
+
     @Column(nullable = false, length = 50)
     private String nickname;
 
@@ -111,6 +114,10 @@ public class User extends BaseTimeEntity {
 
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    public void markEmailVerified(java.time.Instant at) {
+        this.emailVerifiedAt = at;
     }
 
     /** 조용 시간 여부 (§F5 설계 원칙 3). 자정을 넘는 구간도 처리한다. */

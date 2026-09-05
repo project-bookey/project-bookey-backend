@@ -2,6 +2,7 @@ package app.bookey.api.auth.verifier;
 
 import app.bookey.api.auth.SocialProfile;
 import app.bookey.api.auth.SocialTokenVerifier;
+import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.user.AuthProvider;
@@ -21,6 +22,7 @@ public class GoogleTokenVerifier implements SocialTokenVerifier {
     private static final String TOKEN_INFO = "https://oauth2.googleapis.com/tokeninfo?id_token=";
 
     private final RestClient bookApiRestClient;
+    private final BookeyProperties properties;
 
     @Override
     public AuthProvider provider() {
@@ -38,6 +40,7 @@ public class GoogleTokenVerifier implements SocialTokenVerifier {
             if (body == null || body.get("sub") == null) {
                 throw ApiException.of(ErrorCode.INVALID_TOKEN);
             }
+            validateAudience((String) body.get("aud"));
             return new SocialProfile(
                     AuthProvider.GOOGLE,
                     (String) body.get("sub"),
@@ -48,6 +51,24 @@ public class GoogleTokenVerifier implements SocialTokenVerifier {
             throw e;
         } catch (Exception e) {
             log.warn("Google token verification failed", e);
+            throw ApiException.of(ErrorCode.INVALID_TOKEN);
+        }
+    }
+
+    private void validateAudience(String audience) {
+        if (audience == null || audience.isBlank()) {
+            throw ApiException.of(ErrorCode.INVALID_TOKEN);
+        }
+        var allowed = properties.oauth().googleClientIds();
+        if (allowed == null || allowed.isEmpty() || allowed.stream().allMatch(String::isBlank)) {
+            log.warn("Google OAuth audience validation is not configured");
+            return;
+        }
+        boolean matched = allowed.stream()
+                .map(String::trim)
+                .filter(id -> !id.isBlank())
+                .anyMatch(id -> id.equals(audience));
+        if (!matched) {
             throw ApiException.of(ErrorCode.INVALID_TOKEN);
         }
     }

@@ -3,16 +3,26 @@ package app.bookey.common.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
+import java.util.List;
 
 /** application.yml 의 bookey.* 설정. */
 @ConfigurationProperties(prefix = "bookey")
 public record BookeyProperties(
         Jwt jwt,
+        Auth auth,
         BookApi bookApi,
+        OAuth oauth,
         Club club,
         Notification notification,
         Storage storage
 ) {
+
+    /** 가입 본인인증. 이메일 인증 코드 정책. */
+    public record Auth(EmailCode emailCode) {
+        /** expose 가 true 면 코드 발급 응답에 코드를 동봉한다 — 로컬 개발·스모크 전용, 운영은 반드시 false. */
+        public record EmailCode(Duration ttl, Duration cooldown, int maxAttempts, boolean expose) {}
+    }
+
     public record Jwt(
             String secret,
             Duration accessTokenTtl,
@@ -25,6 +35,12 @@ public record BookeyProperties(
             String aladinTtbKey,
             String googleBooksKey,
             Duration cacheTtl
+    ) {}
+
+    public record OAuth(
+            List<String> googleClientIds,
+            List<String> appleAudiences,
+            Long kakaoAppId
     ) {}
 
     public record Club(

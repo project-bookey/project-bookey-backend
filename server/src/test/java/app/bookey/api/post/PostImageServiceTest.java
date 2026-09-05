@@ -96,7 +96,7 @@ class PostImageServiceTest {
             new PostImageService(imageRepository, storage, rateLimiter, properties(MAX_BYTES));
 
     private static BookeyProperties properties(long maxBytes) {
-        return new BookeyProperties(null, null, null, null, new BookeyProperties.Storage("local",
+        return new BookeyProperties(null, null, null, null, null, null, new BookeyProperties.Storage("local",
                 new BookeyProperties.Storage.Local("./uploads", ""),
                 new BookeyProperties.Storage.Gcs(""),
                 new BookeyProperties.Storage.Image(maxBytes, 10)));

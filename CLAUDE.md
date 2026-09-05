@@ -27,7 +27,7 @@ cd server && ./mvnw test -Dtest=BannerServiceTest            # 단일 클래스
 cd server && ./mvnw test -Dtest=BannerServiceTest#메서드명    # 단일 메서드
 ```
 
-로컬 프로필 기동 시 `LocalDataSeeder`가 표본 도서 4권과 관리자 계정(`admin@bookey.local` / `bookey-local-1234`)을 시드한다. 개발용 사용자 로그인은 이메일 가입·로그인으로 한다 — `POST /api/v1/auth/signup` `{"email","password","nickname"}` 으로 가입하면 응답에 토큰이 바로 담기고, 이후 `POST /api/v1/auth/login` `{"email","password"}` 으로 로그인한다. 스모크 스크립트는 `tester1@dev.local` / `password1234` 처럼 로그인 실패 시 가입으로 폴백하는 관례를 쓴다. 예전의 `provider: "DEV"` 소셜 로그인은 제거됐다(`AuthProvider` 는 `APPLE`·`GOOGLE`·`KAKAO` 만, `AuthServiceTest` 가 고정).
+로컬 프로필 기동 시 `LocalDataSeeder`가 표본 도서 4권과 관리자 계정(`admin@bookey.local` / `bookey-local-1234`)을 시드한다. 개발용 사용자 로그인은 이메일 가입·로그인으로 한다 — 가입은 2단계: ① `POST /api/v1/auth/email/code` `{"email"}` 로 인증 코드를 발급받고(로컬은 `bookey.auth.email-code.expose=true` 라 응답 `devCode` 에 코드가 동봉된다; 운영은 prod 프로필이 끈다), ② `POST /api/v1/auth/signup` `{"email","password","nickname","code"}` 로 가입하면 응답에 토큰이 바로 담긴다. 이후 `POST /api/v1/auth/login` `{"email","password"}` 으로 로그인한다. 스모크 스크립트는 `tester1@dev.local` / `password1234` 처럼 로그인 실패 시 코드 발급→가입으로 폴백하는 관례를 쓴다. 소셜 로그인(`/auth/social`)은 **이미 연동된 계정만** 통과하고 신규 가입은 하지 않는다 — 가입은 이메일로만, 소셜은 가입 후 `/auth/social/link` 로 연동한다(`AuthServiceTest` 가 고정). 예전의 `provider: "DEV"` 소셜 로그인은 제거됐다(`AuthProvider` 는 `APPLE`·`GOOGLE`·`KAKAO` 만).
 
 ## API contract — the one rule that matters
 

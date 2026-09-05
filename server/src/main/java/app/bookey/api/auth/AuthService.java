@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.HexFormat;
@@ -34,11 +35,15 @@ public class AuthService {
     private final UserDeviceRepository deviceRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final OpsFlagRepository opsFlagRepository;
+    private final EmailVerificationRepository emailVerificationRepository;
     private final JwtTokenProvider tokenProvider;
     private final HandleGenerator handleGenerator;
     private final BookeyProperties properties;
     private final List<SocialTokenVerifier> verifiers;
     private final PasswordEncoder passwordEncoder;
+    private final EmailCodeSender emailCodeSender;
+
+    private final SecureRandom secureRandom = new SecureRandom();
 
     private Map<AuthProvider, SocialTokenVerifier> verifierMap;
 
@@ -55,46 +60,85 @@ public class AuthService {
         return verifier;
     }
 
+    /** 소셜 로그인 — 이미 연동된 계정만 통과한다. 신규 가입은 이메일 가입(코드 인증) 후 연동으로만 가능하다. */
     @Transactional
     public TokenResponse socialLogin(SocialLoginRequest request) {
         SocialProfile profile = verifierFor(request.provider()).verify(request.token());
 
         UserIdentity identity = identityRepository
                 .findByProviderAndProviderUid(profile.provider(), profile.providerUid())
-                .orElse(null);
+                .orElseThrow(() -> ApiException.of(ErrorCode.SOCIAL_SIGNUP_DISABLED));
 
-        boolean newUser = identity == null;
-        User user;
-        if (newUser) {
-            requireSignupOpen();
-            user = createUser(profile, request.nickname());
-            identityRepository.save(
-                    new UserIdentity(user.getId(), profile.provider(), profile.providerUid()));
-        } else {
-            user = userRepository.findById(identity.getUserId())
-                    .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        }
+        User user = userRepository.findById(identity.getUserId())
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
 
         if (!user.getStatus().canLogin()) {
             throw ApiException.of(ErrorCode.USER_SUSPENDED);
         }
-        return issueTokens(user, newUser);
+        return issueTokens(user, false);
     }
 
+    /** 가입 인증 코드 발급 — 코드 원문은 저장하지 않고 해시만 남긴 뒤 이메일로 발송한다. */
     @Transactional
+    public EmailCodeResponse requestEmailCode(EmailCodeRequest request) {
+        requireSignupOpen();
+        String email = normalizeEmail(request.email());
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+        BookeyProperties.Auth.EmailCode policy = properties.auth().emailCode();
+        Instant now = Instant.now();
+        emailVerificationRepository.findTopByEmailOrderByIdDesc(email).ifPresent(latest -> {
+            if (latest.getCreatedAt() != null && now.isBefore(latest.getCreatedAt().plus(policy.cooldown()))) {
+                throw new ApiException(ErrorCode.RATE_LIMITED, "인증 코드는 잠시 후 다시 요청할 수 있습니다.");
+            }
+        });
+        String code = "%06d".formatted(secureRandom.nextInt(1_000_000));
+        emailVerificationRepository.save(new EmailVerification(email, sha256(code), now.plus(policy.ttl())));
+        emailCodeSender.send(email, code, policy.ttl());
+        return new EmailCodeResponse(policy.ttl().toSeconds(), policy.expose() ? code : null);
+    }
+
+    /**
+     * 이메일 가입 — 발급받은 인증 코드를 통과해야 한다.
+     * noRollbackFor: 코드 불일치 시 실패 횟수 누적이 롤백으로 사라지지 않게 한다(무작위 대입 방어).
+     * ApiException 은 항상 다른 쓰기 이전에 던져지므로 부분 커밋 위험이 없다.
+     */
+    @Transactional(noRollbackFor = ApiException.class)
     public TokenResponse emailSignup(EmailSignupRequest request) {
         requireSignupOpen();
         String email = normalizeEmail(request.email());
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
+        consumeEmailCode(email, request.code());
         User user = User.builder()
                 .handle(handleGenerator.generate(email.substring(0, email.indexOf("@"))))
                 .email(email)
                 .nickname(request.nickname().trim())
                 .build();
         user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.markEmailVerified(Instant.now());
         return issueTokens(userRepository.save(user), true);
+    }
+
+    /** 최신 발급 코드와 대조한다 — 소진·만료·시도 초과면 재발급을 유도하고, 불일치는 실패 횟수를 누적한다. */
+    private void consumeEmailCode(String email, String code) {
+        BookeyProperties.Auth.EmailCode policy = properties.auth().emailCode();
+        EmailVerification verification = emailVerificationRepository.findTopByEmailOrderByIdDesc(email)
+                .orElseThrow(() -> ApiException.of(ErrorCode.EMAIL_CODE_INVALID));
+        Instant now = Instant.now();
+        if (verification.isConsumed() || verification.isExpired(now)
+                || !verification.hasAttemptsLeft(policy.maxAttempts())) {
+            throw ApiException.of(ErrorCode.EMAIL_CODE_EXPIRED);
+        }
+        if (!sha256(code).equals(verification.getCodeHash())) {
+            verification.recordFailedAttempt();
+            emailVerificationRepository.save(verification);
+            throw ApiException.of(ErrorCode.EMAIL_CODE_INVALID);
+        }
+        verification.consume(now);
+        emailVerificationRepository.save(verification);
     }
 
     @Transactional
@@ -136,30 +180,6 @@ public class AuthService {
                 throw new ApiException(ErrorCode.FORBIDDEN, "현재 신규 가입이 중단되었습니다.");
             }
         });
-    }
-
-    private User createUser(SocialProfile profile, String requestedNickname) {
-        String nickname = firstNonBlank(requestedNickname, profile.nickname(), "독서가");
-        String handleSeed = profile.email() != null
-                ? profile.email().split("@")[0]
-                : nickname;
-        User user = User.builder()
-                .handle(handleGenerator.generate(handleSeed))
-                .email(profile.email())
-                .nickname(nickname)
-                .avatarUrl(profile.avatarUrl())
-                .timezone("Asia/Seoul")
-                .build();
-        return userRepository.save(user);
-    }
-
-    private static String firstNonBlank(String... values) {
-        for (String value : values) {
-            if (value != null && !value.isBlank()) {
-                return value;
-            }
-        }
-        return "독서가";
     }
 
     private TokenResponse issueTokens(User user, boolean newUser) {

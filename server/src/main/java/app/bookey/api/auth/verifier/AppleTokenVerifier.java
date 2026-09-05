@@ -2,6 +2,7 @@ package app.bookey.api.auth.verifier;
 
 import app.bookey.api.auth.SocialProfile;
 import app.bookey.api.auth.SocialTokenVerifier;
+import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.user.AuthProvider;
@@ -21,6 +22,7 @@ import java.security.spec.RSAPublicKeySpec;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Apple id_token 검증. iOS 심사상 Apple 로그인은 필수(§9).
@@ -36,6 +38,7 @@ public class AppleTokenVerifier implements SocialTokenVerifier {
 
     private final RestClient bookApiRestClient;
     private final ObjectMapper objectMapper;
+    private final BookeyProperties properties;
     private final Map<String, PublicKey> keyCache = new HashMap<>();
 
     @Override
@@ -60,12 +63,31 @@ public class AppleTokenVerifier implements SocialTokenVerifier {
             if (sub == null) {
                 throw ApiException.of(ErrorCode.INVALID_TOKEN);
             }
+            validateAudience(claims.getAudience());
             String email = claims.get("email", String.class);
             return new SocialProfile(AuthProvider.APPLE, sub, email, null, null);
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
             log.warn("Apple token verification failed", e);
+            throw ApiException.of(ErrorCode.INVALID_TOKEN);
+        }
+    }
+
+    private void validateAudience(Set<String> audiences) {
+        if (audiences == null || audiences.isEmpty()) {
+            throw ApiException.of(ErrorCode.INVALID_TOKEN);
+        }
+        var allowed = properties.oauth().appleAudiences();
+        if (allowed == null || allowed.isEmpty() || allowed.stream().allMatch(String::isBlank)) {
+            log.warn("Apple OAuth audience validation is not configured");
+            return;
+        }
+        boolean matched = allowed.stream()
+                .map(String::trim)
+                .filter(id -> !id.isBlank())
+                .anyMatch(audiences::contains);
+        if (!matched) {
             throw ApiException.of(ErrorCode.INVALID_TOKEN);
         }
     }
