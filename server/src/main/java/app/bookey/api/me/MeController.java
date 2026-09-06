@@ -25,9 +25,11 @@ import org.springframework.web.bind.annotation.*;
 public class MeController {
 
     private final AuthService authService;
+    private final AvatarService avatarService;
     private final UserRepository userRepository;
 
-    public record UpdateProfileRequest(@Size(max = 50) String nickname, String avatarUrl) {}
+    public record UpdateProfileRequest(@Size(max = 50) String nickname, String avatarUrl,
+                                       @Size(max = 10) java.util.List<@Size(max = 30) String> preferredCategories) {}
 
     @Operation(summary = "내 정보")
     @GetMapping
@@ -43,7 +45,16 @@ public class MeController {
         User entity = userRepository.findById(user.id())
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         entity.updateProfile(request.nickname(), request.avatarUrl());
+        entity.updatePreferredCategories(
+                request.preferredCategories() == null ? null : request.preferredCategories().toArray(String[]::new));
         return AuthService.toMe(entity);
+    }
+
+    @Operation(summary = "프로필 사진 업로드 — 온보딩 필수 단계")
+    @PostMapping(value = "/avatar", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public MeResponse uploadAvatar(@AuthenticationPrincipal AuthUser user,
+                                   @RequestPart("file") org.springframework.web.multipart.MultipartFile file) {
+        return avatarService.upload(user.id(), file);
     }
 
     @Operation(summary = "푸시 디바이스 등록")

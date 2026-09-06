@@ -10,6 +10,9 @@ import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
+    /** 같은 사람(CI)의 중복 가입 검사 — 본인인증 가입 경로. */
+    boolean existsByCi(String ci);
+
     Optional<User> findByHandle(String handle);
 
     Optional<User> findByEmailIgnoreCase(String email);

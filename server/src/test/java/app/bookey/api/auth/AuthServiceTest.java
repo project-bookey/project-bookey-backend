@@ -64,14 +64,24 @@ class AuthServiceTest {
         }
     };
 
+    private static final BookeyProperties.Auth.Identity IDENTITY_STUB =
+            new BookeyProperties.Auth.Identity("", "", "", true);
+    /** 기본 테스트 모드는 EMAIL_CODE — 본인인증 모드는 identityService() 로 따로 만든다. */
     private static final BookeyProperties.Auth AUTH = new BookeyProperties.Auth(
-            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), 5, true));
+            BookeyProperties.Auth.SignupVerification.EMAIL_CODE,
+            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), 5, true),
+            IDENTITY_STUB);
+    private static final BookeyProperties.Auth AUTH_IDENTITY = new BookeyProperties.Auth(
+            BookeyProperties.Auth.SignupVerification.IDENTITY,
+            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), 5, true),
+            IDENTITY_STUB);
 
     private final UserRepository userRepository = mock(UserRepository.class);
     private final UserIdentityRepository identityRepository = mock(UserIdentityRepository.class);
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
     private final EmailVerificationRepository emailVerificationRepository = mock(EmailVerificationRepository.class);
     private final EmailCodeSender emailCodeSender = mock(EmailCodeSender.class);
+    private final IdentityVerifier identityVerifier = mock(IdentityVerifier.class);
     private final HandleGenerator handleGenerator = mock(HandleGenerator.class);
     private final app.bookey.domain.admin.OpsFlagRepository opsFlagRepository =
             mock(app.bookey.domain.admin.OpsFlagRepository.class);
@@ -84,7 +94,19 @@ class AuthServiceTest {
     private AuthService service(List<SocialTokenVerifier> verifiers) {
         return new AuthService(userRepository, identityRepository, null, refreshTokenRepository,
                 opsFlagRepository, emailVerificationRepository, tokenProvider, handleGenerator,
-                properties, verifiers, PLAIN, emailCodeSender);
+                properties, verifiers, PLAIN, emailCodeSender, identityVerifier);
+    }
+
+    /** IDENTITY 모드 서비스 — 가입이 휴대폰 본인인증을 요구한다. */
+    private AuthService identityService() {
+        BookeyProperties identityProps = new BookeyProperties(
+                new BookeyProperties.Jwt("unit-test-secret-must-be-at-least-32-bytes-long",
+                        Duration.ofHours(1), Duration.ofDays(30), Duration.ofMinutes(30)),
+                AUTH_IDENTITY, null, null, null, null, null, null);
+        return new AuthService(userRepository, identityRepository, null, refreshTokenRepository,
+                opsFlagRepository, emailVerificationRepository,
+                new JwtTokenProvider(identityProps), handleGenerator,
+                identityProps, List.of(), PLAIN, emailCodeSender, identityVerifier);
     }
 
     private User user(long id, String email, String password) {
@@ -259,7 +281,7 @@ class AuthServiceTest {
     // ───────────── 이메일 가입 (인증 코드 필수) ─────────────
 
     private EmailSignupRequest signupRequest(String code) {
-        return new EmailSignupRequest("new@dev.local", "password1234", "새 독서가", code);
+        return new EmailSignupRequest("new@dev.local", "password1234", "새 독서가", code, null);
     }
 
     @Test
@@ -352,6 +374,59 @@ class AuthServiceTest {
 
         assertApiError(() -> service(List.of()).emailSignup(signupRequest("123456")), ErrorCode.EMAIL_ALREADY_EXISTS);
         verify(emailVerificationRepository, never()).findTopByEmailOrderByIdDesc(any());
+    }
+
+    // ───────────── 휴대폰 본인인증 가입 (IDENTITY 모드) ─────────────
+
+    @Test
+    @DisplayName("본인인증 가입 — 인증 결과를 계정에 기록하고 email_verified_at 대신 identity_verified_at 을 채운다")
+    void identitySignupRecordsIdentity() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        when(handleGenerator.generate("new")).thenReturn("newbie");
+        stubUserSave();
+        when(identityVerifier.verify("dev-abc")).thenReturn(new app.bookey.api.auth.VerifiedIdentity(
+                "홍길동", "01012341234", java.time.LocalDate.of(1995, 1, 1), "ci-1", "di-1"));
+        when(userRepository.existsByCi("ci-1")).thenReturn(false);
+
+        TokenResponse res = identityService().emailSignup(new EmailSignupRequest(
+                "new@dev.local", "password1234", "새 독서가", null, "dev-abc"));
+
+        assertThat(res.newUser()).isTrue();
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getCi()).isEqualTo("ci-1");
+        assertThat(saved.getValue().getRealName()).isEqualTo("홍길동");
+        assertThat(saved.getValue().getIdentityVerifiedAt()).isNotNull();
+        assertThat(saved.getValue().getEmailVerifiedAt()).isNull();
+        verify(emailVerificationRepository, never()).findTopByEmailOrderByIdDesc(any());
+    }
+
+    @Test
+    @DisplayName("본인인증 가입 — id 가 없으면 IDENTITY_VERIFICATION_REQUIRED, 같은 CI 는 IDENTITY_ALREADY_REGISTERED")
+    void identitySignupGuards() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        AuthService service = identityService();
+
+        assertApiError(() -> service.emailSignup(new EmailSignupRequest(
+                "new@dev.local", "password1234", "새 독서가", null, null)),
+                ErrorCode.IDENTITY_VERIFICATION_REQUIRED);
+
+        when(identityVerifier.verify("dev-abc")).thenReturn(new app.bookey.api.auth.VerifiedIdentity(
+                "홍길동", "01012341234", null, "ci-1", "di-1"));
+        when(userRepository.existsByCi("ci-1")).thenReturn(true);
+        assertApiError(() -> service.emailSignup(new EmailSignupRequest(
+                "new@dev.local", "password1234", "새 독서가", null, "dev-abc")),
+                ErrorCode.IDENTITY_ALREADY_REGISTERED);
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("EMAIL_CODE 모드 가입 — 코드가 아예 없으면 EMAIL_CODE_INVALID")
+    void emailSignupWithoutCodeField() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+
+        assertApiError(() -> service(List.of()).emailSignup(new EmailSignupRequest(
+                "new@dev.local", "password1234", "새 독서가", null, null)), ErrorCode.EMAIL_CODE_INVALID);
     }
 
     // ───────────── 이메일 로그인 ─────────────

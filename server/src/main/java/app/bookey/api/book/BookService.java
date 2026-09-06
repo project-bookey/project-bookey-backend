@@ -170,6 +170,15 @@ public class BookService {
                 .toList();
     }
 
+    /** 온보딩 책 고르기 (비회원) — 표지 있는 책만, 카테고리 부분 일치. */
+    @Transactional(readOnly = true)
+    public List<BookSummary> onboardingPicks(String category, int size) {
+        String normalized = category == null || category.isBlank() ? null : category.trim();
+        return bookRepository.findOnboardingPicks(normalized, PageRequest.of(0, size)).stream()
+                .map(BookSummary::from)
+                .toList();
+    }
+
     /** 추천 도서 — 에디터 픽 순서를 따른다. */
     @Transactional(readOnly = true)
     public List<BookSummary> recommended(int size) {

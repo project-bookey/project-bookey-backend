@@ -5,6 +5,9 @@ spring:
         format_sql: false
 bookey:
   auth:
+    identity:
+      # 운영에서 개발 스텁은 절대 열지 않는다 — 본인인증은 포트원 검증을 통과해야만 성립한다.
+      allow-dev-stub: false
     email-code:
       # 운영에서는 인증 코드를 응답에 절대 동봉하지 않는다 — 코드는 이메일 발송 채널로만 전달돼야 본인인증이 성립한다.
       expose: false

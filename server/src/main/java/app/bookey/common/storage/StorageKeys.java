@@ -23,6 +23,11 @@ public final class StorageKeys {
                 + UUID.randomUUID() + "." + safeExtension(extension);
     }
 
+    /** avatars/{userId}/{uuid}.{ext} — 프로필 사진. */
+    public static String forAvatar(long userId, String extension) {
+        return "avatars/" + userId + "/" + UUID.randomUUID() + "." + safeExtension(extension);
+    }
+
     /** 확장자는 스니퍼가 준 값만 오지만, 경로가 될 수 있는 문자는 여기서 한 번 더 막는다. */
     private static String safeExtension(String extension) {
         if (extension == null || extension.isBlank()
