@@ -16,6 +16,9 @@ public final class PostDtos {
 
     private PostDtos() {}
 
+    /** 피드 정렬 (§14.1) — HOT: 좋아요·시간 감쇠 점수, NEW: 최신순. */
+    public enum FeedSort { HOT, NEW }
+
     public record CreatePostRequest(Long bookId, Long readingRecordId,
             @NotBlank @Size(max = 300) String title, @NotBlank @Size(max = 20000) String bodyMd,
             @NotNull PostVisibility visibility, List<@Size(max = 30) String> tags,

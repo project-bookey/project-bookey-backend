@@ -46,12 +46,13 @@ public class PostController {
         return postService.listMine(user.id(), PageRequest.of(page, size));
     }
 
-    @Operation(summary = "광장 독후감 피드 — 공개 독후감 최신순")
+    @Operation(summary = "광장 독후감 피드 — HOT(좋아요·시간 감쇠) 또는 NEW(최신순)")
     @GetMapping("/feed")
     public PageResponse<PostView> feed(@AuthenticationPrincipal AuthUser user,
+                                       @RequestParam(defaultValue = "HOT") FeedSort sort,
                                        @RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "10") int size) {
-        return postService.feed(user.id(), PageRequest.of(page, size));
+        return postService.feed(user.id(), sort, PageRequest.of(page, size));
     }
 
     @Operation(summary = "독후감 한 건 — 비공개는 작성자만, 남의 글은 조회수를 올린다")

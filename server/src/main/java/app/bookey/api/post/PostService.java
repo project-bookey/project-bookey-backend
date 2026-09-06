@@ -144,10 +144,20 @@ public class PostService {
         return toView(post, viewerId);
     }
 
-    /** 광장 독후감 피드 — 공개 독후감 최신순. */
+    /** 광장 독후감 피드 (§14.1) — HOT(기본): 좋아요·시간 감쇠 점수, NEW: 최신순. */
     @Transactional(readOnly = true)
-    public PageResponse<PostView> feed(Long viewerId, Pageable pageable) {
-        return toPage(postRepository.findFeed(pageable), viewerId);
+    public PageResponse<PostView> feed(Long viewerId, FeedSort sort, Pageable pageable) {
+        Page<Post> page = sort == FeedSort.NEW
+                ? postRepository.findFeed(pageable)
+                : postRepository.findHotFeed(pageable);
+        return toPage(page, viewerId);
+    }
+
+    /** 유저 마이페이지의 공개 독후감 (§14.3) — 피드에서 휘발된 글도 여기엔 축적된다. */
+    @Transactional(readOnly = true)
+    public PageResponse<PostView> listPublicByUser(Long viewerId, Long userId, Pageable pageable) {
+        return toPage(postRepository.findAllByUserIdAndVisibilityOrderByPublishedAtDescIdDesc(
+                userId, PostVisibility.PUBLIC, pageable), viewerId);
     }
 
     @Transactional(readOnly = true)

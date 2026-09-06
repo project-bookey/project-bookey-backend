@@ -125,6 +125,33 @@ public class AdminController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "구독 수동 지급 — 사유 필수 (IAP 검증 전 운영 경로)")
+    @PostMapping("/users/{userId}/subscription")
+    public ResponseEntity<Void> grantSubscription(@AuthenticationPrincipal AuthAdmin admin,
+                                                  @PathVariable Long userId,
+                                                  @Valid @RequestBody SubscriptionGrantRequest request) {
+        adminUserService.grantSubscription(admin, userId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "지갑 수동 조정 — 책갈피·엽서·우표, 사유 필수 (베타 운영 경로)")
+    @PostMapping("/users/{userId}/wallet")
+    public ResponseEntity<Void> adjustWallet(@AuthenticationPrincipal AuthAdmin admin,
+                                             @PathVariable Long userId,
+                                             @Valid @RequestBody WalletAdjustRequest request) {
+        adminUserService.adjustWallet(admin, userId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "구독 회수")
+    @DeleteMapping("/users/{userId}/subscription")
+    public ResponseEntity<Void> revokeSubscription(@AuthenticationPrincipal AuthAdmin admin,
+                                                   @PathVariable Long userId,
+                                                   @RequestParam String reason) {
+        adminUserService.revokeSubscription(admin, userId, reason);
+        return ResponseEntity.noContent().build();
+    }
+
     // ── 도서 ────────────────────────────────────────────────
     @Operation(summary = "도서 검색")
     @GetMapping("/books")

@@ -40,6 +40,8 @@ public class AdminUserService {
     private final ClubMemberRepository clubMemberRepository;
     private final UserSanctionRepository sanctionRepository;
     private final AdminAuditService auditService;
+    private final app.bookey.api.social.SubscriptionService subscriptionService;
+    private final app.bookey.api.social.WalletService walletService;
 
     @Transactional(readOnly = true)
     public PageResponse<UserRow> search(AuthAdmin admin, String keyword, UserStatus status,
@@ -117,6 +119,47 @@ public class AdminUserService {
                 request.reason(),
                 Map.of("status", before.name()),
                 Map.of("status", after.name(), "endsAt", String.valueOf(endsAt)));
+    }
+
+    /** 지갑 수동 조정 — IAP·제휴 적립 전의 베타 운영 경로 (§14.2). */
+    @Transactional
+    public void adjustWallet(AuthAdmin admin, Long userId, WalletAdjustRequest request) {
+        if (!admin.canSanction()) {
+            throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
+        }
+        userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        walletService.adminAdjust(userId, request.bookmarks(), request.postcards(), request.stamps());
+        auditService.log(admin, "ADJUST_WALLET", "USER", userId, request.reason(),
+                Map.of(),
+                Map.of("bookmarks", String.valueOf(request.bookmarks()),
+                        "postcards", String.valueOf(request.postcards()),
+                        "stamps", String.valueOf(request.stamps())));
+    }
+
+    /** 구독 수동 지급 — 스토어 IAP 검증 전의 운영 경로 (§14.2). */
+    @Transactional
+    public void grantSubscription(AuthAdmin admin, Long userId, SubscriptionGrantRequest request) {
+        if (!admin.canSanction()) {
+            throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
+        }
+        userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        subscriptionService.adminGrant(userId, request.months());
+        auditService.log(admin, "GRANT_SUBSCRIPTION", "USER", userId, request.reason(),
+                Map.of(), Map.of("months", String.valueOf(request.months())));
+    }
+
+    @Transactional
+    public void revokeSubscription(AuthAdmin admin, Long userId, String reason) {
+        if (!admin.canSanction()) {
+            throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
+        }
+        if (reason == null || reason.isBlank()) {
+            throw ApiException.of(ErrorCode.ADMIN_REASON_REQUIRED);
+        }
+        subscriptionService.adminRevoke(userId);
+        auditService.log(admin, "REVOKE_SUBSCRIPTION", "USER", userId, reason, Map.of(), Map.of());
     }
 
     @Transactional
