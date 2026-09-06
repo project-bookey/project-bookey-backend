@@ -40,7 +40,12 @@ public final class BookDtos {
             long verifiedReviewCount,
             boolean liked,
             long likeCount,
-            Long myRecordId
+            Long myRecordId,
+            /** YES24 상품 페이지. */
+            String purchaseLink,
+            /** YES24 제휴 애드온 링크 — 이 링크로 구매해야 책갈피 적립(§14.2) 대상. */
+            String addonLink,
+            String tableOfContents
     ) {}
 
     public record RatingSummary(Double average, long count) {

@@ -5,5 +5,6 @@ public enum BookSource {
     ALADIN,
     GOOGLE,
     NAVER,
+    YES24,
     MANUAL
 }

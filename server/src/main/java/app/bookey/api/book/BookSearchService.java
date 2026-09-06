@@ -2,6 +2,8 @@ package app.bookey.api.book;
 
 import app.bookey.api.book.client.AladinBookClient;
 import app.bookey.api.book.client.ExternalBook;
+import app.bookey.api.book.client.Yes24Client;
+import app.bookey.api.book.client.Yes24Client.Yes24Item;
 import app.bookey.api.book.client.GoogleBooksClient;
 import app.bookey.api.book.client.KakaoBookClient;
 import app.bookey.domain.book.Book;
@@ -45,6 +47,7 @@ public class BookSearchService {
     private final KakaoBookClient kakaoClient;
     private final AladinBookClient aladinClient;
     private final GoogleBooksClient googleClient;
+    private final Yes24Client yes24Client;
     private final BookMetaEnricher metaEnricher;
 
     @Transactional
@@ -68,7 +71,13 @@ public class BookSearchService {
             externalSource = BookSource.ALADIN;
         }
 
-        // 4) 국내 결과가 없으면 구글 폴백
+        // 4) 예스24 폴백 — 국내 커버리지 보강
+        if (external.isEmpty()) {
+            external = new ArrayList<>(yes24Client.search(keyword, size));
+            externalSource = BookSource.YES24;
+        }
+
+        // 5) 국내 결과가 없으면 구글 폴백
         if (external.isEmpty()) {
             external = new ArrayList<>(googleClient.search(keyword, size));
             externalSource = BookSource.GOOGLE;
@@ -113,11 +122,33 @@ public class BookSearchService {
         if (!kakao.isEmpty()) {
             return Optional.of(upsert(kakao.get(0), BookSource.KAKAO));
         }
+        Optional<Yes24Item> yes24 = yes24Client.detailByIsbn13(isbn13);
+        if (yes24.isPresent()) {
+            Book book = upsert(yes24.get().book(), BookSource.YES24);
+            Yes24Item item = yes24.get();
+            book.applyYes24(item.purchaseLink(), item.addonLink(), item.tableOfContents(), item.introduction());
+            return Optional.of(book);
+        }
         List<ExternalBook> google = googleClient.search("isbn:" + isbn13, 1);
         if (!google.isEmpty()) {
             return Optional.of(upsert(google.get(0), BookSource.GOOGLE));
         }
         return Optional.empty();
+    }
+
+    /** YES24 큐레이션의 upsert — 부가 정보(링크·목차·소개)까지 반영한다. */
+    @Transactional
+    public List<Book> upsertYes24(List<Yes24Item> items) {
+        List<Book> books = upsertAll(items.stream().map(Yes24Item::book).toList(), BookSource.YES24);
+        Map<String, Yes24Item> byIsbn = new LinkedHashMap<>();
+        items.forEach(item -> byIsbn.putIfAbsent(item.book().isbn13(), item));
+        for (Book book : books) {
+            Yes24Item item = book.getIsbn13() == null ? null : byIsbn.get(book.getIsbn13());
+            if (item != null) {
+                book.applyYes24(item.purchaseLink(), item.addonLink(), item.tableOfContents(), item.introduction());
+            }
+        }
+        return books;
     }
 
     private List<Long> idsNeedingEnrichment(List<Book> books) {

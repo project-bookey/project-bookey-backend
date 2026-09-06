@@ -26,6 +26,7 @@ public class PublicController {
     private final PostService postService;
     private final ReviewService reviewService;
     private final BookService bookService;
+    private final app.bookey.api.book.Yes24CurationService yes24CurationService;
 
     @Operation(summary = "사용자 공개 블로그 — bookey.app/@{handle}")
     @GetMapping("/blogs/{handle}/posts")
@@ -46,7 +47,22 @@ public class PublicController {
     public java.util.List<app.bookey.api.book.dto.BookDtos.BookSummary> onboardingBooks(
             @RequestParam(required = false) String category,
             @RequestParam(defaultValue = "30") int size) {
-        return bookService.onboardingPicks(category, Math.min(size, 60));
+        int capped = Math.min(size, 60);
+        java.util.List<app.bookey.api.book.dto.BookDtos.BookSummary> books =
+                new java.util.ArrayList<>(bookService.onboardingPicks(category, capped));
+        // 내부 책이 모자라면 YES24 베스트셀러로 채운다 — 첫 가입자도 고를 책이 있게.
+        if (books.size() < capped) {
+            java.util.Set<Long> seen = books.stream()
+                    .map(app.bookey.api.book.dto.BookDtos.BookSummary::id)
+                    .collect(java.util.stream.Collectors.toSet());
+            yes24CurationService.curation(
+                            app.bookey.api.book.client.Yes24Client.CurationKind.BESTSELLER, capped)
+                    .stream()
+                    .filter(b -> seen.add(b.id()))
+                    .limit(capped - books.size())
+                    .forEach(books::add);
+        }
+        return books;
     }
 
     @Operation(summary = "도서 공개 정보 — 검증 평점 포함")
