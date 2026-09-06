@@ -34,7 +34,7 @@ class SubscriptionServiceTest {
     private final WalletTransactionRepository transactionRepository = mock(WalletTransactionRepository.class);
     private final Clock clock = mock(Clock.class);
     private final BookeyProperties properties =
-            new BookeyProperties(null, null, null, null, null, null, SOCIAL, null);
+            new BookeyProperties(null, null, null, null, null, null, SOCIAL, null, null);
     private final SubscriptionService service =
             new SubscriptionService(subscriptionRepository, transactionRepository, properties, clock);
 
