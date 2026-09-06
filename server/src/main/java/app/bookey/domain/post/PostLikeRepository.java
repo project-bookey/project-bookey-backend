@@ -12,6 +12,10 @@ public interface PostLikeRepository extends JpaRepository<PostLike, Long> {
 
     Optional<PostLike> findByUserIdAndPostId(Long userId, Long postId);
 
+    /** 좋아요 누른 사람 목록 — 최신순 (§14.2 구독 열람권). */
+    org.springframework.data.domain.Page<PostLike> findAllByPostIdOrderByIdDesc(
+            Long postId, org.springframework.data.domain.Pageable pageable);
+
     long countByPostId(Long postId);
 
     List<PostLike> findAllByUserIdAndPostIdIn(Long userId, Collection<Long> postIds);

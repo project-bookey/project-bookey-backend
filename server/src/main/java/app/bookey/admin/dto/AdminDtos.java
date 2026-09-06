@@ -93,6 +93,18 @@ public final class AdminDtos {
     public record BookRow(@NotNull Long id, String isbn13, @NotNull String title, String author, String publisher,
                           Integer totalPages, @NotNull String source, boolean userCreated, @NotNull Instant createdAt) {}
 
+    /** 구독 수동 지급 (§14.2) — 스토어 IAP 검증이 붙기 전의 운영 경로. */
+    public record SubscriptionGrantRequest(
+            @Min(1) @Max(24) int months,
+            @NotBlank @Size(max = 500) String reason) {}
+
+    /** 지갑 수동 조정 (§14.2) — IAP·제휴 적립 전의 베타 운영 경로. */
+    public record WalletAdjustRequest(
+            @Min(-100000) @Max(100000) int bookmarks,
+            @Min(-100000) @Max(100000) int postcards,
+            @Min(-100000) @Max(100000) int stamps,
+            @NotBlank @Size(max = 500) String reason) {}
+
     public record UpdateBookRequest(
             @Size(max = 500) String title,
             @Size(max = 500) String author,

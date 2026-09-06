@@ -28,6 +28,20 @@ public enum ErrorCode {
     SOCIAL_ACCOUNT_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 계정에 연결된 소셜 계정입니다."),
     WRITE_BANNED(HttpStatus.FORBIDDEN, "글쓰기가 제한된 계정입니다."),
 
+    // 소셜 — 팔로우 · 엽서 · 지갑 · 구독 (§14)
+    FOLLOW_CODE_INVALID(HttpStatus.NOT_FOUND, "유효하지 않은 팔로우 코드입니다."),
+    FOLLOW_SELF(HttpStatus.BAD_REQUEST, "나를 팔로우할 수는 없습니다."),
+    ALREADY_FOLLOWING(HttpStatus.CONFLICT, "이미 팔로우한 사용자입니다."),
+    POSTCARD_NOT_FOUND(HttpStatus.NOT_FOUND, "엽서를 찾을 수 없습니다."),
+    POSTCARD_SELF(HttpStatus.BAD_REQUEST, "나에게는 엽서를 보낼 수 없습니다."),
+    POSTCARD_BODY_TOO_LONG(HttpStatus.BAD_REQUEST, "엽서에는 16글자까지만 적을 수 있습니다."),
+    POSTCARD_ALREADY_SENT(HttpStatus.CONFLICT, "답장을 기다리는 엽서가 이미 있습니다."),
+    POSTCARD_ALREADY_REPLIED(HttpStatus.CONFLICT, "이미 답장한 엽서입니다."),
+    INSUFFICIENT_POSTCARD(HttpStatus.CONFLICT, "오늘 무료 엽서를 다 썼고 보유한 엽서도 없습니다."),
+    INSUFFICIENT_STAMP(HttpStatus.CONFLICT, "우표가 부족합니다."),
+    INSUFFICIENT_BOOKMARK(HttpStatus.CONFLICT, "책갈피가 부족합니다."),
+    SUBSCRIPTION_REQUIRED(HttpStatus.FORBIDDEN, "구독 회원만 이용할 수 있는 기능입니다."),
+
     // 도서 / 서재
     BOOK_NOT_FOUND(HttpStatus.NOT_FOUND, "도서를 찾을 수 없습니다."),
     TOTAL_PAGES_REQUIRED(HttpStatus.BAD_REQUEST, "총 페이지 수가 필요합니다."),

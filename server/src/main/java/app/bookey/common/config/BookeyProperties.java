@@ -14,8 +14,21 @@ public record BookeyProperties(
         OAuth oauth,
         Club club,
         Notification notification,
+        Social social,
         Storage storage
 ) {
+
+    /** 소셜 피드 경제 (§14.2) — 엽서·우표·책갈피·구독 정책. */
+    public record Social(
+            int postcardDailyFree,
+            int postcardMaxLength,
+            int postcardCostBookmarks,
+            int stampCostBookmarks,
+            int subscriptionMonthlyPostcards,
+            int subscriptionMonthlyStamps,
+            int subscriptionPriceKrw
+    ) {}
+
 
     /** 가입 본인인증. 이메일 인증 코드 정책. */
     public record Auth(EmailCode emailCode) {
