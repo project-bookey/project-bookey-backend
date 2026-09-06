@@ -12,13 +12,17 @@ import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingRecordRepository.BookSavedCount;
 import app.bookey.domain.review.ReviewRepository;
+import app.bookey.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,6 +31,10 @@ public class BookService {
 
     /** 크라우드 페이지 수 채택 기준 — 동일 값 3표. */
     private static final int CROWD_ADOPT_VOTES = 3;
+    private static final int ONBOARDING_CATEGORY_LIMIT = 24;
+    private static final List<String> DEFAULT_ONBOARDING_CATEGORIES = List.of(
+            "소설", "에세이", "시", "인문학", "역사", "과학",
+            "자기계발", "경제/경영", "컴퓨터/IT", "예술", "여행", "만화");
 
     private final BookRepository bookRepository;
     private final app.bookey.api.book.client.Yes24Client yes24Client;
@@ -36,6 +44,7 @@ public class BookService {
     private final ReadingRecordRepository readingRecordRepository;
     private final EditorPickRepository editorPickRepository;
     private final BookLikeRepository bookLikeRepository;
+    private final UserRepository userRepository;
 
     @Transactional
     public List<BookSummary> search(String keyword, int size) {
@@ -196,21 +205,100 @@ public class BookService {
                 .toList();
     }
 
-    /** 추천 도서 — 에디터 픽 순서를 따른다. */
+    /** 온보딩 선호 카테고리 — 책 메타에서 가져오고, 초기 데이터가 적으면 기본값으로 보강한다. */
     @Transactional(readOnly = true)
-    public List<BookSummary> recommended(int size) {
-        List<EditorPick> picks = editorPickRepository.findAllByOrderBySortOrderAscIdAsc();
-        Map<Long, Book> books = bookRepository.findAllById(
-                        picks.stream().map(EditorPick::getBookId).toList())
-                .stream().collect(Collectors.toMap(Book::getId, b -> b));
-        return assembleRecommended(picks.stream().limit(size).toList(), books);
+    public List<String> onboardingCategories() {
+        java.util.LinkedHashSet<String> categories = new java.util.LinkedHashSet<>();
+        bookRepository.findDistinctCategories(PageRequest.of(0, 200)).stream()
+                .flatMap(raw -> toOnboardingCategories(raw).stream())
+                .forEach(categories::add);
+        DEFAULT_ONBOARDING_CATEGORIES.forEach(categories::add);
+        return categories.stream().limit(ONBOARDING_CATEGORY_LIMIT).toList();
     }
 
-    static List<BookSummary> assembleRecommended(List<EditorPick> picks, Map<Long, Book> books) {
+    private static List<String> toOnboardingCategories(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        List<String> matches = DEFAULT_ONBOARDING_CATEGORIES.stream()
+                .filter(raw::contains)
+                .toList();
+        if (!matches.isEmpty()) {
+            return matches;
+        }
+        String[] parts = raw.split("[>/]");
+        for (int i = parts.length - 1; i >= 0; i--) {
+            String part = parts[i].trim();
+            if (!part.isBlank() && part.length() <= 20) {
+                return List.of(part);
+            }
+        }
+        return List.of();
+    }
+
+    /** 추천 도서 — 에디터 픽 → 선호 카테고리 → 최신 내부 책 → YES24 베스트셀러 순으로 보강한다. */
+    @Transactional
+    public List<BookSummary> recommended(Long userId, int size) {
+        int capped = Math.min(Math.max(size, 1), 50);
+        Set<Long> savedBookIds = userId == null
+                ? Set.of()
+                : Set.copyOf(readingRecordRepository.findDistinctBookIdsByUserId(userId));
+        List<Long> excludedBookIds = savedBookIds.isEmpty() ? List.of(-1L) : savedBookIds.stream().toList();
+        LinkedHashMap<Long, Book> result = new LinkedHashMap<>();
+
+        List<EditorPick> picks = editorPickRepository.findAllByOrderBySortOrderAscIdAsc();
+        Map<Long, Book> pickedBooks = bookRepository.findAllById(
+                        picks.stream().map(EditorPick::getBookId).toList())
+                .stream().collect(Collectors.toMap(Book::getId, b -> b));
+        assembleRecommended(picks, pickedBooks).forEach(book -> putRecommended(result, book, savedBookIds, capped));
+
+        if (result.size() < capped) {
+            preferredCategories(userId).forEach(category ->
+                    bookRepository.findRecommendationsByCategoryExcluding(
+                                    category, excludedBookIds, PageRequest.of(0, capped))
+                            .forEach(book -> putRecommended(result, book, savedBookIds, capped)));
+        }
+
+        if (result.size() < capped) {
+            bookRepository.findRecommendationsExcluding(excludedBookIds, PageRequest.of(0, capped))
+                    .forEach(book -> putRecommended(result, book, savedBookIds, capped));
+        }
+
+        if (result.size() < capped && yes24Client.isConfigured()) {
+            List<Book> yes24Books = searchService.upsertYes24(
+                    yes24Client.curation(app.bookey.api.book.client.Yes24Client.CurationKind.BESTSELLER, capped));
+            yes24Books.forEach(book -> putRecommended(result, book, savedBookIds, capped));
+        }
+
+        return result.values().stream().map(BookSummary::from).toList();
+    }
+
+    static List<Book> assembleRecommended(List<EditorPick> picks, Map<Long, Book> books) {
         return picks.stream()
                 .filter(p -> books.containsKey(p.getBookId()))
-                .map(p -> BookSummary.from(books.get(p.getBookId())))
+                .map(p -> books.get(p.getBookId()))
                 .toList();
+    }
+
+    private List<String> preferredCategories(Long userId) {
+        if (userId == null) {
+            return DEFAULT_ONBOARDING_CATEGORIES;
+        }
+        return userRepository.findById(userId)
+                .map(user -> Arrays.stream(user.getPreferredCategories())
+                        .filter(category -> category != null && !category.isBlank())
+                        .map(String::trim)
+                        .distinct()
+                        .toList())
+                .filter(categories -> !categories.isEmpty())
+                .orElse(DEFAULT_ONBOARDING_CATEGORIES);
+    }
+
+    private static void putRecommended(LinkedHashMap<Long, Book> result, Book book, Set<Long> savedBookIds, int limit) {
+        if (result.size() >= limit || book == null || book.getId() == null || savedBookIds.contains(book.getId())) {
+            return;
+        }
+        result.putIfAbsent(book.getId(), book);
     }
 
     private static String emptyToNull(String value) {

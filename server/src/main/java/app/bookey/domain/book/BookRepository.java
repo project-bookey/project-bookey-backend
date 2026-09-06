@@ -25,6 +25,36 @@ public interface BookRepository extends JpaRepository<Book, Long> {
     List<Book> findOnboardingPicks(@org.springframework.data.repository.query.Param("category") String category,
                                    org.springframework.data.domain.Pageable pageable);
 
+    /** 추천 보강 — 선호 카테고리 부분 일치, 이미 내 서재에 있는 책 제외. */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT b FROM Book b
+            WHERE b.category LIKE CONCAT('%', CAST(:category AS string), '%')
+              AND b.id NOT IN :excludedBookIds
+            ORDER BY CASE WHEN b.coverUrl IS NULL THEN 1 ELSE 0 END, b.id DESC
+            """)
+    List<Book> findRecommendationsByCategoryExcluding(
+            @org.springframework.data.repository.query.Param("category") String category,
+            @org.springframework.data.repository.query.Param("excludedBookIds") java.util.Collection<Long> excludedBookIds,
+            org.springframework.data.domain.Pageable pageable);
+
+    /** 추천 보강 — 이미 내 서재에 있는 책 제외. */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT b FROM Book b
+            WHERE b.id NOT IN :excludedBookIds
+            ORDER BY CASE WHEN b.coverUrl IS NULL THEN 1 ELSE 0 END, b.id DESC
+            """)
+    List<Book> findRecommendationsExcluding(
+            @org.springframework.data.repository.query.Param("excludedBookIds") java.util.Collection<Long> excludedBookIds,
+            org.springframework.data.domain.Pageable pageable);
+
+    /** 온보딩 카테고리 — 내부 책 메타에 실제로 존재하는 카테고리만. */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT DISTINCT b.category FROM Book b
+            WHERE b.category IS NOT NULL AND b.category <> ''
+            ORDER BY b.category
+            """)
+    List<String> findDistinctCategories(org.springframework.data.domain.Pageable pageable);
+
     /** 내부 캐시 조회 (§F1 파이프라인 1번). */
     @Query("""
             SELECT b FROM Book b

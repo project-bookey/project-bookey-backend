@@ -1,6 +1,11 @@
 package app.bookey.api.social;
 
 import app.bookey.common.config.BookeyProperties;
+import app.bookey.api.social.dto.SubscriptionDtos.SubscriptionCheckoutRequest;
+import app.bookey.api.social.dto.SubscriptionDtos.SubscriptionCheckoutView;
+import app.bookey.api.social.dto.SubscriptionDtos.SubscriptionVerifyRequest;
+import app.bookey.common.error.ApiException;
+import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.wallet.Subscription;
 import app.bookey.domain.wallet.SubscriptionRepository;
 import app.bookey.domain.wallet.SubscriptionStore;
@@ -16,6 +21,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.UUID;
 
 /**
  * 구독 (§14.2, 월 17,900원). MVP 는 관리자 지급(ADMIN 스토어)이 유일한 활성화 경로 —
@@ -37,6 +43,37 @@ public class SubscriptionService {
         return subscriptionRepository.findTopByUserIdOrderByIdDesc(userId)
                 .map(sub -> sub.isActiveAt(clock.instant()))
                 .orElse(false);
+    }
+
+    @Transactional(readOnly = true)
+    public SubscriptionCheckoutView checkout(Long userId, SubscriptionCheckoutRequest request) {
+        SubscriptionStore provider = request.provider();
+        if (provider == SubscriptionStore.ADMIN) {
+            throw ApiException.of(ErrorCode.INVALID_REQUEST);
+        }
+        BookeyProperties.Payment payment = properties.payment();
+        String productId = payment.subscriptionProductId();
+        String orderId = "bookey-sub-" + userId + "-" + UUID.randomUUID();
+        String customerKey = "bookey-user-" + userId;
+        BookeyProperties.Payment.Toss toss = payment.toss();
+        if (provider == SubscriptionStore.TOSS) {
+            return new SubscriptionCheckoutView(
+                    provider, productId, orderId, properties.social().subscriptionPriceKrw(), customerKey,
+                    blankToNull(toss.clientKey()), blankToNull(toss.successUrl()), blankToNull(toss.failUrl()));
+        }
+        return new SubscriptionCheckoutView(
+                provider, productId, orderId, properties.social().subscriptionPriceKrw(), customerKey,
+                null, null, null);
+    }
+
+    /**
+     * 결제 검증 계약만 먼저 고정한다. 실제 구현 시:
+     * APPLE/GOOGLE 은 영수증과 originalTransactionId 를 검증하고,
+     * TOSS 는 paymentKey/orderId/amount 를 승인 API 로 재검증한 뒤 grantFromPayment 로 연결한다.
+     */
+    @Transactional
+    public void verify(Long userId, SubscriptionVerifyRequest request) {
+        throw ApiException.of(ErrorCode.PAYMENT_NOT_CONFIGURED);
     }
 
     /**
@@ -82,5 +119,9 @@ public class SubscriptionService {
     public void adminRevoke(Long userId) {
         subscriptionRepository.findTopByUserIdOrderByIdDesc(userId)
                 .ifPresent(sub -> sub.cancel(clock.instant()));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 }

@@ -15,6 +15,7 @@ public record BookeyProperties(
         Club club,
         Notification notification,
         Social social,
+        Payment payment,
         Storage storage
 ) {
 
@@ -84,6 +85,14 @@ public record BookeyProperties(
             int clubDailyCap,
             int defaultSendHour
     ) {}
+
+    /** 구독 결제 연동. Apple/Google IAP 와 웹 Toss Payments 를 같은 구독 계약으로 맞춘다. */
+    public record Payment(
+            String subscriptionProductId,
+            Toss toss
+    ) {
+        public record Toss(String clientKey, String successUrl, String failUrl) {}
+    }
 
     /** 업로드 파일 저장소. type 은 local | gcs. */
     public record Storage(

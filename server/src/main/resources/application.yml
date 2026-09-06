@@ -110,6 +110,12 @@ bookey:
     subscription-monthly-postcards: 50  # 구독 월 지급 엽서
     subscription-monthly-stamps: 30     # 구독 월 지급 우표
     subscription-price-krw: 17900       # 월 구독가 (§14.9 확정) — 스토어 상품 구성 시 기준
+  payment:
+    subscription-product-id: ${SUBSCRIPTION_PRODUCT_ID:bookey.plus.monthly}
+    toss:
+      client-key: ${TOSS_CLIENT_KEY:}
+      success-url: ${TOSS_SUCCESS_URL:}
+      fail-url: ${TOSS_FAIL_URL:}
   storage:
     type: ${STORAGE_TYPE:local}                    # local | gcs | none(업로드 끔). prod 기본값은 application-prod.yml 에서 none
     local:

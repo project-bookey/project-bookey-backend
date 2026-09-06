@@ -39,6 +39,9 @@ public interface ReadingRecordRepository extends JpaRepository<ReadingRecord, Lo
 
     List<ReadingRecord> findAllByUserIdAndStatus(Long userId, ReadingStatus status);
 
+    @Query("SELECT DISTINCT r.bookId FROM ReadingRecord r WHERE r.userId = :userId")
+    List<Long> findDistinctBookIdsByUserId(@Param("userId") Long userId);
+
     /**
      * 광장 밑줄의 완독 인증용 — 작성자들×책들 교차 범위에서 해당 상태의 기록.
      * 교차곱이라 호출자가 (userId, bookId) 쌍으로 다시 거른다.

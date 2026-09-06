@@ -86,8 +86,9 @@ public class BookController {
 
     @Operation(summary = "추천 도서 — 에디터 픽")
     @GetMapping("/recommended")
-    public List<BookSummary> recommended(@RequestParam(defaultValue = "20") int size) {
-        return bookService.recommended(size);
+    public List<BookSummary> recommended(@AuthenticationPrincipal AuthUser user,
+                                         @RequestParam(defaultValue = "20") int size) {
+        return bookService.recommended(user.id(), size);
     }
 
     @Operation(summary = "책별 오려둔 문장 목록 — 최신순, q 로 문장·책 제목 검색")

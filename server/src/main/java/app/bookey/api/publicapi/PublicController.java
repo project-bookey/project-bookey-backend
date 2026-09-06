@@ -65,6 +65,12 @@ public class PublicController {
         return books;
     }
 
+    @Operation(summary = "온보딩 선호 카테고리 — 실제 책 메타 기반 (비회원)")
+    @GetMapping("/onboarding/categories")
+    public java.util.List<String> onboardingCategories() {
+        return bookService.onboardingCategories();
+    }
+
     @Operation(summary = "도서 공개 정보 — 검증 평점 포함")
     @GetMapping("/books/{bookId}")
     public BookDetail book(@PathVariable Long bookId) {
