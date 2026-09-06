@@ -27,6 +27,7 @@ import java.util.List;
 public class BookController {
 
     private final BookService bookService;
+    private final Yes24CurationService yes24CurationService;
     private final QuoteService quoteService;
     private final PostService postService;
 
@@ -67,6 +68,14 @@ public class BookController {
                                                @PathVariable Long bookId,
                                                @Valid @RequestBody PageSuggestionRequest request) {
         return bookService.suggestTotalPages(user.id(), bookId, request.totalPages());
+    }
+
+    @Operation(summary = "YES24 큐레이션 — 베스트셀러·스테디셀러·신상품 (1시간 캐시)")
+    @GetMapping("/curation/yes24")
+    public List<BookSummary> yes24Curation(
+            @RequestParam(defaultValue = "BESTSELLER") app.bookey.api.book.client.Yes24Client.CurationKind kind,
+            @RequestParam(defaultValue = "20") int size) {
+        return yes24CurationService.curation(kind, Math.min(size, 50));
     }
 
     @Operation(summary = "인기 도서 — 서재에 담긴 수 순")

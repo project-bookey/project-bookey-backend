@@ -84,7 +84,9 @@ bookey:
     kakao-key: ${KAKAO_REST_KEY:}
     aladin-ttb-key: ${ALADIN_TTB_KEY:}
     google-books-key: ${GOOGLE_BOOKS_KEY:}
+    yes24-key: ${YES24_API_KEY:}            # 예스24 오픈API (X-Api-Key) — 없으면 YES24 경로 전체 건너뜀
     cache-ttl: PT24H
+    yes24-curation-ttl: PT1H
   oauth:
     google-client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:}
     apple-audiences: ${APPLE_OAUTH_AUDIENCES:app.bookey.mobile}

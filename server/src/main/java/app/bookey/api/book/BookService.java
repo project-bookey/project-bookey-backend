@@ -29,6 +29,7 @@ public class BookService {
     private static final int CROWD_ADOPT_VOTES = 3;
 
     private final BookRepository bookRepository;
+    private final app.bookey.api.book.client.Yes24Client yes24Client;
     private final BookPageSuggestionRepository suggestionRepository;
     private final ReviewRepository reviewRepository;
     private final BookSearchService searchService;
@@ -50,9 +51,11 @@ public class BookService {
                 .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
     }
 
-    @Transactional(readOnly = true)
+    /** 쓰기 트랜잭션인 이유: 상세를 처음 열 때 YES24 링크·목차를 게으르게 채워 넣는다. */
+    @Transactional
     public BookDetail detail(Long userId, Long bookId) {
         Book book = getBook(bookId);
+        enrichYes24IfMissing(book);
         Long myRecordId = userId == null ? null
                 : readingRecordRepository.findFirstByUserIdAndBookIdOrderByRoundDesc(userId, bookId)
                         .map(ReadingRecord::getId)
@@ -65,7 +68,21 @@ public class BookService {
                 toRating(reviewRepository.verifiedRating(bookId)).count(),
                 bookLikeRepository.existsByUserIdAndBookId(userId, bookId),
                 bookLikeRepository.countByBookId(bookId),
-                myRecordId);
+                myRecordId,
+                book.getPurchaseLink(),
+                book.getAddonLink(),
+                book.getTableOfContents());
+    }
+
+    /** YES24 부가 정보(구매 링크·목차)가 없으면 상세 조회 시 한 번 채운다 — 실패해도 상세는 그대로 나간다. */
+    private void enrichYes24IfMissing(Book book) {
+        if (book.getAddonLink() != null || book.getTableOfContents() != null
+                || book.getIsbn13() == null || !yes24Client.isConfigured()) {
+            return;
+        }
+        yes24Client.detailByIsbn13(book.getIsbn13()).ifPresent(item ->
+                book.applyYes24(item.purchaseLink(), item.addonLink(),
+                        item.tableOfContents(), item.introduction()));
     }
 
     /** 좋아요 토글 — 있으면 해제, 없으면 등록. */

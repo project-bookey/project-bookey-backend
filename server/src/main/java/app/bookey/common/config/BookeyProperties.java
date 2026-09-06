@@ -58,7 +58,10 @@ public record BookeyProperties(
             String kakaoKey,
             String aladinTtbKey,
             String googleBooksKey,
-            Duration cacheTtl
+            String yes24Key,
+            Duration cacheTtl,
+            /** YES24 큐레이션(베스트셀러 등) 목록 캐시 TTL — 순위는 자주 바뀌므로 검색 캐시보다 짧게. */
+            Duration yes24CurationTtl
     ) {}
 
     public record OAuth(

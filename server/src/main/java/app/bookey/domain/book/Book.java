@@ -68,6 +68,17 @@ public class Book extends BaseTimeEntity {
     @Column(name = "meta_enriched_at")
     private Instant metaEnrichedAt;
 
+    // ── YES24 (V18) ──────────────────────────────────────────
+    @Column(name = "purchase_link", columnDefinition = "text")
+    private String purchaseLink;
+
+    /** 제휴 애드온 링크 — 이 링크로 구매해야 책갈피 적립(§14.2)의 근거가 된다. */
+    @Column(name = "addon_link", columnDefinition = "text")
+    private String addonLink;
+
+    @Column(name = "table_of_contents", columnDefinition = "text")
+    private String tableOfContents;
+
     @Builder
     private Book(String isbn13, String title, String subtitle, String author, String translator,
                  String publisher, LocalDate publishedAt, Integer totalPages, String coverUrl,
@@ -112,6 +123,22 @@ public class Book extends BaseTimeEntity {
 
     public void markEnrichAttempted() {
         this.metaEnrichedAt = Instant.now();
+    }
+
+    /** YES24 부가 정보 — 링크·목차는 최신 값으로 덮어쓰고, 소개는 비어 있을 때만 채운다. */
+    public void applyYes24(String purchaseLink, String addonLink, String tableOfContents, String introduction) {
+        if (purchaseLink != null && !purchaseLink.isBlank()) {
+            this.purchaseLink = purchaseLink;
+        }
+        if (addonLink != null && !addonLink.isBlank()) {
+            this.addonLink = addonLink;
+        }
+        if (tableOfContents != null && !tableOfContents.isBlank()) {
+            this.tableOfContents = tableOfContents;
+        }
+        if (this.description == null && introduction != null && !introduction.isBlank()) {
+            this.description = introduction;
+        }
     }
 
     /** 관리자 메타 수정 (§F13 도서 관리). */

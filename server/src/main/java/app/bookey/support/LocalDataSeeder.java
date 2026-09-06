@@ -67,7 +67,7 @@ public class LocalDataSeeder implements ApplicationRunner {
                 Book.builder().isbn13("9788932917245").title("아몬드").author("손원평")
                         .publisher("창비").totalPages(263).category("소설")
                         .publishedAt(LocalDate.of(2017, 3, 31)).source(BookSource.MANUAL).build(),
-                Book.builder().isbn13("9791162241974").title("클린 아키텍처").author("로버트 C. 마틴")
+                Book.builder().isbn13("9788966262472").title("클린 아키텍처").author("로버트 C. 마틴")
                         .publisher("인사이트").totalPages(444).category("컴퓨터/IT")
                         .publishedAt(LocalDate.of(2019, 8, 20)).source(BookSource.MANUAL).build()
         );
