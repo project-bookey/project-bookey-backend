@@ -29,6 +29,26 @@ public class User extends BaseTimeEntity {
     @Column(name = "email_verified_at")
     private java.time.Instant emailVerifiedAt;
 
+    // ── 휴대폰 본인인증 (V17) ──────────────────────────────
+    @Column(name = "real_name", length = 50)
+    private String realName;
+
+    @Column(length = 20)
+    private String phone;
+
+    @Column(name = "birth_date")
+    private java.time.LocalDate birthDate;
+
+    /** 연계정보 — 사람당 1개. 부분 유니크 인덱스(uq_users_ci)로 중복 가입을 막는다. */
+    @Column(length = 128)
+    private String ci;
+
+    @Column(length = 128)
+    private String di;
+
+    @Column(name = "identity_verified_at")
+    private java.time.Instant identityVerifiedAt;
+
     @Column(nullable = false, length = 50)
     private String nickname;
 
@@ -60,6 +80,11 @@ public class User extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserStatus status;
+
+    /** 온보딩에서 고른 선호 카테고리 — 추천·피드 개인화 입력값. */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.ARRAY)
+    @Column(name = "preferred_categories", nullable = false, columnDefinition = "text[]")
+    private String[] preferredCategories = new String[0];
 
     @Builder
     private User(String handle, String email, String nickname, String avatarUrl, String timezone) {
@@ -118,6 +143,23 @@ public class User extends BaseTimeEntity {
 
     public void markEmailVerified(java.time.Instant at) {
         this.emailVerifiedAt = at;
+    }
+
+    /** 본인인증 결과를 기록한다 — 가입 시 1회. */
+    public void recordIdentity(String realName, String phone, java.time.LocalDate birthDate,
+                               String ci, String di, java.time.Instant at) {
+        this.realName = realName;
+        this.phone = phone;
+        this.birthDate = birthDate;
+        this.ci = ci;
+        this.di = di;
+        this.identityVerifiedAt = at;
+    }
+
+    public void updatePreferredCategories(String[] categories) {
+        if (categories != null) {
+            this.preferredCategories = categories;
+        }
     }
 
     /** 조용 시간 여부 (§F5 설계 원칙 3). 자정을 넘는 구간도 처리한다. */

@@ -41,6 +41,14 @@ public class PublicController {
         return postService.readPublic(handle, slug);
     }
 
+    @Operation(summary = "온보딩 책 고르기 — 표지 있는 책, 카테고리 부분 일치 (비회원)")
+    @GetMapping("/onboarding/books")
+    public java.util.List<app.bookey.api.book.dto.BookDtos.BookSummary> onboardingBooks(
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "30") int size) {
+        return bookService.onboardingPicks(category, Math.min(size, 60));
+    }
+
     @Operation(summary = "도서 공개 정보 — 검증 평점 포함")
     @GetMapping("/books/{bookId}")
     public BookDetail book(@PathVariable Long bookId) {

@@ -16,6 +16,15 @@ public interface BookRepository extends JpaRepository<Book, Long> {
 
     List<Book> findAllByIsbn13In(Collection<String> isbn13s);
 
+    /** 온보딩 책 고르기 — 카테고리 부분 일치(선택), 표지 있는 책 우선 최신순. */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT b FROM Book b
+            WHERE (:category IS NULL OR b.category LIKE CONCAT('%', CAST(:category AS string), '%'))
+            ORDER BY CASE WHEN b.coverUrl IS NULL THEN 1 ELSE 0 END, b.id DESC
+            """)
+    List<Book> findOnboardingPicks(@org.springframework.data.repository.query.Param("category") String category,
+                                   org.springframework.data.domain.Pageable pageable);
+
     /** 내부 캐시 조회 (§F1 파이프라인 1번). */
     @Query("""
             SELECT b FROM Book b

@@ -69,6 +69,12 @@ bookey:
     refresh-token-ttl: P30D
     admin-token-ttl: PT30M
   auth:
+    signup-verification: ${SIGNUP_VERIFICATION:IDENTITY}   # EMAIL_CODE | IDENTITY(휴대폰 본인인증)
+    identity:
+      portone-api-secret: ${PORTONE_API_SECRET:}     # 포트원 V2 API Secret — 계약 후 발급
+      portone-store-id: ${PORTONE_STORE_ID:}
+      portone-channel-key: ${PORTONE_CHANNEL_KEY:}   # 본인인증 채널(NICE/KCB 등) 키
+      allow-dev-stub: ${IDENTITY_DEV_STUB:true}      # secret 없이 "dev-" id 통과(로컬 전용). 운영은 prod 프로필이 끈다
     email-code:
       ttl: PT10M
       cooldown: PT1M

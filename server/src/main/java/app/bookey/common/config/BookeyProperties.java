@@ -30,10 +30,21 @@ public record BookeyProperties(
     ) {}
 
 
-    /** 가입 본인인증. 이메일 인증 코드 정책. */
-    public record Auth(EmailCode emailCode) {
+    /** 가입 본인인증 정책 — 이메일 인증 코드 또는 휴대폰 본인인증(포트원). */
+    public record Auth(SignupVerification signupVerification, EmailCode emailCode, Identity identity) {
+
+        /** 가입 시 요구하는 인증 수단. */
+        public enum SignupVerification { EMAIL_CODE, IDENTITY }
+
         /** expose 가 true 면 코드 발급 응답에 코드를 동봉한다 — 로컬 개발·스모크 전용, 운영은 반드시 false. */
         public record EmailCode(Duration ttl, Duration cooldown, int maxAttempts, boolean expose) {}
+
+        /**
+         * 포트원 본인인증. apiSecret 이 비어 있고 allowDevStub 이면 "dev-" 접두 id 를 통과시키는
+         * 개발 스텁으로 동작한다 — 운영은 application-prod.yml 이 스텁을 끈다.
+         */
+        public record Identity(String portoneApiSecret, String portoneStoreId,
+                               String portoneChannelKey, boolean allowDevStub) {}
     }
 
     public record Jwt(

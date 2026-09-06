@@ -34,8 +34,18 @@ public final class AuthDtos {
             @NotBlank @Email @Size(max = 255) String email,
             @NotBlank @Size(min = 8, max = 72) String password,
             @NotBlank @Size(max = 50) String nickname,
-            /** 이메일로 받은 가입 인증 코드. */
-            @NotBlank @Size(min = 6, max = 6) String code
+            /** EMAIL_CODE 모드 — 이메일로 받은 6자리 인증 코드. */
+            @Size(min = 6, max = 6) String code,
+            /** IDENTITY 모드 — 포트원 본인인증 완료 id. */
+            @Size(max = 100) String identityVerificationId
+    ) {}
+
+    /** 가입 화면 구성용 — 어떤 인증을 요구하는지, 포트원 SDK 키, 개발 스텁 여부. */
+    public record SignupConfigResponse(
+            @NotNull String verification,
+            String portoneStoreId,
+            String portoneChannelKey,
+            boolean identityDevStub
     ) {}
 
     public record EmailLoginRequest(
@@ -64,7 +74,9 @@ public final class AuthDtos {
             short dailyNotifyCap,
             short clubNotifyCap,
             boolean allowNudge,
-            @NotNull String status
+            @NotNull String status,
+            /** 온보딩에서 고른 선호 카테고리. */
+            java.util.List<String> preferredCategories
     ) {}
 
     public record DeviceRegisterRequest(

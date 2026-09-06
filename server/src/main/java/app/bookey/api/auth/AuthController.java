@@ -24,13 +24,19 @@ public class AuthController {
         return authService.socialLogin(request);
     }
 
-    @Operation(summary = "가입 이메일 인증 코드 발급")
+    @Operation(summary = "가입 화면 구성 — 요구 인증 수단(EMAIL_CODE|IDENTITY)과 포트원 SDK 키")
+    @GetMapping("/signup-config")
+    public SignupConfigResponse signupConfig() {
+        return authService.signupConfig();
+    }
+
+    @Operation(summary = "가입 이메일 인증 코드 발급 (EMAIL_CODE 모드)")
     @PostMapping("/email/code")
     public EmailCodeResponse requestEmailCode(@Valid @RequestBody EmailCodeRequest request) {
         return authService.requestEmailCode(request);
     }
 
-    @Operation(summary = "이메일 회원가입 — 인증 코드 필요")
+    @Operation(summary = "이메일 회원가입 — 설정에 따라 이메일 코드 또는 휴대폰 본인인증 필요")
     @PostMapping("/signup")
     public TokenResponse signup(@Valid @RequestBody EmailSignupRequest request) {
         return authService.emailSignup(request);

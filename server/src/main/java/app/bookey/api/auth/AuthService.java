@@ -42,6 +42,7 @@ public class AuthService {
     private final List<SocialTokenVerifier> verifiers;
     private final PasswordEncoder passwordEncoder;
     private final EmailCodeSender emailCodeSender;
+    private final IdentityVerifier identityVerifier;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -99,8 +100,24 @@ public class AuthService {
         return new EmailCodeResponse(policy.ttl().toSeconds(), policy.expose() ? code : null);
     }
 
+    /** 가입 화면 구성 — 어떤 인증을 요구하는지와 포트원 SDK 키. */
+    public SignupConfigResponse signupConfig() {
+        BookeyProperties.Auth auth = properties.auth();
+        BookeyProperties.Auth.Identity identity = auth.identity();
+        boolean configured = identity.portoneApiSecret() != null && !identity.portoneApiSecret().isBlank();
+        return new SignupConfigResponse(
+                auth.signupVerification().name(),
+                blankToNull(identity.portoneStoreId()),
+                blankToNull(identity.portoneChannelKey()),
+                !configured && identity.allowDevStub());
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
     /**
-     * 이메일 가입 — 발급받은 인증 코드를 통과해야 한다.
+     * 이메일 가입 — 설정에 따라 이메일 인증 코드(EMAIL_CODE) 또는 휴대폰 본인인증(IDENTITY)을 요구한다.
      * noRollbackFor: 코드 불일치 시 실패 횟수 누적이 롤백으로 사라지지 않게 한다(무작위 대입 방어).
      * ApiException 은 항상 다른 쓰기 이전에 던져지므로 부분 커밋 위험이 없다.
      */
@@ -111,15 +128,42 @@ public class AuthService {
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
-        consumeEmailCode(email, request.code());
+        VerifiedIdentity identity = null;
+        switch (properties.auth().signupVerification()) {
+            case EMAIL_CODE -> {
+                if (request.code() == null || request.code().isBlank()) {
+                    throw ApiException.of(ErrorCode.EMAIL_CODE_INVALID);
+                }
+                consumeEmailCode(email, request.code());
+            }
+            case IDENTITY -> identity = requireVerifiedIdentity(request.identityVerificationId());
+        }
         User user = User.builder()
                 .handle(handleGenerator.generate(email.substring(0, email.indexOf("@"))))
                 .email(email)
                 .nickname(request.nickname().trim())
                 .build();
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.markEmailVerified(Instant.now());
+        Instant now = Instant.now();
+        if (identity != null) {
+            user.recordIdentity(identity.name(), identity.phone(), identity.birthDate(),
+                    identity.ci(), identity.di(), now);
+        } else {
+            user.markEmailVerified(now);
+        }
         return issueTokens(userRepository.save(user), true);
+    }
+
+    /** 본인인증 결과를 포트원에서 재조회하고, 같은 사람(CI)의 중복 가입을 막는다. */
+    private VerifiedIdentity requireVerifiedIdentity(String identityVerificationId) {
+        if (identityVerificationId == null || identityVerificationId.isBlank()) {
+            throw ApiException.of(ErrorCode.IDENTITY_VERIFICATION_REQUIRED);
+        }
+        VerifiedIdentity identity = identityVerifier.verify(identityVerificationId.trim());
+        if (userRepository.existsByCi(identity.ci())) {
+            throw ApiException.of(ErrorCode.IDENTITY_ALREADY_REGISTERED);
+        }
+        return identity;
     }
 
     /** 최신 발급 코드와 대조한다 — 소진·만료·시도 초과면 재발급을 유도하고, 불일치는 실패 횟수를 누적한다. */
@@ -240,7 +284,8 @@ public class AuthService {
                 user.getAvatarUrl(), user.getTimezone(), user.getNotifyTone().name(),
                 user.getQuietHoursStart(), user.getQuietHoursEnd(),
                 user.getDailyNotifyCap(), user.getClubNotifyCap(),
-                user.isAllowNudge(), user.getStatus().name());
+                user.isAllowNudge(), user.getStatus().name(),
+                List.of(user.getPreferredCategories()));
     }
 
     private static String sha256(String value) {
