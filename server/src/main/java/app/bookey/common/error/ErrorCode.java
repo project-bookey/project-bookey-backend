@@ -41,6 +41,8 @@ public enum ErrorCode {
     INSUFFICIENT_STAMP(HttpStatus.CONFLICT, "우표가 부족합니다."),
     INSUFFICIENT_BOOKMARK(HttpStatus.CONFLICT, "책갈피가 부족합니다."),
     SUBSCRIPTION_REQUIRED(HttpStatus.FORBIDDEN, "구독 회원만 이용할 수 있는 기능입니다."),
+    CHAT_NOT_FOUND(HttpStatus.NOT_FOUND, "채팅방을 찾을 수 없습니다."),
+    CHAT_NOT_ALLOWED(HttpStatus.FORBIDDEN, "맞팔로우인 상대와만 채팅할 수 있습니다."),
 
     // 도서 / 서재
     BOOK_NOT_FOUND(HttpStatus.NOT_FOUND, "도서를 찾을 수 없습니다."),
