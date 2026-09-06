@@ -227,33 +227,41 @@ class PostServiceTest {
     // ────────────────────────────── validateQuoteAttachments ──────────────────────────────
 
     @Test
-    @DisplayName("남의 밑줄은 붙일 수 없다 — INVALID_REQUEST 와 안내 메시지")
-    void rejectsQuotesOwnedByOthers() {
+    @DisplayName("남이 오려둔 밑줄도 붙일 수 있다 — 밑줄은 공개물이라 소유는 보지 않는다")
+    void allowsOthersQuotes() {
         List<BookQuote> found = List.of(quote(1L, 10L, 100L), quote(2L, 99L, 100L));
 
-        assertThatThrownBy(() -> PostService.validateQuoteAttachments(10L, List.of(1L, 2L), found))
+        assertThatCode(() -> PostService.validateQuoteAttachments(List.of(1L, 2L), found))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("없는 밑줄 id 가 섞여 개수가 맞지 않으면 거부한다 — INVALID_REQUEST 와 안내 메시지")
+    void rejectsWhenSomeQuotesAreMissing() {
+        List<BookQuote> found = List.of(quote(1L, 10L, 100L));
+
+        assertThatThrownBy(() -> PostService.validateQuoteAttachments(List.of(1L, 404L), found))
                 .isInstanceOfSatisfying(ApiException.class, e -> {
                     assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
-                    assertThat(e.getMessage()).isEqualTo("내가 오려둔 밑줄만 붙일 수 있습니다.");
+                    assertThat(e.getMessage()).isEqualTo("없는 밑줄은 붙일 수 없습니다.");
                 });
     }
 
     @Test
-    @DisplayName("없는 밑줄 id 가 섞여 개수가 맞지 않으면 거부한다")
-    void rejectsWhenSomeQuotesAreMissing() {
-        List<BookQuote> found = List.of(quote(1L, 10L, 100L));
+    @DisplayName("남의 밑줄이라도 없는 id 가 섞이면 거부한다 — 존재 검사는 그대로 남는다")
+    void rejectsMissingQuoteAmongOthers() {
+        List<BookQuote> found = List.of(quote(1L, 99L, 100L));
 
-        assertThatThrownBy(() -> PostService.validateQuoteAttachments(10L, List.of(1L, 404L), found))
-                .isInstanceOfSatisfying(ApiException.class,
-                        e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.INVALID_REQUEST));
+        assertThatThrownBy(() -> PostService.validateQuoteAttachments(List.of(1L, 404L), found))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test
-    @DisplayName("다른 책의 밑줄도 내 것이면 허용한다 — 책 정보는 아예 보지 않는다")
-    void allowsOwnQuotesRegardlessOfBook() {
+    @DisplayName("다른 책의 밑줄도 허용한다 — 책 정보는 아예 보지 않는다")
+    void allowsQuotesRegardlessOfBook() {
         List<BookQuote> found = List.of(quote(1L, 10L, 100L), quote(2L, 10L, 200L));
 
-        assertThatCode(() -> PostService.validateQuoteAttachments(10L, List.of(1L, 2L), found))
+        assertThatCode(() -> PostService.validateQuoteAttachments(List.of(1L, 2L), found))
                 .doesNotThrowAnyException();
     }
 

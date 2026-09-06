@@ -27,13 +27,14 @@ public class QuoteController {
         return quoteService.create(user.id(), request);
     }
 
-    @Operation(summary = "내가 오려둔 문장 목록 — 최신순, bookId 로 책 하나만 추릴 수 있다")
+    @Operation(summary = "내 오려둔 문장 목록 — 최신순, bookId 로 책 하나만 추리고 q 로 문장·책 제목 검색")
     @GetMapping
     public PageResponse<BookQuoteView> myQuotes(@AuthenticationPrincipal AuthUser user,
                                                 @RequestParam(required = false) Long bookId,
+                                                @RequestParam(required = false) String q,
                                                 @RequestParam(defaultValue = "0") int page,
                                                 @RequestParam(defaultValue = "20") int size) {
-        return quoteService.mine(user.id(), bookId, PageRequest.of(page, size));
+        return quoteService.mine(user.id(), bookId, q, PageRequest.of(page, size));
     }
 
     @Operation(summary = "문장 한 건 — 상세 진입용")

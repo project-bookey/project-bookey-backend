@@ -15,6 +15,19 @@ class PostExcerptTest {
     }
 
     @Test
+    @DisplayName("오려둔 문장 표시는 통째로 지운다")
+    void removesQuoteMarkers() {
+        assertThat(PostExcerpt.of("앞 문장 〖오려둔 문장 123〗 뒤 문장", 100))
+                .isEqualTo("앞 문장 뒤 문장");
+    }
+
+    @Test
+    @DisplayName("표시만 있는 본문은 빈 문자열이 된다")
+    void markerOnlyBodyBecomesEmpty() {
+        assertThat(PostExcerpt.of("〖오려둔 문장 7〗", 100)).isEmpty();
+    }
+
+    @Test
     @DisplayName("링크는 텍스트만 남긴다")
     void keepsLinkText() {
         assertThat(PostExcerpt.of("[원문](https://bookey.app/a)을 읽었다", 100))

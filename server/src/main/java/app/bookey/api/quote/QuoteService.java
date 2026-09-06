@@ -14,6 +14,7 @@ import app.bookey.domain.quote.QuoteAgreeRepository;
 import app.bookey.domain.quote.QuoteAgreeRepository.AgreeCount;
 import app.bookey.domain.quote.QuoteCommentRepository;
 import app.bookey.domain.quote.QuoteCommentRepository.CommentCount;
+import app.bookey.domain.quote.QuoteSearchKeyword;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.user.User;
@@ -87,12 +88,23 @@ public class QuoteService {
                 loadAgreeCounts(quotes), loadMyAgreed(userId, quotes), loadCommentCounts(quotes)).get(0);
     }
 
-    /** 내가 오려둔 문장 목록 — 최신순. bookId 를 주면 그 책에서 오려둔 것만(독후감에 인용할 밑줄 고르기). */
+    /**
+     * 내가 오려둔 문장 목록 — 최신순. bookId 를 주면 그 책에서 오려둔 것만(독후감에 인용할 밑줄 고르기),
+     * keyword 를 주면 문장 내용·책 제목에서 찾는다. 둘 다 줄 수 있고, 검색어가 없으면 예전과 같이 동작한다.
+     */
     @Transactional(readOnly = true)
-    public PageResponse<BookQuoteView> mine(Long userId, Long bookId, Pageable pageable) {
-        Page<BookQuote> page = bookId == null
-                ? quoteRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(userId, pageable)
-                : quoteRepository.findAllByUserIdAndBookIdOrderByCreatedAtDescIdDesc(userId, bookId, pageable);
+    public PageResponse<BookQuoteView> mine(Long userId, Long bookId, String keyword, Pageable pageable) {
+        String q = QuoteSearchKeyword.normalize(keyword);
+        Page<BookQuote> page;
+        if (q == null) {
+            page = bookId == null
+                    ? quoteRepository.findAllByUserIdOrderByCreatedAtDescIdDesc(userId, pageable)
+                    : quoteRepository.findAllByUserIdAndBookIdOrderByCreatedAtDescIdDesc(userId, bookId, pageable);
+        } else {
+            page = bookId == null
+                    ? quoteRepository.searchByUserId(userId, q, pageable)
+                    : quoteRepository.searchByUserIdAndBookId(userId, bookId, q, pageable);
+        }
         return toPageResponse(page, userId, Map.of());
     }
 
@@ -110,12 +122,15 @@ public class QuoteService {
         return views.stream().collect(Collectors.toMap(BookQuoteView::id, Function.identity()));
     }
 
-    /** 책별 오려둔 문장 목록 — 최신순. */
+    /** 책별 오려둔 문장 목록 — 최신순. keyword 를 주면 문장 내용·책 제목에서 찾는다. */
     @Transactional(readOnly = true)
-    public PageResponse<BookQuoteView> byBook(Long userId, Long bookId, Pageable pageable) {
+    public PageResponse<BookQuoteView> byBook(Long userId, Long bookId, String keyword, Pageable pageable) {
         Book book = bookRepository.findById(bookId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
-        Page<BookQuote> page = quoteRepository.findAllByBookIdOrderByCreatedAtDescIdDesc(bookId, pageable);
+        String q = QuoteSearchKeyword.normalize(keyword);
+        Page<BookQuote> page = q == null
+                ? quoteRepository.findAllByBookIdOrderByCreatedAtDescIdDesc(bookId, pageable)
+                : quoteRepository.searchByBookId(bookId, q, pageable);
         // 존재 확인에서 이미 가져온 책을 시드로 넘겨 loadBooks의 재조회를 피한다(페이지당 쿼리 5개 고정).
         return toPageResponse(page, userId, Map.of(book.getId(), book));
     }
