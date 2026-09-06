@@ -67,6 +67,8 @@ public final class AuthDtos {
             @NotNull String nickname,
             String email,
             String avatarUrl,
+            String gender,
+            java.time.LocalDate birthDate,
             @NotNull String timezone,
             @NotNull String notifyTone,
             short quietHoursStart,

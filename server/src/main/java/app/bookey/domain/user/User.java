@@ -39,6 +39,9 @@ public class User extends BaseTimeEntity {
     @Column(name = "birth_date")
     private java.time.LocalDate birthDate;
 
+    @Column(length = 30)
+    private String gender;
+
     /** 연계정보 — 사람당 1개. 부분 유니크 인덱스(uq_users_ci)로 중복 가입을 막는다. */
     @Column(length = 128)
     private String ci;
@@ -108,6 +111,15 @@ public class User extends BaseTimeEntity {
         }
         if (avatarUrl != null) {
             this.avatarUrl = avatarUrl;
+        }
+    }
+
+    public void updateDemographics(String gender, java.time.LocalDate birthDate) {
+        if (gender != null) {
+            this.gender = gender.isBlank() ? null : gender;
+        }
+        if (birthDate != null) {
+            this.birthDate = birthDate;
         }
     }
 

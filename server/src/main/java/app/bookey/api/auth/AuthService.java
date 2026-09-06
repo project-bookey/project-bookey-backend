@@ -281,7 +281,8 @@ public class AuthService {
     public static MeResponse toMe(User user) {
         return new MeResponse(
                 user.getId(), user.getHandle(), user.getNickname(), user.getEmail(),
-                user.getAvatarUrl(), user.getTimezone(), user.getNotifyTone().name(),
+                user.getAvatarUrl(), user.getGender(), user.getBirthDate(),
+                user.getTimezone(), user.getNotifyTone().name(),
                 user.getQuietHoursStart(), user.getQuietHoursEnd(),
                 user.getDailyNotifyCap(), user.getClubNotifyCap(),
                 user.isAllowNudge(), user.getStatus().name(),

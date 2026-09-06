@@ -11,6 +11,7 @@ import app.bookey.domain.user.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +30,8 @@ public class MeController {
     private final UserRepository userRepository;
 
     public record UpdateProfileRequest(@Size(max = 50) String nickname, String avatarUrl,
+                                       @Pattern(regexp = "MALE|FEMALE|OTHER|PREFER_NOT_TO_SAY") String gender,
+                                       java.time.LocalDate birthDate,
                                        @Size(max = 10) java.util.List<@Size(max = 30) String> preferredCategories) {}
 
     @Operation(summary = "내 정보")
@@ -45,6 +48,7 @@ public class MeController {
         User entity = userRepository.findById(user.id())
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         entity.updateProfile(request.nickname(), request.avatarUrl());
+        entity.updateDemographics(request.gender(), request.birthDate());
         entity.updatePreferredCategories(
                 request.preferredCategories() == null ? null : request.preferredCategories().toArray(String[]::new));
         return AuthService.toMe(entity);
