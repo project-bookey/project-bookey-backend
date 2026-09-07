@@ -91,7 +91,7 @@ jobs:
             ALADIN_TTB_KEY=${{ secrets.ALADIN_TTB_KEY }}
             GOOGLE_BOOKS_KEY=${{ secrets.GOOGLE_BOOKS_KEY }}
             YES24_API_KEY=${{ secrets.YES24_API_KEY }}
-            SIGNUP_VERIFICATION=EMAIL_CODE
+            SIGNUP_VERIFICATION=NONE
             ADMIN_BOOTSTRAP_EMAIL=${{ secrets.ADMIN_BOOTSTRAP_EMAIL }}
             ADMIN_BOOTSTRAP_PASSWORD=${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
 

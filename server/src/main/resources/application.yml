@@ -69,7 +69,7 @@ bookey:
     refresh-token-ttl: P30D
     admin-token-ttl: PT30M
   auth:
-    signup-verification: ${SIGNUP_VERIFICATION:IDENTITY}   # EMAIL_CODE | IDENTITY(휴대폰 본인인증)
+    signup-verification: ${SIGNUP_VERIFICATION:IDENTITY}   # EMAIL_CODE | IDENTITY(휴대폰 본인인증) | NONE(인증 생략)
     identity:
       portone-api-secret: ${PORTONE_API_SECRET:}     # 포트원 V2 API Secret — 계약 후 발급
       portone-store-id: ${PORTONE_STORE_ID:}

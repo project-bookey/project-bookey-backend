@@ -117,7 +117,8 @@ public class AuthService {
     }
 
     /**
-     * 이메일 가입 — 설정에 따라 이메일 인증 코드(EMAIL_CODE) 또는 휴대폰 본인인증(IDENTITY)을 요구한다.
+     * 이메일 가입 — 설정에 따라 이메일 인증 코드(EMAIL_CODE), 휴대폰 본인인증(IDENTITY),
+     * 또는 인증 생략(NONE)을 적용한다.
      * noRollbackFor: 코드 불일치 시 실패 횟수 누적이 롤백으로 사라지지 않게 한다(무작위 대입 방어).
      * ApiException 은 항상 다른 쓰기 이전에 던져지므로 부분 커밋 위험이 없다.
      */
@@ -137,6 +138,9 @@ public class AuthService {
                 consumeEmailCode(email, request.code());
             }
             case IDENTITY -> identity = requireVerifiedIdentity(request.identityVerificationId());
+            case NONE -> {
+                // 개발·초기 테스트용. 운영에서 쓰면 이메일 소유 검증 없이 가입된다.
+            }
         }
         User user = User.builder()
                 .handle(handleGenerator.generate(email.substring(0, email.indexOf("@"))))

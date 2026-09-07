@@ -35,7 +35,7 @@ public record BookeyProperties(
     public record Auth(SignupVerification signupVerification, EmailCode emailCode, Identity identity) {
 
         /** 가입 시 요구하는 인증 수단. */
-        public enum SignupVerification { EMAIL_CODE, IDENTITY }
+        public enum SignupVerification { EMAIL_CODE, IDENTITY, NONE }
 
         /** expose 가 true 면 코드 발급 응답에 코드를 동봉한다 — 로컬 개발·스모크 전용, 운영은 반드시 false. */
         public record EmailCode(Duration ttl, Duration cooldown, int maxAttempts, boolean expose) {}
