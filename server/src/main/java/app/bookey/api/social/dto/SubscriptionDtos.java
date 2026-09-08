@@ -18,6 +18,7 @@ public final class SubscriptionDtos {
             @NotBlank String orderId,
             int amountKrw,
             @NotBlank String customerKey,
+            String checkoutUrl,
             String tossClientKey,
             String successUrl,
             String failUrl

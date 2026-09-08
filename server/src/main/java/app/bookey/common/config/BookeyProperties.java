@@ -89,9 +89,13 @@ public record BookeyProperties(
     /** 구독 결제 연동. Apple/Google IAP 와 웹 Toss Payments 를 같은 구독 계약으로 맞춘다. */
     public record Payment(
             String subscriptionProductId,
-            Toss toss
+            Toss toss,
+            Apple apple
     ) {
-        public record Toss(String clientKey, String successUrl, String failUrl) {}
+        public record Toss(String clientKey, String secretKey, String successUrl, String failUrl,
+                           String appScheme) {}
+        public record Apple(String issuerId, String keyId, String bundleId, String privateKey,
+                            String environment) {}
     }
 
     /** 업로드 파일 저장소. type 은 local | gcs. */

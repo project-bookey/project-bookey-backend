@@ -1,6 +1,10 @@
 package app.bookey.api.social;
 
 import app.bookey.common.config.BookeyProperties;
+import app.bookey.api.social.dto.SubscriptionDtos.SubscriptionCheckoutRequest;
+import app.bookey.api.social.dto.SubscriptionDtos.SubscriptionVerifyRequest;
+import app.bookey.api.social.payment.AppStorePaymentClient;
+import app.bookey.api.social.payment.TossPaymentClient;
 import app.bookey.domain.wallet.Subscription;
 import app.bookey.domain.wallet.SubscriptionRepository;
 import app.bookey.domain.wallet.SubscriptionStore;
@@ -19,6 +23,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -29,14 +34,24 @@ class SubscriptionServiceTest {
 
     private static final BookeyProperties.Social SOCIAL =
             new BookeyProperties.Social(5, 16, 1, 2, 50, 30, 17900);
+    private static final BookeyProperties.Payment PAYMENT = new BookeyProperties.Payment(
+            "bookey.plus.monthly",
+            new BookeyProperties.Payment.Toss(
+                    "test_ck", "test_sk", "bookey://payment/toss-success",
+                    "bookey://payment/toss-fail", "bookey"),
+            new BookeyProperties.Payment.Apple(
+                    "issuer", "key", "app.bookey.mobile", "private-key", "SANDBOX"));
 
     private final SubscriptionRepository subscriptionRepository = mock(SubscriptionRepository.class);
     private final WalletTransactionRepository transactionRepository = mock(WalletTransactionRepository.class);
+    private final TossPaymentClient tossPaymentClient = mock(TossPaymentClient.class);
+    private final AppStorePaymentClient appStorePaymentClient = mock(AppStorePaymentClient.class);
     private final Clock clock = mock(Clock.class);
     private final BookeyProperties properties =
-            new BookeyProperties(null, null, null, null, null, null, SOCIAL, null, null);
+            new BookeyProperties(null, null, null, null, null, null, SOCIAL, PAYMENT, null);
     private final SubscriptionService service =
-            new SubscriptionService(subscriptionRepository, transactionRepository, properties, clock);
+            new SubscriptionService(subscriptionRepository, transactionRepository, properties, clock,
+                    tossPaymentClient, appStorePaymentClient);
 
     private Subscription activeSubscription(Instant start, Instant end) {
         return Subscription.builder()
@@ -116,5 +131,70 @@ class SubscriptionServiceTest {
         when(subscriptionRepository.findTopByUserIdOrderByIdDesc(1L)).thenReturn(Optional.of(created));
         service.adminRevoke(1L);
         assertThat(created.isActiveAt(now.plusSeconds(1))).isFalse();
+    }
+
+    @Test
+    @DisplayName("Toss 체크아웃 — Toss 결제창 URL 을 생성해서 내려준다")
+    void tossCheckout() {
+        when(tossPaymentClient.createCheckoutUrl(eq("test_sk"), any()))
+                .thenReturn("https://checkout.tosspayments.com/test");
+
+        var view = service.checkout(1L, new SubscriptionCheckoutRequest(SubscriptionStore.TOSS));
+
+        assertThat(view.provider()).isEqualTo(SubscriptionStore.TOSS);
+        assertThat(view.productId()).isEqualTo("bookey.plus.monthly");
+        assertThat(view.orderId()).startsWith("bookey-sub-1-");
+        assertThat(view.amountKrw()).isEqualTo(17900);
+        assertThat(view.customerKey()).isEqualTo("bookey-user-1");
+        assertThat(view.checkoutUrl()).isEqualTo("https://checkout.tosspayments.com/test");
+        assertThat(view.successUrl()).contains("provider=TOSS", "productId=bookey.plus.monthly");
+    }
+
+    @Test
+    @DisplayName("Toss 검증 — 서버 승인 결과가 정상일 때 구독을 활성화한다")
+    void verifyToss() {
+        Instant now = Instant.parse("2026-09-06T03:00:00Z");
+        when(clock.instant()).thenReturn(now);
+        when(subscriptionRepository.existsByStoreAndOriginalTransactionId(SubscriptionStore.TOSS, "pay_123"))
+                .thenReturn(false);
+        when(tossPaymentClient.confirm("test_sk", "pay_123", "bookey-sub-1-order", 17900))
+                .thenReturn(new TossPaymentClient.TossPayment("pay_123", "bookey-sub-1-order", 17900, "DONE"));
+        ArgumentCaptor<Subscription> saved = ArgumentCaptor.forClass(Subscription.class);
+
+        service.verify(1L, new SubscriptionVerifyRequest(
+                SubscriptionStore.TOSS, "bookey.plus.monthly", "bookey-sub-1-order",
+                17900, "pay_123", null, null));
+
+        verify(subscriptionRepository).save(saved.capture());
+        assertThat(saved.getValue().getUserId()).isEqualTo(1L);
+        assertThat(saved.getValue().getStore()).isEqualTo(SubscriptionStore.TOSS);
+        assertThat(saved.getValue().getProductId()).isEqualTo("bookey.plus.monthly");
+        assertThat(saved.getValue().getOriginalTransactionId()).isEqualTo("pay_123");
+        assertThat(saved.getValue().isActiveAt(now.plusSeconds(1))).isTrue();
+    }
+
+    @Test
+    @DisplayName("App Store 검증 — Apple 서버 거래가 정상일 때 구독을 활성화한다")
+    void verifyApple() {
+        Instant now = Instant.parse("2026-09-06T03:00:00Z");
+        Instant expires = now.plusSeconds(31L * 24 * 60 * 60);
+        when(clock.instant()).thenReturn(now);
+        when(subscriptionRepository.existsByStoreAndOriginalTransactionId(SubscriptionStore.APPLE, "orig_123"))
+                .thenReturn(false);
+        when(appStorePaymentClient.getTransaction(PAYMENT.apple(), "tx_123"))
+                .thenReturn(new AppStorePaymentClient.AppStoreTransaction(
+                        "tx_123", "orig_123", "bookey.plus.monthly",
+                        "app.bookey.mobile", expires.toEpochMilli()));
+        ArgumentCaptor<Subscription> saved = ArgumentCaptor.forClass(Subscription.class);
+
+        service.verify(1L, new SubscriptionVerifyRequest(
+                SubscriptionStore.APPLE, "bookey.plus.monthly", null,
+                null, "tx_123", null, null));
+
+        verify(subscriptionRepository).save(saved.capture());
+        assertThat(saved.getValue().getUserId()).isEqualTo(1L);
+        assertThat(saved.getValue().getStore()).isEqualTo(SubscriptionStore.APPLE);
+        assertThat(saved.getValue().getOriginalTransactionId()).isEqualTo("orig_123");
+        assertThat(saved.getValue().getCurrentPeriodEnd()).isEqualTo(expires);
     }
 }

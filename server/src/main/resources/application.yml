@@ -114,8 +114,16 @@ bookey:
     subscription-product-id: ${SUBSCRIPTION_PRODUCT_ID:bookey.plus.monthly}
     toss:
       client-key: ${TOSS_CLIENT_KEY:}
+      secret-key: ${TOSS_SECRET_KEY:}
       success-url: ${TOSS_SUCCESS_URL:}
       fail-url: ${TOSS_FAIL_URL:}
+      app-scheme: ${TOSS_APP_SCHEME:bookey}
+    apple:
+      issuer-id: ${APPSTORE_ISSUER_ID:}
+      key-id: ${APPSTORE_KEY_ID:}
+      bundle-id: ${APPSTORE_BUNDLE_ID:app.bookey.mobile}
+      private-key: ${APPSTORE_PRIVATE_KEY:}
+      environment: ${APPSTORE_ENVIRONMENT:SANDBOX} # SANDBOX | PRODUCTION
   storage:
     type: ${STORAGE_TYPE:local}                    # local | gcs | none(업로드 끔). prod 기본값은 application-prod.yml 에서 none
     local:
