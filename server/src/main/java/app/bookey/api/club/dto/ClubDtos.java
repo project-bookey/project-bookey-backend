@@ -50,6 +50,12 @@ public final class ClubDtos {
             Boolean shareProgress
     ) {}
 
+    public record JoinPublicRequest(
+            Boolean adoptTargetDate,
+            /** 진척 공개 동의 (§12.1 ③). false 면 비공개로 참가. */
+            Boolean shareProgress
+    ) {}
+
     public record UpdateSharingRequest(Boolean shareProgress, Boolean allowNudge) {}
 
     public record KickRequest(@NotNull Long userId, @NotBlank @Size(max = 200) String reason) {}

@@ -224,7 +224,19 @@ public class ClubService {
         String code = JoinCodeGenerator.normalize(request.code());
         Club club = clubRepository.findByJoinCode(code)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_CODE_INVALID));
+        return joinClub(userId, club, request.adoptTargetDate(), request.shareProgress());
+    }
 
+    @Transactional
+    public ClubHomeView joinPublic(Long userId, Long clubId, JoinPublicRequest request) {
+        Club club = getClub(clubId);
+        if (club.getVisibility() != ClubVisibility.PUBLIC) {
+            throw ApiException.of(ErrorCode.CLUB_NOT_FOUND);
+        }
+        return joinClub(userId, club, request.adoptTargetDate(), request.shareProgress());
+    }
+
+    private ClubHomeView joinClub(Long userId, Club club, Boolean adoptTargetDate, Boolean shareProgressRequest) {
         if (club.getStatus().isOver()) {
             throw ApiException.of(ErrorCode.CLUB_ENDED);
         }
@@ -244,9 +256,9 @@ public class ClubService {
         Book book = bookRepository.findById(clubBook.getBookId())
                 .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
 
-        boolean adoptTarget = request.adoptTargetDate() == null || request.adoptTargetDate();
+        boolean adoptTarget = adoptTargetDate == null || adoptTargetDate;
         ReadingRecord record = ensureReadingRecord(userId, book, club.getEndsAt(), adoptTarget);
-        boolean shareProgress = request.shareProgress() == null || request.shareProgress();
+        boolean shareProgress = shareProgressRequest == null || shareProgressRequest;
 
         club.joinMember();   // 정원·종료 검사 포함
         existing.ifPresentOrElse(

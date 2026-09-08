@@ -56,11 +56,26 @@ public class ClubController {
         return clubService.preview(user == null ? null : user.id(), code, clientKey);
     }
 
+    @Operation(summary = "공개 모임 미리보기 — 추천 모임 상세 진입용")
+    @GetMapping("/{clubId}/preview")
+    public ClubPreview previewById(@AuthenticationPrincipal AuthUser user,
+                                   @PathVariable Long clubId) {
+        return clubService.previewById(user.id(), clubId);
+    }
+
     @Operation(summary = "코드로 참가 — 도서 자동 등록 + 진척 공유 동의")
     @PostMapping("/join")
     public ClubHomeView join(@AuthenticationPrincipal AuthUser user,
                              @Valid @RequestBody JoinRequest request) {
         return clubService.join(user.id(), request);
+    }
+
+    @Operation(summary = "공개 모임 참가 — 추천 모임 상세에서 코드 없이 참가")
+    @PostMapping("/{clubId}/join")
+    public ClubHomeView joinPublic(@AuthenticationPrincipal AuthUser user,
+                                   @PathVariable Long clubId,
+                                   @Valid @RequestBody JoinPublicRequest request) {
+        return clubService.joinPublic(user.id(), clubId, request);
     }
 
     @Operation(summary = "모임 홈 — 멤버 진척 · 체크포인트 그리드")
