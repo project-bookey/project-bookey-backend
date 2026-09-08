@@ -2,10 +2,13 @@ package app.bookey.api.post;
 
 import app.bookey.api.post.dto.PostDtos.CreatePostCommentRequest;
 import app.bookey.api.post.dto.PostDtos.PostCommentView;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
+import app.bookey.domain.notification.NotificationType;
+import app.bookey.domain.post.Post;
 import app.bookey.domain.post.PostComment;
 import app.bookey.domain.post.PostCommentRepository;
 import app.bookey.domain.user.User;
@@ -36,6 +39,7 @@ public class PostCommentService {
     /** 읽기 권한 규칙은 PostService.readable 하나만 쓴다 — 규칙이 둘로 갈라지지 않게. */
     private final PostService postService;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
 
     /**
@@ -63,7 +67,7 @@ public class PostCommentService {
     /** parentId 가 있으면 답글 — 답글의 답글은 막는다(2단계까지). */
     @Transactional
     public PostCommentView create(Long userId, Long postId, CreatePostCommentRequest request) {
-        postService.readable(userId, postId);
+        Post post = postService.readable(userId, postId);
         rateLimiter.require("post:comment:" + userId, CREATE_RATE_LIMIT, Duration.ofMinutes(1));
 
         Long parentId = null;
@@ -85,6 +89,7 @@ public class PostCommentService {
                 .build());
 
         User author = userRepository.findById(userId).orElse(null);
+        notifyPostCommented(userId, author, post, parentId);
         return assembleThreads(List.of(comment), Map.of(), userId,
                 author == null ? Map.of() : Map.of(userId, author)).get(0);
     }
@@ -120,6 +125,18 @@ public class PostCommentService {
         }
         return userRepository.findAllById(ids).stream()
                 .collect(Collectors.toMap(User::getId, Function.identity()));
+    }
+
+    private void notifyPostCommented(Long commenterId, User commenter, Post post, Long parentId) {
+        if (post.isOwnedBy(commenterId)) {
+            return;
+        }
+        String nickname = commenter == null ? "누군가" : commenter.getNickname();
+        notificationService.inApp(new NotificationService.NotificationRequest(
+                post.getUserId(), NotificationType.POST_COMMENTED, null, post.getReadingRecordId(), null,
+                parentId == null ? "독후감에 댓글이 달렸어요" : "독후감에 답글이 달렸어요",
+                nickname + "님이 \"" + post.getTitle() + "\"에 댓글을 남겼습니다.",
+                Map.of("postId", post.getId(), "commenterId", commenterId), null));
     }
 
     /**

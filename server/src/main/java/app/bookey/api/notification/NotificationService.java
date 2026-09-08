@@ -97,6 +97,28 @@ public class NotificationService {
         return Optional.of(notificationRepository.save(notification));
     }
 
+    /** 사용자가 만든 소셜 이벤트는 푸시 전역 설정·무음·총량 제한과 무관하게 인앱 목록에 남긴다. */
+    @Transactional
+    public Optional<Notification> inApp(NotificationRequest request) {
+        User user = userRepository.findById(request.userId()).orElse(null);
+        if (user == null || !user.getStatus().canLogin()) {
+            return Optional.empty();
+        }
+        Notification notification = Notification.builder()
+                .userId(user.getId())
+                .type(request.type())
+                .lagLevel(request.lagLevel())
+                .readingRecordId(request.readingRecordId())
+                .clubId(request.clubId())
+                .title(request.title())
+                .body(request.body())
+                .payload(request.payload())
+                .scheduledAt(Instant.now())
+                .experimentVariant(request.experimentVariant())
+                .build();
+        return Optional.of(notificationRepository.save(notification));
+    }
+
     private boolean isPushEnabledGlobally() {
         return opsFlagRepository.findById(OpsFlag.PUSH_ENABLED)
                 .map(OpsFlag::isEnabled)

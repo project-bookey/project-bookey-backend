@@ -3,9 +3,11 @@ package app.bookey.api.social;
 import app.bookey.api.social.dto.SocialDtos.PostcardView;
 import app.bookey.api.social.dto.SocialDtos.ReplyPostcardRequest;
 import app.bookey.api.social.dto.SocialDtos.SendPostcardRequest;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
+import app.bookey.domain.notification.NotificationType;
 import app.bookey.common.support.GraphemeCounter;
 import app.bookey.common.support.PageResponse;
 import app.bookey.domain.post.Post;
@@ -47,6 +49,7 @@ public class PostcardService {
     private final PostRepository postRepository;
     private final WalletService walletService;
     private final FollowService followService;
+    private final NotificationService notificationService;
     private final BookeyProperties properties;
     private final Clock clock;
 
@@ -82,6 +85,7 @@ public class PostcardService {
             walletService.payStamp(fromUserId, wallet, WalletTransactionKind.ATTACH_STAMP, postcard.getId());
         }
         walletService.payPostcardSend(fromUserId, wallet, postcard.getId());
+        notifyPostcardReceived(fromUserId, to.getId(), postcard);
         return toView(postcard, fromUserId);
     }
 
@@ -104,6 +108,7 @@ public class PostcardService {
         }
         postcard.reply(body, Instant.now(clock));
         followService.ensureMutual(postcard.getFromUserId(), postcard.getToUserId(), FollowSource.POSTCARD);
+        notifyPostcardReplied(userId, postcard);
         return toView(postcard, userId);
     }
 
@@ -135,6 +140,27 @@ public class PostcardService {
             throw ApiException.of(ErrorCode.POSTCARD_BODY_TOO_LONG);
         }
         return body;
+    }
+
+    private void notifyPostcardReceived(Long fromUserId, Long toUserId, Postcard postcard) {
+        User from = userRepository.findById(fromUserId).orElse(null);
+        String nickname = from == null ? "누군가" : from.getNickname();
+        notificationService.inApp(new NotificationService.NotificationRequest(
+                toUserId, NotificationType.POSTCARD_RECEIVED, null, null, null,
+                "새 엽서가 도착했어요",
+                nickname + "님이 엽서를 보냈습니다.",
+                Map.of("postcardId", postcard.getId(), "fromUserId", fromUserId), null));
+    }
+
+    private void notifyPostcardReplied(Long replierId, Postcard postcard) {
+        Long recipient = postcard.getFromUserId();
+        User replier = userRepository.findById(replierId).orElse(null);
+        String nickname = replier == null ? "상대" : replier.getNickname();
+        notificationService.inApp(new NotificationService.NotificationRequest(
+                recipient, NotificationType.POSTCARD_REPLIED, null, null, null,
+                "엽서에 답장이 왔어요",
+                nickname + "님이 답장을 보냈습니다.",
+                Map.of("postcardId", postcard.getId(), "fromUserId", replierId), null));
     }
 
     // ────────────────────────────── 조립 ──────────────────────────────

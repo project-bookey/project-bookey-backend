@@ -4,10 +4,12 @@ import app.bookey.api.social.dto.ChatDtos.ChatMessageView;
 import app.bookey.api.social.dto.ChatDtos.ChatMessagesView;
 import app.bookey.api.social.dto.ChatDtos.ChatSummaryView;
 import app.bookey.api.social.dto.ChatDtos.SendMessageRequest;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
+import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.social.Chat;
 import app.bookey.domain.social.ChatMessage;
 import app.bookey.domain.social.ChatMessageRepository;
@@ -48,6 +50,7 @@ public class ChatService {
     private final ChatMessageRepository messageRepository;
     private final UserRepository userRepository;
     private final FollowService followService;
+    private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
     private final Clock clock;
 
@@ -120,6 +123,7 @@ public class ChatService {
                 .build());
         chat.touchLastMessage(now);
         chat.markRead(userId, now);   // 내가 보낸 직후의 내 안읽음은 0 이어야 한다
+        notifyMessageReceived(userId, chat.counterpartOf(userId), chatId, message);
         return toMessageView(message, userId);
     }
 
@@ -167,6 +171,16 @@ public class ChatService {
         }
         return messageRepository.findAllById(lastIds).stream()
                 .collect(Collectors.toMap(ChatMessage::getChatId, Function.identity()));
+    }
+
+    private void notifyMessageReceived(Long senderId, Long recipientId, Long chatId, ChatMessage message) {
+        User sender = userRepository.findById(senderId).orElse(null);
+        String nickname = sender == null ? "상대" : sender.getNickname();
+        notificationService.inApp(new NotificationService.NotificationRequest(
+                recipientId, NotificationType.CHAT_MESSAGE, null, null, null,
+                "새 채팅이 도착했어요",
+                nickname + "님이 메시지를 보냈습니다.",
+                Map.of("chatId", chatId, "messageId", message.getId(), "fromUserId", senderId), null));
     }
 
     private ChatSummaryView toSummary(Chat chat, Long userId, User other,

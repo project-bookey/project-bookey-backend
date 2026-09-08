@@ -1,6 +1,7 @@
 package app.bookey.api.post;
 
 import app.bookey.api.post.dto.PostDtos.*;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.api.quote.QuoteService;
 import app.bookey.api.quote.dto.QuoteDtos.BookQuoteView;
 import app.bookey.common.error.ApiException;
@@ -9,6 +10,7 @@ import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookRepository;
+import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.post.Post;
 import app.bookey.domain.post.PostCommentRepository;
 import app.bookey.domain.post.PostCommentRepository.PostCommentCount;
@@ -72,6 +74,7 @@ public class PostService {
     private final ReadingRecordRepository recordRepository;
     private final UserRepository userRepository;
     private final QuoteService quoteService;
+    private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
 
     @Transactional
@@ -176,7 +179,7 @@ public class PostService {
     /** 좋아요 토글 — BookService.toggleLike 미러. 읽을 수 없는 글은 없는 것으로 본다. */
     @Transactional
     public PostLikeView toggleLike(Long userId, Long postId) {
-        readable(userId, postId);
+        Post post = readable(userId, postId);
         var existing = likeRepository.findByUserIdAndPostId(userId, postId);
         boolean liked;
         if (existing.isPresent()) {
@@ -185,6 +188,7 @@ public class PostService {
         } else {
             likeRepository.save(PostLike.builder().userId(userId).postId(postId).build());
             liked = true;
+            notifyPostLiked(userId, post);
         }
         return new PostLikeView(liked, likeRepository.countByPostId(postId));
     }
@@ -258,6 +262,19 @@ public class PostService {
             throw ApiException.of(ErrorCode.FORBIDDEN);
         }
         return readingRecordId;
+    }
+
+    private void notifyPostLiked(Long likerId, Post post) {
+        if (post.isOwnedBy(likerId)) {
+            return;
+        }
+        User liker = userRepository.findById(likerId).orElse(null);
+        String nickname = liker == null ? "누군가" : liker.getNickname();
+        notificationService.inApp(new NotificationService.NotificationRequest(
+                post.getUserId(), NotificationType.POST_LIKED, null, post.getReadingRecordId(), null,
+                "독후감에 좋아요가 눌렸어요",
+                nickname + "님이 \"" + post.getTitle() + "\"을 좋아합니다.",
+                Map.of("postId", post.getId(), "fromUserId", likerId), null));
     }
 
     /** 사진을 요청 순서대로 붙인다. null·빈 목록이면 아무것도 하지 않는다. 중복 id 는 첫 것만. */

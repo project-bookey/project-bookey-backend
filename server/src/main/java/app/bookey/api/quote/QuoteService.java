@@ -1,12 +1,14 @@
 package app.bookey.api.quote;
 
 import app.bookey.api.quote.dto.QuoteDtos.*;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookRepository;
+import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.quote.BookQuote;
 import app.bookey.domain.quote.BookQuoteRepository;
 import app.bookey.domain.quote.QuoteAgree;
@@ -48,6 +50,7 @@ public class QuoteService {
     private final BookRepository bookRepository;
     private final ReadingRecordRepository recordRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
 
     @Transactional
@@ -147,7 +150,7 @@ public class QuoteService {
     /** 나도 그럼 토글 — BookService.toggleLike 미러(find→delete/save, 카운트 반환). */
     @Transactional
     public QuoteAgreeView toggleAgree(Long userId, Long quoteId) {
-        getQuote(quoteId);
+        BookQuote quote = getQuote(quoteId);
         var existing = agreeRepository.findByUserIdAndQuoteId(userId, quoteId);
         boolean agreed;
         if (existing.isPresent()) {
@@ -156,6 +159,7 @@ public class QuoteService {
         } else {
             agreeRepository.save(QuoteAgree.builder().userId(userId).quoteId(quoteId).build());
             agreed = true;
+            notifyQuoteAgreed(userId, quote);
         }
         return new QuoteAgreeView(agreed, agreeRepository.countByQuoteId(quoteId));
     }
@@ -165,6 +169,19 @@ public class QuoteService {
     private BookQuote getQuote(Long quoteId) {
         return quoteRepository.findById(quoteId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.QUOTE_NOT_FOUND));
+    }
+
+    private void notifyQuoteAgreed(Long userId, BookQuote quote) {
+        if (quote.isOwnedBy(userId)) {
+            return;
+        }
+        User user = userRepository.findById(userId).orElse(null);
+        String nickname = user == null ? "누군가" : user.getNickname();
+        notificationService.inApp(new NotificationService.NotificationRequest(
+                quote.getUserId(), NotificationType.QUOTE_AGREED, null, quote.getReadingRecordId(), null,
+                "밑줄에 공감이 붙었어요",
+                nickname + "님이 내 밑줄에 공감했습니다.",
+                Map.of("quoteId", quote.getId(), "fromUserId", userId), null));
     }
 
     private PageResponse<BookQuoteView> toPageResponse(Page<BookQuote> page, Long userId,

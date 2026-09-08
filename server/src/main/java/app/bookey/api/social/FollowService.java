@@ -2,10 +2,12 @@ package app.bookey.api.social;
 
 import app.bookey.api.social.dto.SocialDtos.FollowCodeView;
 import app.bookey.api.social.dto.SocialDtos.FollowUserView;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.PublicIdGenerator;
+import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.social.FollowSource;
 import app.bookey.domain.social.UserFollow;
 import app.bookey.domain.social.UserFollowRepository;
@@ -39,6 +41,7 @@ public class FollowService {
     private final UserFollowRepository followRepository;
     private final UserPublicIdRepository publicIdRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
     private final Clock clock;
 
     /** 내 팔로우 코드 — 없으면 만든다. QR 은 클라이언트가 딥링크로 그린다. */
@@ -84,11 +87,21 @@ public class FollowService {
     /** 양방향 팔로우를 보장한다 — 이미 있는 방향은 그대로 둔다. 엽서 답장 성립 시에도 쓰인다. */
     @Transactional
     public void ensureMutual(Long a, Long b, FollowSource source) {
+        boolean createdAtoB = false;
+        boolean createdBtoA = false;
         if (!followRepository.existsByFollowerIdAndFolloweeId(a, b)) {
             followRepository.save(UserFollow.builder().followerId(a).followeeId(b).source(source).build());
+            createdAtoB = true;
         }
         if (!followRepository.existsByFollowerIdAndFolloweeId(b, a)) {
             followRepository.save(UserFollow.builder().followerId(b).followeeId(a).source(source).build());
+            createdBtoA = true;
+        }
+        if (createdAtoB) {
+            notifyConnected(b, a);
+        }
+        if (createdBtoA) {
+            notifyConnected(a, b);
         }
     }
 
@@ -155,6 +168,16 @@ public class FollowService {
             }
         }
         throw ApiException.of(ErrorCode.INTERNAL_ERROR);
+    }
+
+    private void notifyConnected(Long userId, Long counterpartId) {
+        User counterpart = userRepository.findById(counterpartId).orElse(null);
+        String nickname = counterpart == null ? "상대" : counterpart.getNickname();
+        notificationService.inApp(new NotificationService.NotificationRequest(
+                userId, NotificationType.FOLLOW_CONNECTED, null, null, null,
+                "서로 연결됐어요",
+                nickname + "님과 맞팔로우가 되었습니다.",
+                Map.of("userId", counterpartId), null));
     }
 
     private static FollowCodeView toCodeView(UserPublicId publicId) {

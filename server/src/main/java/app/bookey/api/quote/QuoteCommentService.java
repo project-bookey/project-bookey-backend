@@ -2,10 +2,13 @@ package app.bookey.api.quote;
 
 import app.bookey.api.quote.dto.QuoteDtos.CreateQuoteCommentRequest;
 import app.bookey.api.quote.dto.QuoteDtos.QuoteCommentView;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
+import app.bookey.domain.notification.NotificationType;
+import app.bookey.domain.quote.BookQuote;
 import app.bookey.domain.quote.BookQuoteRepository;
 import app.bookey.domain.quote.QuoteComment;
 import app.bookey.domain.quote.QuoteCommentRepository;
@@ -36,6 +39,7 @@ public class QuoteCommentService {
     private final QuoteCommentRepository commentRepository;
     private final BookQuoteRepository quoteRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
 
     /**
@@ -73,7 +77,7 @@ public class QuoteCommentService {
     /** parentId 를 주면 그 댓글의 답글이 된다. 답글에는 답글을 달 수 없다(1단계). */
     @Transactional
     public QuoteCommentView create(Long userId, Long quoteId, CreateQuoteCommentRequest request) {
-        requireQuote(quoteId);
+        BookQuote quote = getQuote(quoteId);
         rateLimiter.require("quote:comment:" + userId, CREATE_RATE_LIMIT, Duration.ofMinutes(1));
 
         Long parentId = request.parentId() == null
@@ -88,6 +92,7 @@ public class QuoteCommentService {
                 .build());
 
         User author = userRepository.findById(userId).orElse(null);
+        notifyQuoteCommented(userId, author, quote, parentId);
         return assembleViews(List.of(comment), userId,
                 author == null ? Map.of() : Map.of(userId, author), Map.of()).get(0);
     }
@@ -110,6 +115,23 @@ public class QuoteCommentService {
         if (!quoteRepository.existsById(quoteId)) {
             throw ApiException.of(ErrorCode.QUOTE_NOT_FOUND);
         }
+    }
+
+    private BookQuote getQuote(Long quoteId) {
+        return quoteRepository.findById(quoteId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.QUOTE_NOT_FOUND));
+    }
+
+    private void notifyQuoteCommented(Long commenterId, User commenter, BookQuote quote, Long parentId) {
+        if (quote.isOwnedBy(commenterId)) {
+            return;
+        }
+        String nickname = commenter == null ? "누군가" : commenter.getNickname();
+        notificationService.inApp(new NotificationService.NotificationRequest(
+                quote.getUserId(), NotificationType.QUOTE_COMMENTED, null, quote.getReadingRecordId(), null,
+                parentId == null ? "밑줄에 댓글이 달렸어요" : "밑줄에 답글이 달렸어요",
+                nickname + "님이 내 밑줄에 댓글을 남겼습니다.",
+                Map.of("quoteId", quote.getId(), "commenterId", commenterId), null));
     }
 
     /** 경로의 밑줄에 달린 댓글만 찾는다 — 다른 밑줄의 댓글 id 는 없는 것으로 본다. */

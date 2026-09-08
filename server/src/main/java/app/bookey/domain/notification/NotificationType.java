@@ -14,6 +14,16 @@ public enum NotificationType {
     ACHIEVEMENT(false),
     CLEANUP(false),
 
+    // 소셜 즉시 알림 — 푸시 설정과 별개로 인앱 목록에는 항상 남긴다.
+    POSTCARD_RECEIVED(false),
+    POSTCARD_REPLIED(false),
+    FOLLOW_CONNECTED(false),
+    CHAT_MESSAGE(false),
+    POST_LIKED(false),
+    POST_COMMENTED(false),
+    QUOTE_AGREED(false),
+    QUOTE_COMMENTED(false),
+
     // 모임 (모임당 일 1건 / 전체 일 3건 — 개인 한도와 별도)
     CLUB_CHECKPOINT_DUE(true),
     CLUB_CHECKPOINT_RESULT(true),
