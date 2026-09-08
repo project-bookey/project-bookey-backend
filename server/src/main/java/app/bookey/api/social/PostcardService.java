@@ -117,6 +117,17 @@ public class PostcardService {
         return toPage(postcardRepository.findAllByFromUserIdOrderByIdDesc(userId, pageable), userId);
     }
 
+    /** 보낸 사람 또는 받은 사람만 지울 수 있다 — 남의 엽서는 존재도 드러내지 않는다. */
+    @Transactional
+    public void delete(Long userId, Long postcardId) {
+        Postcard postcard = postcardRepository.findById(postcardId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.POSTCARD_NOT_FOUND));
+        if (!postcard.isParticipant(userId)) {
+            throw ApiException.of(ErrorCode.POSTCARD_NOT_FOUND);
+        }
+        postcardRepository.delete(postcard);
+    }
+
     /** 16글자(grapheme) 검사 — §14.9 확정: 한글 완성형 글자 기준. */
     private String requireBody(String raw) {
         String body = raw.trim();

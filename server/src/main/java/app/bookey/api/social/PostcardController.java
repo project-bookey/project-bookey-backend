@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -50,5 +51,13 @@ public class PostcardController {
                               @PathVariable Long postcardId,
                               @Valid @RequestBody ReplyPostcardRequest request) {
         return postcardService.reply(user.id(), postcardId, request);
+    }
+
+    @Operation(summary = "엽서 삭제 — 보낸 사람 또는 받은 사람만")
+    @DeleteMapping("/{postcardId}")
+    public ResponseEntity<Void> delete(@AuthenticationPrincipal AuthUser user,
+                                       @PathVariable Long postcardId) {
+        postcardService.delete(user.id(), postcardId);
+        return ResponseEntity.noContent().build();
     }
 }

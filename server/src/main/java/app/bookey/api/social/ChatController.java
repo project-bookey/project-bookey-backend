@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -52,5 +53,13 @@ public class ChatController {
                                 @PathVariable Long chatId,
                                 @Valid @RequestBody SendMessageRequest request) {
         return chatService.send(user.id(), chatId, request);
+    }
+
+    @Operation(summary = "채팅방 삭제 — 참가자만, 메시지도 함께 삭제된다")
+    @DeleteMapping("/{chatId}")
+    public ResponseEntity<Void> delete(@AuthenticationPrincipal AuthUser user,
+                                       @PathVariable Long chatId) {
+        chatService.delete(user.id(), chatId);
+        return ResponseEntity.noContent().build();
     }
 }

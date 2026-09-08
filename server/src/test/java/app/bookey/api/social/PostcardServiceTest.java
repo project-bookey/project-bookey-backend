@@ -218,4 +218,15 @@ class PostcardServiceTest {
         assertApiError(() -> service.reply(2L, 100L, new ReplyPostcardRequest("또")),
                 ErrorCode.POSTCARD_ALREADY_REPLIED);
     }
+
+    @Test
+    @DisplayName("삭제 — 보낸 사람 또는 받은 사람만 삭제할 수 있고, 남의 엽서는 없는 것처럼 보인다")
+    void deleteOnlyParticipant() {
+        Postcard card = sentCard(false);
+
+        service.delete(1L, 100L);
+        verify(postcardRepository).delete(card);
+
+        assertApiError(() -> service.delete(9L, 100L), ErrorCode.POSTCARD_NOT_FOUND);
+    }
 }

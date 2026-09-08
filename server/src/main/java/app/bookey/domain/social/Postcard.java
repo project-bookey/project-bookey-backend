@@ -64,6 +64,10 @@ public class Postcard extends BaseTimeEntity {
         return toUserId.equals(userId);
     }
 
+    public boolean isParticipant(Long userId) {
+        return fromUserId.equals(userId) || toUserId.equals(userId);
+    }
+
     public boolean isReplied() {
         return status == PostcardStatus.REPLIED;
     }

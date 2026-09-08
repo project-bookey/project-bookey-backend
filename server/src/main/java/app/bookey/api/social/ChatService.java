@@ -123,6 +123,13 @@ public class ChatService {
         return toMessageView(message, userId);
     }
 
+    /** 채팅방 삭제 — 참가자만. DB FK 가 메시지를 함께 지운다. */
+    @Transactional
+    public void delete(Long userId, Long chatId) {
+        Chat chat = participantChat(userId, chatId);
+        chatRepository.delete(chat);
+    }
+
     /** 없는 방과 남의 방은 똑같이 CHAT_NOT_FOUND — 방의 존재를 드러내지 않는다. */
     private Chat participantChat(Long userId, Long chatId) {
         Chat chat = chatRepository.findById(chatId)

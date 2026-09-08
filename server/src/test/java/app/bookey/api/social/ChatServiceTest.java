@@ -197,4 +197,17 @@ class ChatServiceTest {
         service.messages(1L, 10L, 50L);
         assertThat(chat.lastReadOf(1L)).isNull();
     }
+
+    @Test
+    @DisplayName("삭제 — 참가자만 방을 삭제할 수 있고, 남의 방은 없는 것처럼 보인다")
+    void deleteOnlyParticipant() {
+        Chat chat = Chat.of(1L, 2L);
+        set(chat, "id", 10L);
+        when(chatRepository.findById(10L)).thenReturn(Optional.of(chat));
+
+        service.delete(1L, 10L);
+        verify(chatRepository).delete(chat);
+
+        assertApiError(() -> service.delete(9L, 10L), ErrorCode.CHAT_NOT_FOUND);
+    }
 }
