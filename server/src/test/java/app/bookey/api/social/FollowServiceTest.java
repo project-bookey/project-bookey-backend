@@ -2,6 +2,7 @@ package app.bookey.api.social;
 
 import app.bookey.api.social.dto.SocialDtos.FollowCodeView;
 import app.bookey.api.social.dto.SocialDtos.FollowUserView;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PublicIdGenerator;
@@ -38,9 +39,10 @@ class FollowServiceTest {
     private final UserFollowRepository followRepository = mock(UserFollowRepository.class);
     private final UserPublicIdRepository publicIdRepository = mock(UserPublicIdRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
     private final Clock clock = mock(Clock.class);
     private final FollowService service =
-            new FollowService(followRepository, publicIdRepository, userRepository, clock);
+            new FollowService(followRepository, publicIdRepository, userRepository, notificationService, clock);
 
     private static void set(Object target, String field, Object value) {
         try {

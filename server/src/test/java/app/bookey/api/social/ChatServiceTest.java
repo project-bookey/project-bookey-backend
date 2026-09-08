@@ -4,6 +4,7 @@ import app.bookey.api.social.dto.ChatDtos.ChatMessageView;
 import app.bookey.api.social.dto.ChatDtos.ChatMessagesView;
 import app.bookey.api.social.dto.ChatDtos.ChatSummaryView;
 import app.bookey.api.social.dto.ChatDtos.SendMessageRequest;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.RateLimiter;
@@ -40,10 +41,11 @@ class ChatServiceTest {
     private final ChatMessageRepository messageRepository = mock(ChatMessageRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final FollowService followService = mock(FollowService.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
     private final RateLimiter rateLimiter = mock(RateLimiter.class);
     private final Clock clock = mock(Clock.class);
     private final ChatService service = new ChatService(
-            chatRepository, messageRepository, userRepository, followService, rateLimiter, clock);
+            chatRepository, messageRepository, userRepository, followService, notificationService, rateLimiter, clock);
 
     private static void set(Object target, String field, Object value) {
         Class<?> type = target.getClass();

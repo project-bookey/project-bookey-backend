@@ -3,6 +3,7 @@ package app.bookey.api.social;
 import app.bookey.api.social.dto.SocialDtos.PostcardView;
 import app.bookey.api.social.dto.SocialDtos.ReplyPostcardRequest;
 import app.bookey.api.social.dto.SocialDtos.SendPostcardRequest;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
@@ -50,11 +51,12 @@ class PostcardServiceTest {
     private final PostRepository postRepository = mock(PostRepository.class);
     private final WalletService walletService = mock(WalletService.class);
     private final FollowService followService = mock(FollowService.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
     private final Clock clock = mock(Clock.class);
     private final BookeyProperties properties =
             new BookeyProperties(null, null, null, null, null, null, SOCIAL, null, null);
     private final PostcardService service = new PostcardService(
-            postcardRepository, userRepository, postRepository, walletService, followService, properties, clock);
+            postcardRepository, userRepository, postRepository, walletService, followService, notificationService, properties, clock);
 
     private final Wallet wallet = new Wallet(1L, LocalDate.of(2026, 9, 6));
 
