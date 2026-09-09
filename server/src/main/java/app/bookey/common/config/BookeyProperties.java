@@ -16,7 +16,8 @@ public record BookeyProperties(
         Notification notification,
         Social social,
         Payment payment,
-        Storage storage
+        Storage storage,
+        Mail mail
 ) {
 
     /** 소셜 피드 경제 (§14.2) — 엽서·우표·책갈피·구독 정책. */
@@ -54,6 +55,9 @@ public record BookeyProperties(
             Duration refreshTokenTtl,
             Duration adminTokenTtl
     ) {}
+
+    /** 이메일 발송 설정. enabled=false 면 로컬 개발용 로그 발송기로 대체된다. */
+    public record Mail(boolean enabled, String from, String fromName, String subjectPrefix) {}
 
     public record BookApi(
             String kakaoKey,

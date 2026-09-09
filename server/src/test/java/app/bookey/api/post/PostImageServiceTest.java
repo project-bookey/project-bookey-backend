@@ -99,7 +99,7 @@ class PostImageServiceTest {
         return new BookeyProperties(null, null, null, null, null, null, null, null, new BookeyProperties.Storage("local",
                 new BookeyProperties.Storage.Local("./uploads", ""),
                 new BookeyProperties.Storage.Gcs(""),
-                new BookeyProperties.Storage.Image(maxBytes, 10)));
+                new BookeyProperties.Storage.Image(maxBytes, 10)), null);
     }
 
     /** PNG 시그니처 + IHDR(너비·높이) — 스니퍼가 크기를 읽는 앞 24바이트 뒤에 채움을 붙여 원하는 길이로 만든다. */

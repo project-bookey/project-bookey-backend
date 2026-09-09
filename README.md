@@ -93,6 +93,10 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 | `KAKAO_REST_KEY` | 카카오 책 검색 (1차 검색) |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI (페이지 수 보강) |
 | `GOOGLE_BOOKS_KEY` | Google Books (해외서 폴백, 선택) |
+| `SIGNUP_VERIFICATION` | 가입 인증 방식 — 운영은 `EMAIL_CODE` |
+| `MAIL_ENABLED` | `true`면 인증 코드를 SMTP로 발송. `false`면 로그 발송기 사용 |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` | 인증 코드 메일 발송용 SMTP 접속 정보 |
+| `MAIL_FROM` | 발신자 이메일 주소 |
 | `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | 운영 최초 관리자 생성용. 관리자 계정이 0명일 때만 사용 |
 | `STORAGE_TYPE` | 독후감 사진 저장소 — `local`(기본) / `gcs` / `none`(업로드 끔). `prod` 프로파일 기본값은 `none` |
 | `STORAGE_LOCAL_DIR` | `local` 일 때 파일을 둘 디렉터리 (기본 `./uploads` → `server/uploads`) |
@@ -140,7 +144,16 @@ GitHub Repository Secrets:
 | `KAKAO_REST_KEY` | 카카오 책 검색 API 키 |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI 키 |
 | `GOOGLE_BOOKS_KEY` | Google Books API 키 |
+| `SMTP_HOST` | 인증 코드 메일 SMTP 호스트 |
+| `SMTP_PORT` | 인증 코드 메일 SMTP 포트. STARTTLS 기준 보통 `587` |
+| `SMTP_USERNAME` | SMTP 사용자 |
+| `SMTP_PASSWORD` | SMTP 비밀번호 또는 앱 비밀번호 |
+| `MAIL_FROM` | 인증 코드 메일 발신자 주소 |
 | `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | 운영 최초 관리자 생성용. 최초 로그인 후 제거 권장 |
+
+Gmail 발송 계정을 쓸 때는 GitHub Secrets 에 `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`,
+`SMTP_USERNAME=<발송용 Gmail 주소>`, `SMTP_PASSWORD=<Gmail 앱 비밀번호>`, `MAIL_FROM=<발송용 Gmail 주소>` 를 넣는다.
+Google 계정 비밀번호를 그대로 쓰지 말고 2단계 인증을 켠 뒤 발급한 앱 비밀번호를 사용한다.
 
 ### 업로드 저장소 (운영) — 지금은 꺼져 있다
 

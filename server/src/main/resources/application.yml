@@ -80,6 +80,11 @@ bookey:
       cooldown: PT1M
       max-attempts: 5
       expose: ${AUTH_EMAIL_CODE_EXPOSE:true}   # 코드 발급 응답에 코드 동봉(로컬 개발·스모크 편의). 운영은 application-prod.yml 이 끈다
+  mail:
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:no-reply@bookey.local}
+    from-name: ${MAIL_FROM_NAME:Bookey}
+    subject-prefix: ${MAIL_SUBJECT_PREFIX:[Bookey]}
   book-api:
     kakao-key: ${KAKAO_REST_KEY:}
     aladin-ttb-key: ${ALADIN_TTB_KEY:}

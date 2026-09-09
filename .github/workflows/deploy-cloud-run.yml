@@ -91,7 +91,17 @@ jobs:
             ALADIN_TTB_KEY=${{ secrets.ALADIN_TTB_KEY }}
             GOOGLE_BOOKS_KEY=${{ secrets.GOOGLE_BOOKS_KEY }}
             YES24_API_KEY=${{ secrets.YES24_API_KEY }}
-            SIGNUP_VERIFICATION=NONE
+            SIGNUP_VERIFICATION=EMAIL_CODE
+            MAIL_ENABLED=true
+            SPRING_MAIL_HOST=${{ secrets.SMTP_HOST }}
+            SPRING_MAIL_PORT=${{ secrets.SMTP_PORT }}
+            SPRING_MAIL_USERNAME=${{ secrets.SMTP_USERNAME }}
+            SPRING_MAIL_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+            SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=true
+            SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE=true
+            MAIL_FROM=${{ secrets.MAIL_FROM }}
+            MAIL_FROM_NAME=Bookey
+            MAIL_SUBJECT_PREFIX=[Bookey]
             ADMIN_BOOTSTRAP_EMAIL=${{ secrets.ADMIN_BOOTSTRAP_EMAIL }}
             ADMIN_BOOTSTRAP_PASSWORD=${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
 
