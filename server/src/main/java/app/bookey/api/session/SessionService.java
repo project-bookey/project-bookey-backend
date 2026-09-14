@@ -6,9 +6,11 @@ import app.bookey.api.library.ProgressService;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookRepository;
+import app.bookey.domain.club.Club;
 import app.bookey.domain.club.ClubMember;
 import app.bookey.domain.club.ClubMemberRepository;
 import app.bookey.domain.club.ClubMemberStatus;
+import app.bookey.domain.club.ClubRepository;
 import app.bookey.domain.notification.Notification;
 import app.bookey.domain.notification.NotificationRepository;
 import app.bookey.domain.reading.*;
@@ -22,6 +24,8 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /** 독서 세션 기록 (§F3). */
 @Slf4j
@@ -33,6 +37,7 @@ public class SessionService {
     private final ReadingRecordRepository recordRepository;
     private final BookRepository bookRepository;
     private final ClubMemberRepository clubMemberRepository;
+    private final ClubRepository clubRepository;
     private final NotificationRepository notificationRepository;
     private final ProgressService progressService;
 
@@ -159,12 +164,17 @@ public class SessionService {
         List<ClubMember> memberships = clubMemberRepository
                 .findAllByReadingRecordIdAndStatus(record.getId(), ClubMemberStatus.ACTIVE);
         List<ClubProgressEcho> result = new ArrayList<>();
+        // 세션 종료 뒤 읽기로그 화면이 모임 이름을 보여줘야 해서 함께 싣는다.
+        Map<Long, String> clubNames = clubRepository
+                .findAllById(memberships.stream().map(ClubMember::getClubId).toList()).stream()
+                .collect(Collectors.toMap(Club::getId, Club::getName));
         for (ClubMember membership : memberships) {
             membership.touchLastRead(readAt);
             List<ClubMember> peers = clubMemberRepository
                     .findAllByClubIdAndStatus(membership.getClubId(), ClubMemberStatus.ACTIVE);
             int rank = calculateRank(record, peers);
-            result.add(new ClubProgressEcho(membership.getClubId(), null, rank, peers.size()));
+            result.add(new ClubProgressEcho(membership.getClubId(), clubNames.get(membership.getClubId()),
+                    rank, peers.size()));
         }
         return result;
     }

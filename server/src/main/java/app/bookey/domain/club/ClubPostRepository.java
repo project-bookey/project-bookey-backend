@@ -20,6 +20,7 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
             WHERE p.clubId = :clubId
               AND p.parentId IS NULL
               AND p.status = 'VISIBLE'
+              AND p.type <> 'LOG'
             ORDER BY p.pinned DESC, p.createdAt DESC
             """)
     Page<ClubPost> findFeed(@Param("clubId") Long clubId, Pageable pageable);
@@ -30,12 +31,34 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
             WHERE p.clubId = :clubId
               AND p.parentId IS NULL
               AND p.status = 'VISIBLE'
+              AND p.type <> 'LOG'
               AND (p.anchorPage IS NULL OR p.anchorPage <= :maxAnchorPage)
             ORDER BY p.pinned DESC, p.createdAt DESC
             """)
     Page<ClubPost> findFeedUpTo(@Param("clubId") Long clubId,
                                 @Param("maxAnchorPage") int maxAnchorPage,
                                 Pageable pageable);
+
+    /** 읽기로그 보드 — 기간 안의 조각, 오래된 순. */
+    @Query("""
+            SELECT p FROM ClubPost p
+            WHERE p.clubId = :clubId
+              AND p.type = 'LOG'
+              AND p.status = 'VISIBLE'
+              AND p.createdAt >= :from AND p.createdAt < :to
+            ORDER BY p.createdAt ASC
+            """)
+    List<ClubPost> findLogs(@Param("clubId") Long clubId, @Param("from") Instant from, @Param("to") Instant to);
+
+    /** 요일 스트립 — 기간 안 조각의 작성 시각만. 날짜 묶기는 KST 로 서비스가 한다. */
+    @Query("""
+            SELECT p.createdAt FROM ClubPost p
+            WHERE p.clubId = :clubId
+              AND p.type = 'LOG'
+              AND p.status = 'VISIBLE'
+              AND p.createdAt >= :from AND p.createdAt < :to
+            """)
+    List<Instant> findLogTimes(@Param("clubId") Long clubId, @Param("from") Instant from, @Param("to") Instant to);
 
     List<ClubPost> findAllByParentIdAndStatusOrderByCreatedAtAsc(Long parentId, String status);
 

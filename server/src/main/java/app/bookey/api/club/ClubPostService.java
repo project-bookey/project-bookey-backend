@@ -128,6 +128,9 @@ public class ClubPostService {
         rateLimiter.require("club:post:" + userId, POST_RATE_LIMIT, Duration.ofMinutes(1));
 
         ClubPostType type = request.type() == null ? ClubPostType.DISCUSSION : request.type();
+        if (type == ClubPostType.LOG) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "읽기로그 조각은 조각 남기기로만 올릴 수 있습니다.");
+        }
         if (type.requiresModerator() && !me.canModerate()) {
             throw new ApiException(ErrorCode.FORBIDDEN, "공지는 호스트·운영자만 작성할 수 있습니다.");
         }
@@ -268,6 +271,24 @@ public class ClubPostService {
         }
     }
 
+    /**
+     * 토론 목록 밖에서 같은 가림 규칙으로 글을 그릴 때 쓴다(읽기로그 보드 등). 댓글은 싣지 않는다.
+     * 뷰어 진도·공개 기록·내 반응을 한 번에 불러 글 수와 무관하게 쿼리 수가 고정된다.
+     */
+    List<ClubPostView> viewsFor(ClubMember viewer, List<ClubPost> posts) {
+        if (posts.isEmpty()) {
+            return List.of();
+        }
+        Long userId = viewer.getUserId();
+        ViewerState state = viewerState(viewer);
+        Map<Long, User> authors = loadAuthors(posts);
+        Set<Long> revealed = loadRevealed(userId, posts);
+        Map<Long, List<String>> myReactions = loadMyReactions(userId, posts);
+        return posts.stream()
+                .map(post -> toView(post, state, userId, authors, revealed, myReactions, List.of()))
+                .toList();
+    }
+
     // ────────────────────────────── 내부 ──────────────────────────────
 
     private ClubPost getPost(Long clubId, Long postId) {
@@ -349,6 +370,9 @@ public class ClubPostService {
                 post.getReactionCount(),
                 myReactions.getOrDefault(post.getId(), List.of()),
                 post.getCreatedAt() == null ? Instant.now() : post.getCreatedAt(),
-                commentViews);
+                commentViews,
+                masked ? null : post.getImageUrl(),      // 사진도 본문과 같이 가린다
+                masked ? null : post.getImageWidth(),
+                masked ? null : post.getImageHeight());
     }
 }

@@ -198,7 +198,33 @@ public final class ClubDtos {
             int reactionCount,
             List<String> myReactions,
             @NotNull Instant createdAt,
-            List<ClubPostView> comments
+            List<ClubPostView> comments,
+            /** 읽기로그 조각 사진. 가려진 조각은 본문과 함께 null 이다. */
+            String imageUrl,
+            Integer imageWidth,
+            Integer imageHeight
+    ) {}
+
+    // ── 읽기로그 ─────────────────────────────────────────────
+    /** 하루 보드 — 그날의 조각과 모임 합산. */
+    public record ClubLogDayView(
+            @NotNull LocalDate date,
+            List<ClubPostView> logs,
+            @NotNull ClubLogSummary summary
+    ) {}
+
+    /** 그날 끝난 세션 합산(진척 공개 멤버만) + 조각 수. */
+    public record ClubLogSummary(long pagesRead, long durationSec, long readerCount, int logCount) {}
+
+    /** 요일 스트립 한 칸. */
+    public record ClubLogDayCount(@NotNull LocalDate date, int logCount) {}
+
+    /** 지금 읽는 중인 멤버 — 열린 독서 세션이 있는 사람. */
+    public record ReadingNowView(
+            @NotNull Long userId,
+            @NotNull String nickname,
+            String avatarUrl,
+            @NotNull Instant startedAt
     ) {}
 
     public record ReactionRequest(@NotNull ReactionKind kind) {}

@@ -80,4 +80,20 @@ public interface ReadingSessionRepository extends JpaRepository<ReadingSession, 
     long countSessionsSince(@Param("since") Instant since);
 
     long countByUserId(Long userId);
+
+    /** 모임 읽기로그 합산 — 기간 안에 끝난 세션의 읽은 쪽·시간·읽은 사람 수. */
+    @Query("""
+            SELECT new app.bookey.domain.reading.SessionTotals(
+                SUM(CASE WHEN s.endPage > s.startPage THEN CAST(s.endPage - s.startPage AS Long) ELSE 0L END),
+                SUM(CAST(s.durationSec AS Long)),
+                COUNT(DISTINCT s.userId))
+            FROM ReadingSession s
+            WHERE s.readingRecordId IN :recordIds
+              AND s.endedAt >= :from AND s.endedAt < :to
+            """)
+    SessionTotals sumTotalsEndedBetween(@Param("recordIds") List<Long> recordIds,
+                                        @Param("from") Instant from, @Param("to") Instant to);
+
+    /** 지금 읽는 중 — 기록들 중 열린 세션. */
+    List<ReadingSession> findAllByReadingRecordIdInAndEndedAtIsNull(List<Long> recordIds);
 }

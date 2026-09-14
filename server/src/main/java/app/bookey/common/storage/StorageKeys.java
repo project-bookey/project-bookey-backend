@@ -23,6 +23,12 @@ public final class StorageKeys {
                 + UUID.randomUUID() + "." + safeExtension(extension);
     }
 
+    /** clubs/{clubId}/{userId}/{yyyy}/{MM}/{uuid}.{ext} — 읽기로그 조각 사진. */
+    public static String forClubLog(long clubId, long userId, Instant now, String extension) {
+        return "clubs/" + clubId + "/" + userId + "/" + YEAR_MONTH.format(now) + "/"
+                + UUID.randomUUID() + "." + safeExtension(extension);
+    }
+
     /** avatars/{userId}/{uuid}.{ext} — 프로필 사진. */
     public static String forAvatar(long userId, String extension) {
         return "avatars/" + userId + "/" + UUID.randomUUID() + "." + safeExtension(extension);

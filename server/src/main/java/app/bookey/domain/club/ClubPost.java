@@ -63,6 +63,23 @@ public class ClubPost extends BaseTimeEntity {
     @Column(nullable = false, length = 10)
     private String status = "VISIBLE";
 
+    /** 읽기로그 조각 사진 — LOG 에만 쓴다. 가려질 때는 본문과 함께 내려보내지 않는다. */
+    @Column(name = "image_url", length = 500)
+    private String imageUrl;
+
+    @Column(name = "image_storage_key", length = 300, unique = true)
+    private String imageStorageKey;
+
+    @Column(name = "image_width")
+    private Integer imageWidth;
+
+    @Column(name = "image_height")
+    private Integer imageHeight;
+
+    /** 이 조각을 남긴 독서 세션 — LOG 에만 쓴다. */
+    @Column(name = "reading_session_id")
+    private Long readingSessionId;
+
     @Builder
     private ClubPost(Long clubId, Long clubBookId, Long userId, Long parentId, ClubPostType type,
                      String body, Integer anchorPage, SpoilerLevel spoilerLevel, Long linkedPostId) {
@@ -76,6 +93,34 @@ public class ClubPost extends BaseTimeEntity {
         this.spoilerLevel = resolveSpoilerLevel(spoilerLevel, anchorPage);
         this.linkedPostId = linkedPostId;
         this.status = "VISIBLE";
+    }
+
+    /** 사진 한 장의 저장 정보. */
+    public record LogImage(String url, String storageKey, Integer width, Integer height) {}
+
+    /**
+     * 읽기로그 조각. 본문(한 줄)과 사진 중 하나는 있어야 한다 — 검사는 서비스가 맡는다.
+     * 쪽에 붙이면 기본 스포일러는 PAGE 라 그 쪽까지 읽은 멤버에게만 보인다.
+     */
+    public static ClubPost log(Long clubId, Long clubBookId, Long userId, String body, Integer anchorPage,
+                               SpoilerLevel spoilerLevel, Long readingSessionId, LogImage image) {
+        ClubPost post = ClubPost.builder()
+                .clubId(clubId)
+                .clubBookId(clubBookId)
+                .userId(userId)
+                .type(ClubPostType.LOG)
+                .body(body == null ? "" : body)
+                .anchorPage(anchorPage)
+                .spoilerLevel(spoilerLevel)
+                .build();
+        post.readingSessionId = readingSessionId;
+        if (image != null) {
+            post.imageUrl = image.url();
+            post.imageStorageKey = image.storageKey();
+            post.imageWidth = image.width();
+            post.imageHeight = image.height();
+        }
+        return post;
     }
 
     private static SpoilerLevel resolveSpoilerLevel(SpoilerLevel requested, Integer anchorPage) {
