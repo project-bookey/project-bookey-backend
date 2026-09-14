@@ -68,12 +68,16 @@ public class ClubService {
         if (request.endsAt().isBefore(request.startsAt())) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "종료일이 시작일보다 빠릅니다.");
         }
-        Book book = bookRepository.findById(request.bookId())
-                .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
-
         short memberLimit = request.memberLimit() == null
                 ? (short) properties.club().defaultMemberLimit()
                 : request.memberLimit().shortValue();
+        if (memberLimit > properties.club().freeMemberLimit()) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST,
+                    "정원은 " + properties.club().freeMemberLimit() + "명까지 고를 수 있습니다. 더 필요하면 모임을 만든 뒤 자리를 늘려 주세요.");
+        }
+
+        Book book = bookRepository.findById(request.bookId())
+                .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
 
         Club club = clubRepository.save(Club.builder()
                 .ownerId(userId)
@@ -222,14 +226,16 @@ public class ClubService {
     @Transactional
     public ClubHomeView join(Long userId, JoinRequest request) {
         String code = JoinCodeGenerator.normalize(request.code());
-        Club club = clubRepository.findByJoinCode(code)
+        // 정원 검사 전에 모임 행을 잠근다 — 동시 참가가 정원을 넘지 않게.
+        Club club = clubRepository.findByJoinCodeForUpdate(code)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_CODE_INVALID));
         return joinClub(userId, club, request.adoptTargetDate(), request.shareProgress());
     }
 
     @Transactional
     public ClubHomeView joinPublic(Long userId, Long clubId, JoinPublicRequest request) {
-        Club club = getClub(clubId);
+        Club club = clubRepository.findByIdForUpdate(clubId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_FOUND));
         if (club.getVisibility() != ClubVisibility.PUBLIC) {
             throw ApiException.of(ErrorCode.CLUB_NOT_FOUND);
         }
@@ -353,7 +359,7 @@ public class ClubService {
         Club club = getClub(clubId);
         requireHost(club, userId);
         club.update(request.name(), request.description(), request.visibility(),
-                request.memberLimit(), request.endsAt(), request.allowNudge());
+                request.endsAt(), request.allowNudge());
         return home(userId, clubId);
     }
 
@@ -466,7 +472,12 @@ public class ClubService {
                 club.getMemberCount(), club.getMemberLimit(),
                 me.getRole(), me.isShareProgress(), me.isAllowNudge(),
                 myRank, averageCompletion(members, records, book),
-                memberViews, checkpoints, next);
+                memberViews, checkpoints, next, seatPolicy());
+    }
+
+    private ClubSeatPolicy seatPolicy() {
+        BookeyProperties.Club policy = properties.club();
+        return new ClubSeatPolicy(policy.freeMemberLimit(), policy.maxMemberLimit(), policy.seatCostBookmarks());
     }
 
     private List<CheckpointView> checkpointViews(Long clubBookId, ClubMember me, int memberCount) {

@@ -97,8 +97,10 @@ bookey:
     apple-audiences: ${APPLE_OAUTH_AUDIENCES:app.bookey.mobile}
     kakao-app-id: ${KAKAO_APP_ID:}
   club:
-    default-member-limit: 20
-    max-member-limit: 50
+    default-member-limit: 3
+    max-member-limit: 6                   # 책갈피로 늘릴 수 있는 상한
+    free-member-limit: 3                  # 무료 정원 (호스트 포함)
+    seat-cost-bookmarks: 4                # 자리 1개당 책갈피
     nudge-cooldown: PT24H
     nudge-daily-limit: 3
     join-code-lookup-rate-limit: 10        # 분당

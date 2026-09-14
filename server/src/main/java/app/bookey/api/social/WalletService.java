@@ -80,6 +80,18 @@ public class WalletService {
         return toView(userId, wallet);
     }
 
+    /** 책갈피로 다른 도메인의 무언가를 산다(예: 모임 자리). 잠근 지갑에서 차감하고 원장에 참조를 남긴다. */
+    @Transactional
+    public Wallet spendBookmarks(Long userId, int amount, WalletTransactionKind kind,
+                                 String refType, Long refId) {
+        Wallet wallet = prepared(userId);
+        if (!wallet.trySpendBookmarks(amount)) {
+            throw ApiException.of(ErrorCode.INSUFFICIENT_BOOKMARK);
+        }
+        record(userId, kind, -amount, 0, 0, refType, refId);
+        return wallet;
+    }
+
     /** 엽서 발송 비용 지불 — 무료 일일분 우선, 없으면 보유 엽서. 무엇으로도 못 내면 예외. */
     @Transactional
     public void payPostcardSend(Long userId, Wallet wallet, Long postcardId) {

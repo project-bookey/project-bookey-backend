@@ -20,7 +20,8 @@ public final class ClubDtos {
             @NotNull LocalDate startsAt,
             @NotNull LocalDate endsAt,
             ClubVisibility visibility,
-            @Min(2) @Max(50) Integer memberLimit,
+            /** 무료 정원(bookey.club.free-member-limit) 이하만. 더 필요하면 만든 뒤 책갈피로 자리를 늘린다. */
+            @Min(2) Integer memberLimit,
             Boolean allowNudge,
             /** 주차별 체크포인트 자동 생성 (총 페이지를 주차 수로 균등 분배). */
             Boolean autoCheckpoints,
@@ -37,7 +38,6 @@ public final class ClubDtos {
             @Size(max = 60) String name,
             @Size(max = 1000) String description,
             ClubVisibility visibility,
-            @Min(2) @Max(50) Short memberLimit,
             LocalDate endsAt,
             Boolean allowNudge
     ) {}
@@ -61,6 +61,15 @@ public final class ClubDtos {
     public record KickRequest(@NotNull Long userId, @NotBlank @Size(max = 200) String reason) {}
 
     public record TransferHostRequest(@NotNull Long userId) {}
+
+    // ── 자리 늘리기 ───────────────────────────────────────────
+    /** 목표 정원 — 현재 정원보다 크고 최대 정원 이하. 차이만큼 책갈피를 쓴다. */
+    public record ExpandSeatsRequest(@NotNull @Min(3) Integer targetLimit) {}
+
+    public record ClubSeatResult(int memberLimit, int bookmarkBalance) {}
+
+    /** 앱이 가격·상한을 하드코딩하지 않도록 모임 홈에 함께 내린다. */
+    public record ClubSeatPolicy(int freeLimit, int maxLimit, int costPerSeat) {}
 
     // ── 조회 ─────────────────────────────────────────────────
 
@@ -145,7 +154,8 @@ public final class ClubDtos {
             Double averageCompletionRate,
             List<MemberProgressView> members,
             List<CheckpointView> checkpoints,
-            CheckpointView nextCheckpoint
+            CheckpointView nextCheckpoint,
+            @NotNull ClubSeatPolicy seatPolicy
     ) {}
 
     public record ClubResultView(

@@ -22,6 +22,7 @@ import java.util.Map;
 public class ClubController {
 
     private final ClubService clubService;
+    private final ClubSeatService seatService;
     private final ClubNudgeService nudgeService;
 
     @Operation(summary = "모임 만들기 — 초대 코드 자동 발급")
@@ -90,6 +91,14 @@ public class ClubController {
                                @PathVariable Long clubId,
                                @Valid @RequestBody UpdateClubRequest request) {
         return clubService.update(user.id(), clubId, request);
+    }
+
+    @Operation(summary = "자리 늘리기 (호스트) — 자리당 책갈피 차감, 모임이 끝나면 늘린 자리는 사라진다")
+    @PostMapping("/{clubId}/seats")
+    public ClubSeatResult expandSeats(@AuthenticationPrincipal AuthUser user,
+                                      @PathVariable Long clubId,
+                                      @Valid @RequestBody ExpandSeatsRequest request) {
+        return seatService.expand(user.id(), clubId, request);
     }
 
     @Operation(summary = "초대 코드 회전 (호스트) — 유출 시 즉시 무효화")

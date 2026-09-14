@@ -87,8 +87,9 @@ public class Club extends BaseTimeEntity {
         this.joinCode = newCode;
     }
 
+    /** 정원은 여기서 바꾸지 않는다 — 올리기는 책갈피 결제({@link #expandMemberLimit}), 내리기는 산 자리를 버리는 경로라 막는다. */
     public void update(String name, String description, ClubVisibility visibility,
-                       Short memberLimit, LocalDate endsAt, Boolean allowNudge) {
+                       LocalDate endsAt, Boolean allowNudge) {
         if (name != null && !name.isBlank()) {
             this.name = name;
         }
@@ -97,12 +98,6 @@ public class Club extends BaseTimeEntity {
         }
         if (visibility != null) {
             this.visibility = visibility;
-        }
-        if (memberLimit != null) {
-            if (memberLimit < this.memberCount) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST, "현재 인원보다 적게 줄일 수 없습니다.");
-            }
-            this.memberLimit = memberLimit;
         }
         if (endsAt != null) {
             if (endsAt.isBefore(this.startsAt)) {
@@ -126,6 +121,26 @@ public class Club extends BaseTimeEntity {
         if (this.status == ClubStatus.RECRUITING && this.memberCount >= 2) {
             this.status = ClubStatus.ACTIVE;
         }
+    }
+
+    /**
+     * 정원을 targetLimit 으로 늘리고 새로 연 자리 수를 돌려준다.
+     * 호스트 검사와 책갈피 결제는 서비스가 맡는다. 늘린 자리는 이 모임에만 속하고 종료 후에도 되돌리지 않는다
+     * — 종료된 모임은 참가가 막히므로 자리가 자연히 사라지고, 결산 화면은 최종 정원을 그대로 보여준다.
+     */
+    public int expandMemberLimit(int targetLimit, int maxLimit) {
+        if (status.isOver()) {
+            throw ApiException.of(ErrorCode.CLUB_ENDED);
+        }
+        if (targetLimit <= memberLimit) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "지금 정원보다 많은 인원을 골라 주세요.");
+        }
+        if (targetLimit > maxLimit) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "정원은 최대 " + maxLimit + "명까지 늘릴 수 있습니다.");
+        }
+        int added = targetLimit - memberLimit;
+        this.memberLimit = (short) targetLimit;
+        return added;
     }
 
     public void leaveMember() {
