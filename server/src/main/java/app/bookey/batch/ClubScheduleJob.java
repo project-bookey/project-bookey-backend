@@ -30,6 +30,7 @@ public class ClubScheduleJob {
     private final ClubMemberRepository memberRepository;
     private final ClubEventRepository eventRepository;
     private final NotificationService notificationService;
+    private final ClubPostRepository postRepository;
 
     /** 매시 정각 — 마감된 체크포인트를 평가한다. */
     @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
@@ -48,6 +49,38 @@ public class ClubScheduleJob {
         int notified = checkpointService.notifyUpcoming(from, to);
         if (notified > 0) {
             log.info("ClubScheduleJob: {} checkpoint reminders scheduled", notified);
+        }
+    }
+
+    /**
+     * 일요일 밤 — 이번 주 조각이 있는 진행 중 모임의 멤버에게 주간 카드 알림.
+     * 모임 알림 한도(모임당 하루 1건)는 NotificationService 가 건다.
+     */
+    @Scheduled(cron = "0 0 21 * * SUN", zone = "Asia/Seoul")
+    @Transactional(readOnly = true)
+    public void notifyWeeklyLogCards() {
+        LocalDate today = LocalDate.now(KST);
+        LocalDate monday = today.with(java.time.temporal.TemporalAdjusters.previousOrSame(java.time.DayOfWeek.MONDAY));
+        Instant from = monday.atStartOfDay(KST).toInstant();
+        Instant to = monday.plusDays(7).atStartOfDay(KST).toInstant();
+
+        int notified = 0;
+        for (Club club : clubRepository.findAllById(postRepository.findClubIdsWithLogsBetween(from, to))) {
+            if (club.getStatus().isOver()) {
+                continue;
+            }
+            for (ClubMember member :
+                    memberRepository.findAllByClubIdAndStatus(club.getId(), ClubMemberStatus.ACTIVE)) {
+                notificationService.schedule(new NotificationService.NotificationRequest(
+                        member.getUserId(), NotificationType.CLUB_WEEKLY_LOG, null, null, club.getId(),
+                        club.getName() + " — 이번 주 읽기로그",
+                        "함께 읽은 일주일이 카드 한 장으로 모였어요",
+                        Map.of("clubId", club.getId(), "weekOf", monday.toString()), null));
+                notified++;
+            }
+        }
+        if (notified > 0) {
+            log.info("ClubScheduleJob: {} weekly log cards scheduled", notified);
         }
     }
 

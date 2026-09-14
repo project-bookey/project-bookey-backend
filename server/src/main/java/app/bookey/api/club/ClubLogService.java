@@ -1,5 +1,6 @@
 package app.bookey.api.club;
 
+import app.bookey.api.book.dto.BookDtos.BookSummary;
 import app.bookey.api.club.dto.ClubDtos.*;
 import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
@@ -8,6 +9,7 @@ import app.bookey.common.storage.ImageSniffer;
 import app.bookey.common.storage.StorageKeys;
 import app.bookey.common.storage.StorageService;
 import app.bookey.common.support.RateLimiter;
+import app.bookey.domain.book.BookRepository;
 import app.bookey.domain.club.*;
 import app.bookey.domain.reading.ReadingSession;
 import app.bookey.domain.reading.ReadingSessionRepository;
@@ -44,12 +46,15 @@ public class ClubLogService {
     /** 요일 스트립이 한 번에 받는 최대 일수. */
     static final int MAX_DAY_RANGE = 14;
     private static final int SNIFF_BYTES = 64 * 1024;
+    /** 주간 카드에 붙이는 대표 조각 수 — 카드 콜라주 칸 수와 같다. */
+    static final int WEEK_HIGHLIGHTS = 6;
 
     private final ClubService clubService;
     private final ClubPostService postService;
     private final ClubPostRepository postRepository;
     private final ClubMemberRepository memberRepository;
     private final ClubBookRepository clubBookRepository;
+    private final BookRepository bookRepository;
     private final ReadingSessionRepository sessionRepository;
     private final UserRepository userRepository;
     private final StorageService storage;
@@ -173,6 +178,46 @@ public class ClubLogService {
         Instant to = day.plusDays(1).atStartOfDay(KST).toInstant();
 
         List<ClubPost> logs = postRepository.findLogs(clubId, from, to);
+        return new ClubLogDayView(day, postService.viewsFor(me, logs), summarize(clubId, from, to, logs.size()));
+    }
+
+    /**
+     * 주간 공유 카드 — weekOf 가 속한 주(월~일, KST). 비우면 이번 주.
+     * 대표 조각은 보는 사람에게 가려지지 않은 것 중 사진 있는 조각 → 반응 많은 조각 → 먼저 남긴 조각 순으로 6개.
+     * 카드는 이미지로 모임 밖에 공유되므로 가려진 조각·문장은 싣지 않는다.
+     */
+    public ClubLogWeekView week(Long userId, Long clubId, LocalDate weekOf) {
+        ClubMember me = clubService.activeMember(clubId, userId);
+        Club club = clubService.getClub(clubId);
+        LocalDate anyDay = weekOf == null ? LocalDate.now(clock.withZone(KST)) : weekOf;
+        LocalDate monday = anyDay.with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
+        Instant from = monday.atStartOfDay(KST).toInstant();
+        Instant to = monday.plusDays(7).atStartOfDay(KST).toInstant();
+
+        List<ClubPost> logs = postRepository.findLogs(clubId, from, to);
+        List<ClubPostView> highlights = postService.viewsFor(me, logs).stream()
+                .filter(v -> !v.masked())
+                .sorted(Comparator.comparing((ClubPostView v) -> v.imageUrl() == null)
+                        .thenComparing(ClubPostView::reactionCount, Comparator.reverseOrder())
+                        .thenComparing(ClubPostView::createdAt))
+                .limit(WEEK_HIGHLIGHTS)
+                .toList();
+        String topQuote = postService.viewsFor(me, postRepository.findQuotesBetween(clubId, from, to)).stream()
+                .filter(v -> !v.masked() && v.body() != null && !v.body().isBlank())
+                .map(ClubPostView::body)
+                .findFirst()
+                .orElse(null);
+        BookSummary book = clubBookRepository.findFirstByClubIdOrderBySeqAsc(clubId)
+                .flatMap(cb -> bookRepository.findById(cb.getBookId()))
+                .map(BookSummary::from)
+                .orElse(null);
+
+        return new ClubLogWeekView(monday, monday.plusDays(6), club.getName(), book,
+                summarize(clubId, from, to, logs.size()), highlights, topQuote);
+    }
+
+    /** 기간 합산 — 진척 공개 멤버의 끝난 세션(쪽·시간·읽은 사람) + 조각 수. */
+    private ClubLogSummary summarize(Long clubId, Instant from, Instant to, int logCount) {
         List<Long> recordIds = memberRepository.findAllByClubIdAndStatus(clubId, ClubMemberStatus.ACTIVE).stream()
                 .filter(ClubMember::isShareProgress)
                 .map(ClubMember::getReadingRecordId)
@@ -181,9 +226,7 @@ public class ClubLogService {
         SessionTotals totals = recordIds.isEmpty()
                 ? SessionTotals.empty()
                 : sessionRepository.sumTotalsEndedBetween(recordIds, from, to);
-
-        return new ClubLogDayView(day, postService.viewsFor(me, logs),
-                new ClubLogSummary(totals.pagesRead(), totals.durationSec(), totals.readerCount(), logs.size()));
+        return new ClubLogSummary(totals.pagesRead(), totals.durationSec(), totals.readerCount(), logCount);
     }
 
     /** 요일 스트립 — from~to(포함) 날짜마다 조각 수. 조각이 없는 날도 0 으로 채운다. */

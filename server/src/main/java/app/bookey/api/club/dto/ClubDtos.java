@@ -216,6 +216,21 @@ public final class ClubDtos {
     /** 그날 끝난 세션 합산(진척 공개 멤버만) + 조각 수. */
     public record ClubLogSummary(long pagesRead, long durationSec, long readerCount, int logCount) {}
 
+    /**
+     * 주간 공유 카드 — 한 주(월~일, KST) 합산과 대표 조각.
+     * 대표 조각·문장은 보는 사람에게 가려지지 않은 것만 싣는다 — 이미지로 밖에 공유되므로.
+     */
+    public record ClubLogWeekView(
+            @NotNull LocalDate weekStart,
+            @NotNull LocalDate weekEnd,
+            @NotNull String clubName,
+            BookSummary book,
+            @NotNull ClubLogSummary summary,
+            List<ClubPostView> highlights,
+            /** 그 주 반응이 가장 많은 인용 글 본문. 없으면 null. */
+            String topQuote
+    ) {}
+
     /** 요일 스트립 한 칸. */
     public record ClubLogDayCount(@NotNull LocalDate date, int logCount) {}
 

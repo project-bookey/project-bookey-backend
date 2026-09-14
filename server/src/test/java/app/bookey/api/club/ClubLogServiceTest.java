@@ -2,6 +2,7 @@ package app.bookey.api.club;
 
 import app.bookey.api.club.ClubLogService.CreateLogCommand;
 import app.bookey.api.club.dto.ClubDtos.ClubLogDayCount;
+import app.bookey.api.club.dto.ClubDtos.ClubLogWeekView;
 import app.bookey.api.club.dto.ClubDtos.ClubPostView;
 import app.bookey.api.club.dto.ClubDtos.ReadingNowView;
 import app.bookey.common.config.BookeyProperties;
@@ -48,12 +49,13 @@ class ClubLogServiceTest {
     private final ClubPostRepository postRepository = mock(ClubPostRepository.class);
     private final ClubMemberRepository memberRepository = mock(ClubMemberRepository.class);
     private final ClubBookRepository clubBookRepository = mock(ClubBookRepository.class);
+    private final app.bookey.domain.book.BookRepository bookRepository = mock(app.bookey.domain.book.BookRepository.class);
     private final ReadingSessionRepository sessionRepository = mock(ReadingSessionRepository.class);
     private final StorageService storage = mock(StorageService.class);
     private final BookeyProperties properties = new BookeyProperties(null, null, null, null, null, null, null, null,
             new BookeyProperties.Storage("local", null, null, new BookeyProperties.Storage.Image(10_485_760, 10)), null);
     private final ClubLogService service = new ClubLogService(clubService, postService, postRepository,
-            memberRepository, clubBookRepository, sessionRepository, mock(UserRepository.class), storage,
+            memberRepository, clubBookRepository, bookRepository, sessionRepository, mock(UserRepository.class), storage,
             mock(RateLimiter.class), properties, Clock.fixed(NOW, ZoneOffset.UTC));
 
     private final ClubMember me = member(ME, MY_RECORD, true);
@@ -206,5 +208,43 @@ class ClubLogServiceTest {
 
         assertThat(now).extracting(ReadingNowView::userId).containsExactly(OTHER);
         assertThat(now.get(0).startedAt()).isEqualTo(NOW.minus(Duration.ofMinutes(38)));
+    }
+
+    private static ClubPostView view(long id, boolean masked, String imageUrl, int reactions, String createdAt) {
+        return new ClubPostView(id, null, ClubPostType.LOG, OTHER, "지유", null, masked ? null : "한 줄", masked,
+                87, SpoilerLevel.PAGE, false, 0, reactions, List.of(), Instant.parse(createdAt), List.of(),
+                masked ? null : imageUrl, null, null);
+    }
+
+    @Test
+    @DisplayName("주간 카드 — 가려진 조각은 빼고, 사진 → 반응 → 먼저 남긴 순으로 6개까지. 주는 KST 월요일부터")
+    void weekPicksVisibleHighlights() {
+        when(clubService.activeMember(CLUB_ID, ME)).thenReturn(me);
+        when(clubService.getClub(CLUB_ID)).thenReturn(club());
+        when(clubBookRepository.findFirstByClubIdOrderBySeqAsc(CLUB_ID)).thenReturn(Optional.empty());
+        List<ClubPostView> views = new java.util.ArrayList<>(List.of(
+                view(1, false, null, 9, "2026-09-08T01:00:00Z"),          // 글만 · 반응 많음
+                view(2, true, "https://cdn/2.jpg", 20, "2026-09-08T02:00:00Z"), // 가려짐 → 제외
+                view(3, false, "https://cdn/3.jpg", 1, "2026-09-09T01:00:00Z"),
+                view(4, false, "https://cdn/4.jpg", 5, "2026-09-10T01:00:00Z"),
+                view(5, false, "https://cdn/5.jpg", 5, "2026-09-09T00:00:00Z")));
+        for (int i = 6; i <= 9; i++) {
+            views.add(view(i, false, null, 0, "2026-09-11T0" + i + ":00:00Z"));
+        }
+        when(postService.viewsFor(eq(me), any())).thenReturn(views).thenReturn(List.of(
+                view(20, true, null, 30, "2026-09-08T03:00:00Z"),         // 가려진 인용 → 제외
+                new ClubPostView(21L, null, ClubPostType.QUOTE, OTHER, "민수", null, "새는 알을 깨고 나온다.", false,
+                        102, SpoilerLevel.PAGE, false, 0, 7, List.of(), Instant.parse("2026-09-09T03:00:00Z"),
+                        List.of(), null, null, null)));
+
+        // 수요일을 줘도 그 주 월요일(9/7)~일요일(9/13)
+        ClubLogWeekView week = service.week(ME, CLUB_ID, LocalDate.of(2026, 9, 9));
+
+        assertThat(week.weekStart()).isEqualTo(LocalDate.of(2026, 9, 7));
+        assertThat(week.weekEnd()).isEqualTo(LocalDate.of(2026, 9, 13));
+        verify(postRepository).findLogs(CLUB_ID, Instant.parse("2026-09-06T15:00:00Z"), Instant.parse("2026-09-13T15:00:00Z"));
+        assertThat(week.highlights()).extracting(ClubPostView::id).containsExactly(5L, 4L, 3L, 1L, 6L, 7L);
+        assertThat(week.topQuote()).isEqualTo("새는 알을 깨고 나온다.");
+        assertThat(week.clubName()).isEqualTo("월요일의 데미안");
     }
 }

@@ -60,6 +60,26 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
             """)
     List<Instant> findLogTimes(@Param("clubId") Long clubId, @Param("from") Instant from, @Param("to") Instant to);
 
+    /** 주간 카드 '가장 많이 멈춘 문장' 후보 — 기간 안의 인용 글, 반응 많은 순. */
+    @Query("""
+            SELECT p FROM ClubPost p
+            WHERE p.clubId = :clubId
+              AND p.type = 'QUOTE'
+              AND p.parentId IS NULL
+              AND p.status = 'VISIBLE'
+              AND p.createdAt >= :from AND p.createdAt < :to
+            ORDER BY p.reactionCount DESC, p.createdAt ASC
+            """)
+    List<ClubPost> findQuotesBetween(@Param("clubId") Long clubId, @Param("from") Instant from, @Param("to") Instant to);
+
+    /** 주간 알림 대상 — 기간 안에 조각이 하나라도 있는 모임. */
+    @Query("""
+            SELECT DISTINCT p.clubId FROM ClubPost p
+            WHERE p.type = 'LOG' AND p.status = 'VISIBLE'
+              AND p.createdAt >= :from AND p.createdAt < :to
+            """)
+    List<Long> findClubIdsWithLogsBetween(@Param("from") Instant from, @Param("to") Instant to);
+
     List<ClubPost> findAllByParentIdAndStatusOrderByCreatedAtAsc(Long parentId, String status);
 
     List<ClubPost> findAllByParentIdInAndStatus(List<Long> parentIds, String status);

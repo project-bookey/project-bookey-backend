@@ -45,6 +45,14 @@ public class ClubLogController {
         return logService.day(user.id(), clubId, date);
     }
 
+    @Operation(summary = "주간 공유 카드 — 한 주(월~일, KST) 합산과 대표 조각 6개(보는 사람에게 가려지지 않은 것만)")
+    @GetMapping("/logs/week")
+    public ClubLogWeekView week(@AuthenticationPrincipal AuthUser user,
+                                @PathVariable Long clubId,
+                                @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekOf) {
+        return logService.week(user.id(), clubId, weekOf);
+    }
+
     @Operation(summary = "요일 스트립 — 날짜마다 조각 수(최대 14일)")
     @GetMapping("/logs/days")
     public List<ClubLogDayCount> days(@AuthenticationPrincipal AuthUser user,

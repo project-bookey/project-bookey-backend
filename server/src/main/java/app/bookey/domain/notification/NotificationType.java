@@ -31,7 +31,9 @@ public enum NotificationType {
     CLUB_FALLBEHIND(true),
     CLUB_NEW_POST(true),
     CLUB_NUDGE(true),
-    CLUB_ENDED(true);
+    CLUB_ENDED(true),
+    /** 일요일 밤 — 이번 주 읽기로그 카드가 준비됐다는 알림 */
+    CLUB_WEEKLY_LOG(true);
 
     private final boolean clubScoped;
 
