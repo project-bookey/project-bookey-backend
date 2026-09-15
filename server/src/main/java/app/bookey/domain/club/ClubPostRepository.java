@@ -86,7 +86,15 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
 
     long countByClubIdAndStatus(Long clubId, String status);
 
-    long countByClubIdAndUserIdAndStatus(Long clubId, Long userId, String status);
+    /** 결산 토론왕 — 토론·인용만 센다. 읽기로그 조각은 한 줄 기록이라 토론 기여로 보지 않는다. */
+    @Query("""
+            SELECT COUNT(p) FROM ClubPost p
+            WHERE p.clubId = :clubId
+              AND p.userId = :userId
+              AND p.status = 'VISIBLE'
+              AND p.type <> 'LOG'
+            """)
+    long countDiscussions(@Param("clubId") Long clubId, @Param("userId") Long userId);
 
     /** 도배 탐지 — 1분 내 작성 수(§8.5 모임 어뷰징). */
     long countByUserIdAndCreatedAtAfter(Long userId, Instant after);

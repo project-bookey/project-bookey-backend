@@ -625,10 +625,12 @@ public class ClubService {
                 .map(ClubPost::getBody)
                 .toList();
 
+        // 토론왕 — 한 글도 안 쓴 모임에서는 아무도 뽑지 않는다.
         String topDiscussant = members.stream()
-                .max(Comparator.comparingLong(m ->
-                        postRepository.countByClubIdAndUserIdAndStatus(clubId, m.getUserId(), "VISIBLE")))
-                .map(m -> users.get(m.getUserId()))
+                .map(m -> Map.entry(m, postRepository.countDiscussions(clubId, m.getUserId())))
+                .filter(e -> e.getValue() > 0)
+                .max(Comparator.comparingLong(Map.Entry::getValue))
+                .map(e -> users.get(e.getKey().getUserId()))
                 .map(User::getNickname)
                 .orElse(null);
 
