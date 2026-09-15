@@ -181,6 +181,17 @@ public final class ClubDtos {
             Long linkedPostId
     ) {}
 
+    /**
+     * 작성자 수정 — 보낸 값으로 전부 바꾼다(생략한 값은 비우는 것으로 본다).
+     * 필드가 셋뿐이고 앱이 늘 폼 전체를 들고 있어, 부분 수정보다 이 편이 결과를 예측하기 쉽다.
+     * 쪽을 떼려면 anchorPage 를 비우고 spoilerLevel 을 NONE 으로 보낸다.
+     */
+    public record UpdateClubPostRequest(
+            @Size(max = 10000) String body,
+            @Min(0) Integer anchorPage,
+            SpoilerLevel spoilerLevel
+    ) {}
+
     public record ClubPostView(
             @NotNull Long id,
             Long parentId,
@@ -202,7 +213,9 @@ public final class ClubDtos {
             /** 읽기로그 조각 사진. 가려진 조각은 본문과 함께 null 이다. */
             String imageUrl,
             Integer imageWidth,
-            Integer imageHeight
+            Integer imageHeight,
+            /** 작성자가 고친 시각 — null 이면 처음 그대로다. */
+            Instant editedAt
     ) {}
 
     // ── 읽기로그 ─────────────────────────────────────────────

@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
+
 /** 모임 토론 글 (§12.3). */
 @Getter
 @Entity
@@ -80,6 +82,10 @@ public class ClubPost extends BaseTimeEntity {
     @Column(name = "reading_session_id")
     private Long readingSessionId;
 
+    /** 작성자가 고친 시각 — 한 번도 고치지 않았으면 null. */
+    @Column(name = "edited_at")
+    private Instant editedAt;
+
     @Builder
     private ClubPost(Long clubId, Long clubBookId, Long userId, Long parentId, ClubPostType type,
                      String body, Integer anchorPage, SpoilerLevel spoilerLevel, Long linkedPostId) {
@@ -148,16 +154,15 @@ public class ClubPost extends BaseTimeEntity {
         };
     }
 
-    public void edit(String body, Integer anchorPage, SpoilerLevel spoilerLevel) {
-        if (body != null && !body.isBlank()) {
-            this.body = body;
-        }
-        if (anchorPage != null) {
-            this.anchorPage = anchorPage;
-        }
-        if (spoilerLevel != null) {
-            this.spoilerLevel = spoilerLevel;
-        }
+    /**
+     * 작성자 수정 — 보낸 값으로 그대로 바꾼다(빈 본문·쪽 떼기도 그대로 반영).
+     * 무엇을 허용할지는 글 종류마다 달라 서비스가 먼저 검사한다.
+     */
+    public void edit(String body, Integer anchorPage, SpoilerLevel spoilerLevel, Instant now) {
+        this.body = body == null ? "" : body;
+        this.anchorPage = anchorPage;
+        this.spoilerLevel = resolveSpoilerLevel(spoilerLevel, anchorPage);
+        this.editedAt = now;
     }
 
     public void pin(boolean pinned) {
