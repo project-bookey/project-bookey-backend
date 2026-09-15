@@ -205,6 +205,46 @@ public class ClubPostService {
                 null));
     }
 
+    /**
+     * 작성자 수정 — 한 줄과 쪽을 고친다. 사진은 바꾸지 않는다(조각의 사진은 그 순간의 기록이라 바꿀 이유가 없다).
+     *
+     * <p>운영자라도 남의 글 내용은 고칠 수 없다 — 운영자에게 있는 건 숨김·삭제뿐이다.
+     */
+    @Transactional
+    public ClubPostView update(Long userId, Long clubId, Long postId, UpdateClubPostRequest request) {
+        clubService.activeMember(clubId, userId);
+        if (clubService.getClub(clubId).getStatus().isOver()) {
+            throw ApiException.of(ErrorCode.CLUB_ENDED);
+        }
+        ClubPost post = getPost(clubId, postId);
+        if (!post.isAuthor(userId)) {
+            throw ApiException.of(ErrorCode.FORBIDDEN);
+        }
+        if (!post.isVisible()) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "가려지거나 지워진 글은 고칠 수 없습니다.");
+        }
+
+        String body = request.body() == null ? "" : request.body().trim();
+        boolean hasImage = post.getImageUrl() != null;
+        if (body.isEmpty() && !hasImage) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST,
+                    post.getType() == ClubPostType.LOG ? "사진이나 한 줄 중 하나는 남겨 주세요." : "내용을 비울 수 없습니다.");
+        }
+        if (post.getType() == ClubPostType.LOG && body.length() > ClubLogService.BODY_MAX_LENGTH) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST,
+                    "한 줄은 " + ClubLogService.BODY_MAX_LENGTH + "자까지 쓸 수 있습니다.");
+        }
+        if (post.getType().requiresAnchorPage() && request.anchorPage() == null) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "인용은 페이지를 함께 남겨야 합니다.");
+        }
+        if (request.spoilerLevel() == SpoilerLevel.PAGE && request.anchorPage() == null) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "쪽에 붙이려면 쪽 번호가 필요합니다.");
+        }
+
+        post.edit(body, request.anchorPage(), request.spoilerLevel(), Instant.now());
+        return detail(userId, clubId, postId);
+    }
+
     @Transactional
     public void delete(Long userId, Long clubId, Long postId) {
         ClubMember me = clubService.activeMember(clubId, userId);
@@ -373,6 +413,7 @@ public class ClubPostService {
                 commentViews,
                 masked ? null : post.getImageUrl(),      // 사진도 본문과 같이 가린다
                 masked ? null : post.getImageWidth(),
-                masked ? null : post.getImageHeight());
+                masked ? null : post.getImageHeight(),
+                post.getEditedAt());
     }
 }

@@ -46,6 +46,15 @@ public class ClubPostController {
         return postService.create(user.id(), clubId, request);
     }
 
+    @Operation(summary = "글 · 조각 수정 — 작성자만, 한 줄과 쪽을 보낸 값으로 바꾼다")
+    @PatchMapping("/{postId}")
+    public ClubPostView update(@AuthenticationPrincipal AuthUser user,
+                           @PathVariable Long clubId,
+                           @PathVariable Long postId,
+                           @Valid @RequestBody UpdateClubPostRequest request) {
+        return postService.update(user.id(), clubId, postId, request);
+    }
+
     @Operation(summary = "스포일러 해제 — '그래도 볼래요'")
     @PostMapping("/{postId}/reveal")
     public ClubPostView reveal(@AuthenticationPrincipal AuthUser user,

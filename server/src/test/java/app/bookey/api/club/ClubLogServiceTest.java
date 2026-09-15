@@ -213,7 +213,7 @@ class ClubLogServiceTest {
     private static ClubPostView view(long id, boolean masked, String imageUrl, int reactions, String createdAt) {
         return new ClubPostView(id, null, ClubPostType.LOG, OTHER, "지유", null, masked ? null : "한 줄", masked,
                 87, SpoilerLevel.PAGE, false, 0, reactions, List.of(), Instant.parse(createdAt), List.of(),
-                masked ? null : imageUrl, null, null);
+                masked ? null : imageUrl, null, null, null);
     }
 
     @Test
@@ -235,7 +235,7 @@ class ClubLogServiceTest {
                 view(20, true, null, 30, "2026-09-08T03:00:00Z"),         // 가려진 인용 → 제외
                 new ClubPostView(21L, null, ClubPostType.QUOTE, OTHER, "민수", null, "새는 알을 깨고 나온다.", false,
                         102, SpoilerLevel.PAGE, false, 0, 7, List.of(), Instant.parse("2026-09-09T03:00:00Z"),
-                        List.of(), null, null, null)));
+                        List.of(), null, null, null, null)));
 
         // 수요일을 줘도 그 주 월요일(9/7)~일요일(9/13)
         ClubLogWeekView week = service.week(ME, CLUB_ID, LocalDate.of(2026, 9, 9));
