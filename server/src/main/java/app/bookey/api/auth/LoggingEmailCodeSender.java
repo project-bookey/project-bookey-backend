@@ -1,7 +1,7 @@
 package app.bookey.api.auth;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -12,7 +12,7 @@ import java.time.Duration;
  */
 @Slf4j
 @Component
-@ConditionalOnMissingBean(EmailCodeSender.class)
+@ConditionalOnProperty(prefix = "bookey.mail", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class LoggingEmailCodeSender implements EmailCodeSender {
 
     @Override

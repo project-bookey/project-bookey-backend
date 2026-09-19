@@ -53,7 +53,8 @@ class ClubLogServiceTest {
     private final ReadingSessionRepository sessionRepository = mock(ReadingSessionRepository.class);
     private final StorageService storage = mock(StorageService.class);
     private final BookeyProperties properties = new BookeyProperties(null, null, null, null, null, null, null, null,
-            new BookeyProperties.Storage("local", null, null, new BookeyProperties.Storage.Image(10_485_760, 10)), null);
+            new BookeyProperties.Storage("local", null, null, null,
+                    new BookeyProperties.Storage.Image(10_485_760, 10)), null);
     private final ClubLogService service = new ClubLogService(clubService, postService, postRepository,
             memberRepository, clubBookRepository, bookRepository, sessionRepository, mock(UserRepository.class), storage,
             mock(RateLimiter.class), properties, Clock.fixed(NOW, ZoneOffset.UTC));

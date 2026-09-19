@@ -24,6 +24,7 @@
     <jjwt.version>0.13.0</jjwt.version>
     <testcontainers.version>1.21.4</testcontainers.version>
     <google-cloud-libraries.version>26.87.0</google-cloud-libraries.version>
+    <aws-sdk.version>2.29.52</aws-sdk.version>
   </properties>
 
   <dependencyManagement>
@@ -39,6 +40,13 @@
         <groupId>com.google.cloud</groupId>
         <artifactId>libraries-bom</artifactId>
         <version>${google-cloud-libraries.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>software.amazon.awssdk</groupId>
+        <artifactId>bom</artifactId>
+        <version>${aws-sdk.version}</version>
         <type>pom</type>
         <scope>import</scope>
       </dependency>
@@ -84,10 +92,14 @@
       <scope>runtime</scope>
     </dependency>
 
-    <!-- 파일 저장소 (bookey.storage.type=gcs 일 때만 사용) -->
+    <!-- 파일 저장소 (bookey.storage.type=gcs/s3 일 때만 사용) -->
     <dependency>
       <groupId>com.google.cloud</groupId>
       <artifactId>google-cloud-storage</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
     </dependency>
 
     <!-- cache / queue -->

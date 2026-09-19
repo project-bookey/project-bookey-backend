@@ -99,6 +99,7 @@ class PostImageServiceTest {
         return new BookeyProperties(null, null, null, null, null, null, null, null, new BookeyProperties.Storage("local",
                 new BookeyProperties.Storage.Local("./uploads", ""),
                 new BookeyProperties.Storage.Gcs(""),
+                new BookeyProperties.Storage.S3("", "ap-northeast-2", ""),
                 new BookeyProperties.Storage.Image(maxBytes, 10)), null);
     }
 

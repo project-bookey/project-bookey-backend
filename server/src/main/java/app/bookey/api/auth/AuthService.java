@@ -48,6 +48,17 @@ public class AuthService {
 
     private Map<AuthProvider, SocialTokenVerifier> verifierMap;
 
+    /** 계정을 종료하고 재로그인에 필요한 모든 로컬 자격 증명과 개인정보를 제거한다. */
+    @Transactional
+    public void deleteAccount(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        identityRepository.deleteAllByUserId(userId);
+        deviceRepository.deleteAllByUserId(userId);
+        refreshTokenRepository.revokeAllByUserId(userId, Instant.now());
+        user.anonymizeForDeletion();
+    }
+
     private SocialTokenVerifier verifierFor(AuthProvider provider) {
         if (verifierMap == null) {
             Map<AuthProvider, SocialTokenVerifier> map = new EnumMap<>(AuthProvider.class);
@@ -61,22 +72,43 @@ public class AuthService {
         return verifier;
     }
 
-    /** 소셜 로그인 — 이미 연동된 계정만 통과한다. 신규 가입은 이메일 가입(코드 인증) 후 연동으로만 가능하다. */
+    /** 소셜 로그인 — 연동된 계정은 로그인하고, 처음 보는 소셜 계정은 바로 가입시킨다. */
     @Transactional
     public TokenResponse socialLogin(SocialLoginRequest request) {
         SocialProfile profile = verifierFor(request.provider()).verify(request.token());
 
-        UserIdentity identity = identityRepository
-                .findByProviderAndProviderUid(profile.provider(), profile.providerUid())
-                .orElseThrow(() -> ApiException.of(ErrorCode.SOCIAL_SIGNUP_DISABLED));
+        var existingIdentity = identityRepository
+                .findByProviderAndProviderUid(profile.provider(), profile.providerUid());
+        if (existingIdentity.isEmpty()) {
+            return socialSignup(profile);
+        }
 
-        User user = userRepository.findById(identity.getUserId())
+        User user = userRepository.findById(existingIdentity.get().getUserId())
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-
         if (!user.getStatus().canLogin()) {
             throw ApiException.of(ErrorCode.USER_SUSPENDED);
         }
         return issueTokens(user, false);
+    }
+
+    private TokenResponse socialSignup(SocialProfile profile) {
+        requireSignupOpen();
+        String email = normalizeNullableEmail(profile.email());
+        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
+            throw ApiException.of(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+        User user = User.builder()
+                .handle(handleGenerator.generate(handleSeed(profile)))
+                .email(email)
+                .nickname(displayName(profile))
+                .avatarUrl(profile.avatarUrl())
+                .build();
+        if (email != null) {
+            user.markEmailVerified(Instant.now());
+        }
+        User saved = userRepository.save(user);
+        identityRepository.save(new UserIdentity(saved.getId(), profile.provider(), profile.providerUid()));
+        return issueTokens(saved, true);
     }
 
     /** 가입 인증 코드 발급 — 코드 원문은 저장하지 않고 해시만 남긴 뒤 이메일로 발송한다. */
@@ -205,6 +237,32 @@ public class AuthService {
 
     private static String normalizeEmail(String email) {
         return email.trim().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    private static String normalizeNullableEmail(String email) {
+        return email == null || email.isBlank() ? null : normalizeEmail(email);
+    }
+
+    private static String handleSeed(SocialProfile profile) {
+        String email = normalizeNullableEmail(profile.email());
+        if (email != null && email.contains("@")) {
+            return email.substring(0, email.indexOf("@"));
+        }
+        if (profile.nickname() != null && !profile.nickname().isBlank()) {
+            return profile.nickname();
+        }
+        return profile.provider().name().toLowerCase(java.util.Locale.ROOT) + profile.providerUid();
+    }
+
+    private static String displayName(SocialProfile profile) {
+        if (profile.nickname() != null && !profile.nickname().isBlank()) {
+            return profile.nickname().trim();
+        }
+        String email = profile.email();
+        if (email != null && email.contains("@")) {
+            return email.substring(0, email.indexOf("@"));
+        }
+        return "bookey";
     }
 
     @Transactional

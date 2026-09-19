@@ -14,22 +14,25 @@ class StorageConfigValidatorTest {
                 type,
                 new BookeyProperties.Storage.Local("./uploads", ""),
                 new BookeyProperties.Storage.Gcs(bucket),
+                new BookeyProperties.Storage.S3(bucket, "ap-northeast-2", ""),
                 new BookeyProperties.Storage.Image(10485760L, 10)
         );
     }
 
     @Test
-    @DisplayName("type=gcs 이고 버킷이 있으면 통과하고 저장소를 켠 상태로 본다")
+    @DisplayName("type=gcs/s3 이고 버킷이 있으면 통과하고 저장소를 켠 상태로 본다")
     void passesWithGcsAndBucket() {
         assertThat(StorageConfigValidator.validate(storage("gcs", "bookey-media")))
-                .isEqualTo(StorageConfigValidator.Mode.GCS);
+                .isEqualTo(StorageConfigValidator.Mode.REMOTE);
+        assertThat(StorageConfigValidator.validate(storage("s3", "bookey-media")))
+                .isEqualTo(StorageConfigValidator.Mode.REMOTE);
     }
 
     @Test
     @DisplayName("대소문자만 다른 gcs 도 통과한다 — @ConditionalOnProperty 와 같은 규칙")
     void acceptsTypeIgnoringCase() {
         assertThat(StorageConfigValidator.validate(storage("GCS", "bookey-media")))
-                .isEqualTo(StorageConfigValidator.Mode.GCS);
+                .isEqualTo(StorageConfigValidator.Mode.REMOTE);
         assertThat(StorageConfigValidator.validate(storage("NONE", "")))
                 .isEqualTo(StorageConfigValidator.Mode.DISABLED);
     }
@@ -45,9 +48,8 @@ class StorageConfigValidatorTest {
     @DisplayName("업로드가 꺼졌다는 경고에 켜는 방법(고칠 파일과 넣을 두 줄)이 그대로 적혀 있다")
     void disabledWarningTellsHowToTurnItOn() {
         assertThat(StorageConfigValidator.DISABLED_WARNING)
-                .contains(".github/workflows/deploy-cloud-run.yml")
-                .contains("STORAGE_TYPE=gcs")
-                .contains("GCS_BUCKET");
+                .contains("STORAGE_TYPE=s3")
+                .contains("S3_BUCKET");
     }
 
     @Test
@@ -55,7 +57,7 @@ class StorageConfigValidatorTest {
     void rejectsLocalDiskInProd() {
         assertThatThrownBy(() -> StorageConfigValidator.validate(storage("local", "")))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("STORAGE_TYPE=gcs");
+                .hasMessageContaining("STORAGE_TYPE=s3");
     }
 
     @Test
@@ -78,12 +80,12 @@ class StorageConfigValidatorTest {
     @DisplayName("기동 실패 메시지가 고칠 파일(배포 워크플로 env_vars)과 넣을 줄을 그대로 알려 준다")
     void failureMessagesPointAtTheWorkflowLine() {
         assertThatThrownBy(() -> StorageConfigValidator.validate(storage("gcs", "")))
-                .hasMessageContaining(".github/workflows/deploy-cloud-run.yml")
-                .hasMessageContaining("GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }}")
-                .hasMessageContaining("GCP_MEDIA_BUCKET");
+                .hasMessageContaining("GCS_BUCKET");
+        assertThatThrownBy(() -> StorageConfigValidator.validate(storage("s3", "")))
+                .hasMessageContaining("S3_BUCKET");
         assertThatThrownBy(() -> StorageConfigValidator.validate(storage("local", "bookey-media")))
-                .hasMessageContaining(".github/workflows/deploy-cloud-run.yml")
-                .hasMessageContaining("STORAGE_TYPE=gcs")
+                .hasMessageContaining("배포 환경변수")
+                .hasMessageContaining("STORAGE_TYPE=s3")
                 .hasMessageContaining("none");
     }
 
@@ -94,11 +96,23 @@ class StorageConfigValidatorTest {
         assertThatThrownBy(() -> StorageConfigValidator.requireBucket(storage("gcs", "  ")))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("bookey.storage.gcs.bucket")
-                .hasMessageContaining(".github/workflows/deploy-cloud-run.yml")
-                .hasMessageContaining("GCS_BUCKET=${{ vars.GCP_MEDIA_BUCKET }}");
+                .hasMessageContaining("GCS_BUCKET");
         assertThatThrownBy(() -> StorageConfigValidator.requireBucket(null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("GCS_BUCKET");
+    }
+
+    @Test
+    @DisplayName("requireS3 — S3StorageService 생성자가 같은 검사·같은 안내를 쓴다")
+    void requireS3SharesTheSameGuidance() {
+        assertThat(StorageConfigValidator.requireS3(storage("s3", "bookey-media")).bucket()).isEqualTo("bookey-media");
+        assertThatThrownBy(() -> StorageConfigValidator.requireS3(storage("s3", "  ")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("bookey.storage.s3.bucket")
+                .hasMessageContaining("S3_BUCKET");
+        assertThatThrownBy(() -> StorageConfigValidator.requireS3(null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("S3_BUCKET");
     }
 
     @Test

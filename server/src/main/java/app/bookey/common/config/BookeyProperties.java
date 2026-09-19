@@ -26,6 +26,7 @@ public record BookeyProperties(
             int postcardMaxLength,
             int postcardCostBookmarks,
             int stampCostBookmarks,
+            int bookmarkPriceKrw,
             int subscriptionMonthlyPostcards,
             int subscriptionMonthlyStamps,
             int subscriptionPriceKrw
@@ -107,17 +108,20 @@ public record BookeyProperties(
                             String environment) {}
     }
 
-    /** 업로드 파일 저장소. type 은 local | gcs. */
+    /** 업로드 파일 저장소. type 은 local | gcs | s3 | none. */
     public record Storage(
             String type,
             Local local,
             Gcs gcs,
+            S3 s3,
             Image image
     ) {
         /** publicBaseUrl 은 origin 만 적는다(예: http://192.168.0.10:8098). 비우면 요청 origin 을 쓴다. */
         public record Local(String dir, String publicBaseUrl) {}
 
         public record Gcs(String bucket) {}
+
+        public record S3(String bucket, String region, String publicBaseUrl) {}
 
         public record Image(long maxBytes, int maxPerPost) {}
     }

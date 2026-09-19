@@ -1,0 +1,72 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  EC2_USER: ${{ secrets.EC2_USER }}
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+  EC2_APP_DIR: ${{ vars.EC2_APP_DIR || '/opt/bookey' }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Test
+        working-directory: server
+        run: ./mvnw -B test
+
+  deploy:
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/bookey-ec2.pem
+          chmod 600 ~/.ssh/bookey-ec2.pem
+          ssh-keyscan -H "${EC2_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Package source
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='server/target' \
+            --exclude='target' \
+            -czf /tmp/bookey-backend.tgz .
+
+      - name: Upload source
+        run: scp -i ~/.ssh/bookey-ec2.pem /tmp/bookey-backend.tgz "${EC2_USER}@${EC2_HOST}:/tmp/bookey-backend.tgz"
+
+      - name: Deploy backend
+        run: |
+          ssh -i ~/.ssh/bookey-ec2.pem "${EC2_USER}@${EC2_HOST}" "EC2_APP_DIR='${EC2_APP_DIR}' bash -s" <<'REMOTE'
+            set -euo pipefail
+            APP_DIR="${EC2_APP_DIR:-/opt/bookey}"
+            rm -rf "${APP_DIR}/project-bookey-backend"
+            mkdir -p "${APP_DIR}/project-bookey-backend"
+            tar -xzf /tmp/bookey-backend.tgz -C "${APP_DIR}/project-bookey-backend"
+            cd "${APP_DIR}"
+            docker compose build backend
+            docker compose up -d backend
+            docker image prune -f
+          REMOTE
+
+      - name: Health check
+        run: curl --fail --retry 12 --retry-delay 5 "https://api.bookey.site/actuator/health"

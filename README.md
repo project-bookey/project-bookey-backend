@@ -98,6 +98,8 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` | 인증 코드 메일 발송용 SMTP 접속 정보 |
 | `MAIL_FROM` | 발신자 이메일 주소 |
 | `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | 운영 최초 관리자 생성용. 관리자 계정이 0명일 때만 사용 |
+| `TOSS_CLIENT_KEY` / `TOSS_SECRET_KEY` | Toss Payments 결제 연동 |
+| `TOSS_SUCCESS_URL` / `TOSS_FAIL_URL` | Toss 결제 완료/실패 딥링크 또는 웹 URL |
 | `STORAGE_TYPE` | 독후감 사진 저장소 — `local`(기본) / `gcs` / `none`(업로드 끔). `prod` 프로파일 기본값은 `none` |
 | `STORAGE_LOCAL_DIR` | `local` 일 때 파일을 둘 디렉터리 (기본 `./uploads` → `server/uploads`) |
 | `STORAGE_PUBLIC_BASE_URL` | `local` 일 때 사진 URL 의 origin (예: `http://192.168.0.10:8080`). 비우면 요청 origin |
@@ -202,3 +204,47 @@ Bookey 전체 Cloud Run 서비스:
 | `bookey-admin` | `project-bookey-admin` | 관리자 웹 |
 
 모바일 앱(`project-bookey-app`)은 Cloud Run 서비스가 아니라 빌드된 앱에서 `bookey-backend` URL을 바라보도록 설정합니다.
+
+## AWS 이전
+
+현재 운영 배포는 EC2 프리티어 인스턴스 1대 + Docker Compose 기준입니다. `main` 브랜치에 푸시하면
+`.github/workflows/deploy-ec2.yml` 이 테스트를 통과한 뒤 EC2에 소스를 업로드하고 `backend` 서비스만 다시 빌드/기동합니다.
+PostgreSQL/Redis 컨테이너와 Docker volume은 유지됩니다.
+
+준비할 AWS 리소스:
+
+| 리소스 | 권장 이름 | 비고 |
+|---|---|---|
+| EC2 | `bookey-prod` | Amazon Linux 2023, `t4g.micro`, Docker/Compose 설치 |
+| Elastic IP | `43.200.154.240` | DNS A 레코드 대상 |
+| Security Group | `bookey-ec2-sg` | SSH는 작업자 IP만, `8080`은 API 공개 |
+| S3 | `bookey-prod-media-755610386590` | 독후감/프로필 이미지 저장. 공개 읽기, EC2 role 쓰기 |
+| IAM Role | `bookey-ec2-s3-role` | EC2 instance profile `bookey-ec2-profile` 로 연결 |
+| Docker volume | `bookey_postgres-data`, `bookey_redis-data` | DB/Redis 데이터 보존 |
+| `/opt/bookey/.env` | 서버 로컬 파일 | 운영 secret 원천. GitHub Actions가 덮어쓰지 않음 |
+
+GitHub Repository Variables:
+
+| 키 | 예시 |
+|---|---|
+| `EC2_APP_DIR` | `/opt/bookey` |
+
+GitHub Repository Secrets:
+
+| 키 | 담는 값 |
+|---|---|
+| `EC2_HOST` | EC2 public IP 또는 DNS |
+| `EC2_USER` | 예: `ec2-user` |
+| `EC2_SSH_KEY` | EC2 접속용 private key 전체 내용 |
+
+최초 1회 순서:
+
+1. EC2에 Docker, Docker Compose, Buildx를 설치한다.
+2. `/opt/bookey/docker-compose.yml` 과 `/opt/bookey/.env` 를 만든다.
+3. S3 버킷을 만들고 공개 읽기 bucket policy와 EC2 role의 `s3:GetObject`/`PutObject`/`DeleteObject` 권한을 붙인다.
+4. backend 환경변수에 `STORAGE_TYPE=s3`, `S3_BUCKET=bookey-prod-media-755610386590`, `AWS_REGION=ap-northeast-2` 를 넣는다.
+5. GitHub Secrets에 `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY` 를 등록한다.
+6. `main`에 푸시하거나 `Deploy to EC2` workflow를 수동 실행한다.
+7. Actions의 health check와 EC2의 `docker compose ps` 로 기동 상태를 확인한다.
+
+Cloud Run workflow는 수동 실행만 남겨 두었습니다. EC2 자동 배포는 `Deploy to EC2` workflow가 담당합니다.
