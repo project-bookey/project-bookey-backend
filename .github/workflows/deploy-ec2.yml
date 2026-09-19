@@ -6,9 +6,11 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: bookey-production-deploy
+  cancel-in-progress: false
+
 env:
-  EC2_USER: ${{ secrets.EC2_USER }}
-  EC2_HOST: ${{ secrets.EC2_HOST }}
   EC2_APP_DIR: ${{ vars.EC2_APP_DIR || '/opt/bookey' }}
 
 jobs:
@@ -31,17 +33,10 @@ jobs:
 
   deploy:
     needs: validate
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, bookey-prod]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/bookey-ec2.pem
-          chmod 600 ~/.ssh/bookey-ec2.pem
-          ssh-keyscan -H "${EC2_HOST}" >> ~/.ssh/known_hosts
 
       - name: Package source
         run: |
@@ -49,24 +44,50 @@ jobs:
             --exclude='.git' \
             --exclude='server/target' \
             --exclude='target' \
-            -czf /tmp/bookey-backend.tgz .
-
-      - name: Upload source
-        run: scp -i ~/.ssh/bookey-ec2.pem /tmp/bookey-backend.tgz "${EC2_USER}@${EC2_HOST}:/tmp/bookey-backend.tgz"
+            -czf "/tmp/bookey-backend-${GITHUB_RUN_ID}.tgz" .
 
       - name: Deploy backend
+        shell: bash
         run: |
-          ssh -i ~/.ssh/bookey-ec2.pem "${EC2_USER}@${EC2_HOST}" "EC2_APP_DIR='${EC2_APP_DIR}' bash -s" <<'REMOTE'
-            set -euo pipefail
-            APP_DIR="${EC2_APP_DIR:-/opt/bookey}"
-            rm -rf "${APP_DIR}/project-bookey-backend"
-            mkdir -p "${APP_DIR}/project-bookey-backend"
-            tar -xzf /tmp/bookey-backend.tgz -C "${APP_DIR}/project-bookey-backend"
-            cd "${APP_DIR}"
-            docker compose build backend
-            docker compose up -d backend
-            docker image prune -f
-          REMOTE
+          set -euo pipefail
+          APP_DIR="${EC2_APP_DIR:-/opt/bookey}"
+          RELEASE_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          BACKUP_DIR="${APP_DIR}/backups/${RELEASE_ID}"
+
+          sudo mkdir -p "${BACKUP_DIR}"
+
+          DB_USER=$(docker exec bookey-postgres-1 printenv POSTGRES_USER)
+          DB_NAME=$(docker exec bookey-postgres-1 printenv POSTGRES_DB)
+          docker exec bookey-postgres-1 pg_dump -U "${DB_USER}" "${DB_NAME}" \
+            | sudo tee "${BACKUP_DIR}/database.sql" >/dev/null
+
+          OLD_IMAGE=$(docker inspect bookey-backend-1 --format '{{.Image}}')
+          docker tag "${OLD_IMAGE}" "bookey-backend:rollback-${RELEASE_ID}"
+
+          sudo mv "${APP_DIR}/project-bookey-backend" "${BACKUP_DIR}/source"
+          sudo mkdir "${APP_DIR}/project-bookey-backend"
+          sudo tar -xzf "/tmp/bookey-backend-${GITHUB_RUN_ID}.tgz" \
+            -C "${APP_DIR}/project-bookey-backend"
+          sudo chown -R ec2-user:ec2-user "${APP_DIR}/project-bookey-backend"
+
+          cd "${APP_DIR}"
+          docker compose build backend
+          docker compose up -d --no-deps backend
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:8080/actuator/health; then
+              echo
+              exit 0
+            fi
+            sleep 5
+          done
+
+          docker compose logs --tail=160 backend
+          exit 1
 
       - name: Health check
         run: curl --fail --retry 12 --retry-delay 5 "https://api.bookey.site/actuator/health"
+
+      - name: Remove release archive
+        if: always()
+        run: rm -f "/tmp/bookey-backend-${GITHUB_RUN_ID}.tgz"
