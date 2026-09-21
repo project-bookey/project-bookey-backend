@@ -1,7 +1,7 @@
 package app.bookey.api.auth;
 
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -9,10 +9,14 @@ import java.time.Duration;
 /**
  * 로그로만 남기는 발송기 — 메일 인프라가 붙기 전까지의 기본 구현.
  * 로컬은 bookey.auth.email-code.expose=true 라 응답에 코드가 동봉되므로 이 로그는 보조 수단이다.
+ * <p>
+ * 활성 조건은 {@link SmtpEmailCodeSender} 와 정확히 반대(bookey.mail.enabled=false, 미설정 포함)로 둔다.
+ * 컴포넌트 스캔 대상에 {@code @ConditionalOnMissingBean} 을 걸면 등록 단계에서 자기 자신을
+ * "이미 있는 빈"으로 보고 빠져 버려 EmailCodeSender 빈이 하나도 없는 채로 기동이 실패한다.
  */
 @Slf4j
 @Component
-@ConditionalOnMissingBean(EmailCodeSender.class)
+@ConditionalOnProperty(prefix = "bookey.mail", name = "enabled", havingValue = "false", matchIfMissing = true)
 public class LoggingEmailCodeSender implements EmailCodeSender {
 
     @Override
