@@ -419,7 +419,7 @@ public class ClubService {
                     club.getId(), club.getName(), club.getCoverUrl(),
                     book == null ? null : BookSummary.from(book),
                     club.getStatus(), club.getMemberCount(), club.daysLeft(today),
-                    mine, average, 0);
+                    mine, average, 0, membership.getRole());
         });
     }
 
@@ -472,7 +472,7 @@ public class ClubService {
                 club.getMemberCount(), club.getMemberLimit(),
                 me.getRole(), me.isShareProgress(), me.isAllowNudge(),
                 myRank, averageCompletion(members, records, book),
-                memberViews, checkpoints, next, seatPolicy());
+                memberViews, checkpoints, next, seatPolicy(), club.isAllowNudge());
     }
 
     private ClubSeatPolicy seatPolicy() {

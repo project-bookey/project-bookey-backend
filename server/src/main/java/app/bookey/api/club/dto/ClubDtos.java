@@ -100,7 +100,9 @@ public final class ClubDtos {
             long daysLeft,
             Double myCompletionRate,
             Double averageCompletionRate,
-            int unreadPostCount
+            int unreadPostCount,
+            /** 내 역할 — 목록에서 호스트에게만 관리 버튼을 보여주기 위해 내린다. */
+            @NotNull ClubRole myRole
     ) {}
 
     public record MemberProgressView(
@@ -155,7 +157,9 @@ public final class ClubDtos {
             List<MemberProgressView> members,
             List<CheckpointView> checkpoints,
             CheckpointView nextCheckpoint,
-            @NotNull ClubSeatPolicy seatPolicy
+            @NotNull ClubSeatPolicy seatPolicy,
+            /** 모임 전체의 찌르기 허용 여부 — 호스트가 모임 설정에서 바꾼다(myAllowNudge 는 내 개인 설정). */
+            boolean allowNudge
     ) {}
 
     public record ClubResultView(
