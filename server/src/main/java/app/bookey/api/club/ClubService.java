@@ -30,6 +30,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.Objects;
+import java.time.Instant;
+import app.bookey.domain.reading.ReadingSession;
 
 /** 독서 모임 (§F12). */
 @Slf4j
@@ -414,12 +418,13 @@ public class ClubService {
 
             Double mine = completionRate(records.get(membership.getReadingRecordId()), book);
             Double average = averageCompletion(peers, records, book);
+            List<ClubMemberBrief> briefs = memberBriefs(peers, records, book, userId);
 
             return new ClubSummaryView(
                     club.getId(), club.getName(), club.getCoverUrl(),
                     book == null ? null : BookSummary.from(book),
                     club.getStatus(), club.getMemberCount(), club.daysLeft(today),
-                    mine, average, 0, membership.getRole());
+                    mine, average, 0, membership.getRole(), briefs);
         });
     }
 
@@ -578,6 +583,44 @@ public class ClubService {
         }
         return recordRepository.findAllByIdIn(ids).stream()
                 .collect(Collectors.toMap(ReadingRecord::getId, Function.identity()));
+    }
+
+    /** 목록 카드용 멤버 요약 — 진척 높은 순, 비공개 멤버는 진척 null 에 맨 뒤. */
+    private List<ClubMemberBrief> memberBriefs(List<ClubMember> peers, Map<Long, ReadingRecord> records,
+                                               Book book, Long viewerId) {
+        Map<Long, User> users = loadUsers(peers);
+        Set<Long> liveRecordIds = openSessionRecordIds(peers);
+        return peers.stream()
+                .map(p -> {
+                    User user = users.get(p.getUserId());
+                    boolean isMe = p.getUserId().equals(viewerId);
+                    boolean share = p.isShareProgress() || isMe;
+                    return new ClubMemberBrief(
+                            p.getUserId(),
+                            user == null ? "알 수 없음" : user.getNickname(),
+                            user == null ? null : user.getAvatarUrl(),
+                            p.getRole(), isMe,
+                            share ? completionRate(records.get(p.getReadingRecordId()), book) : null,
+                            share && p.getReadingRecordId() != null && liveRecordIds.contains(p.getReadingRecordId()));
+                })
+                .sorted(Comparator.comparing(
+                        (ClubMemberBrief b) -> b.completionRate() == null ? -1.0 : b.completionRate())
+                        .reversed())
+                .toList();
+    }
+
+    /** 열린 읽기 세션이 있는 기록 id — ClubLogService.readingNow 와 같은 규칙(4시간 넘은 세션은 제외). */
+    private Set<Long> openSessionRecordIds(List<ClubMember> members) {
+        List<Long> recordIds = members.stream()
+                .map(ClubMember::getReadingRecordId).filter(Objects::nonNull).distinct().toList();
+        if (recordIds.isEmpty()) {
+            return Set.of();
+        }
+        Instant staleBefore = Instant.now().minus(ReadingSession.MAX_SESSION);
+        return sessionRepository.findAllByReadingRecordIdInAndEndedAtIsNull(recordIds).stream()
+                .filter(s -> s.getStartedAt().isAfter(staleBefore))
+                .map(ReadingSession::getReadingRecordId)
+                .collect(Collectors.toSet());
     }
 
     private Map<Long, User> loadUsers(List<ClubMember> members) {
