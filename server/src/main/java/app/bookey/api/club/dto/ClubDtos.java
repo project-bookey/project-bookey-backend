@@ -102,7 +102,22 @@ public final class ClubDtos {
             Double averageCompletionRate,
             int unreadPostCount,
             /** 내 역할 — 목록에서 호스트에게만 관리 버튼을 보여주기 위해 내린다. */
-            @NotNull ClubRole myRole
+            @NotNull ClubRole myRole,
+            /** 함께 읽는 사람들 — 진척 높은 순. 목록 카드의 아바타 줄과 '지금 읽는 중' 표시용. */
+            @NotNull List<ClubMemberBrief> members
+    ) {}
+
+    /** 목록용 멤버 요약 — 홈의 MemberProgressView 에서 카드에 필요한 만큼만 뽑았다. */
+    public record ClubMemberBrief(
+            @NotNull Long userId,
+            @NotNull String nickname,
+            String avatarUrl,
+            @NotNull ClubRole role,
+            boolean isMe,
+            /** 진척 비공개 멤버는 null. */
+            Double completionRate,
+            /** 열린 읽기 세션이 있으면 true — 진척 비공개 멤버는 늘 false. */
+            boolean readingNow
     ) {}
 
     public record MemberProgressView(
