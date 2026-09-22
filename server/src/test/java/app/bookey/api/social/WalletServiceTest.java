@@ -37,7 +37,7 @@ class WalletServiceTest {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final BookeyProperties.Social SOCIAL =
-            new BookeyProperties.Social(5, 16, 1, 2, 50, 30, 17900);
+            new BookeyProperties.Social(5, 16, 1, 2, 200, 50, 30, 17900);
 
     private final WalletRepository walletRepository = mock(WalletRepository.class);
     private final WalletTransactionRepository transactionRepository = mock(WalletTransactionRepository.class);

@@ -10,4 +10,6 @@ public interface UserIdentityRepository extends JpaRepository<UserIdentity, Long
     Optional<UserIdentity> findByProviderAndProviderUid(AuthProvider provider, String providerUid);
 
     List<UserIdentity> findAllByUserId(Long userId);
+
+    void deleteAllByUserId(Long userId);
 }

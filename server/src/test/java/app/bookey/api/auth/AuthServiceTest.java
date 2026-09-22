@@ -19,6 +19,7 @@ import app.bookey.domain.user.RefreshTokenRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserIdentity;
 import app.bookey.domain.user.UserIdentityRepository;
+import app.bookey.domain.user.UserDeviceRepository;
 import app.bookey.domain.user.UserRepository;
 import app.bookey.domain.user.UserStatus;
 import io.jsonwebtoken.Claims;
@@ -46,7 +47,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 로그인·가입 경로 단위 테스트 — 이메일 가입은 인증 코드를 요구하고, 소셜 로그인은 연동된 계정만 통과하는 계약을 고정한다.
+ * 로그인·가입 경로 단위 테스트 — 이메일 가입은 인증 코드를 요구하고, 소셜 로그인은 미가입 계정을 바로 만든다.
  * 저장소만 Mockito 로 대신하고 토큰 발급은 실제 {@link JwtTokenProvider} 를 쓴다(Spring 컨텍스트 없음).
  */
 class AuthServiceTest {
@@ -78,6 +79,7 @@ class AuthServiceTest {
 
     private final UserRepository userRepository = mock(UserRepository.class);
     private final UserIdentityRepository identityRepository = mock(UserIdentityRepository.class);
+    private final UserDeviceRepository deviceRepository = mock(UserDeviceRepository.class);
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
     private final EmailVerificationRepository emailVerificationRepository = mock(EmailVerificationRepository.class);
     private final EmailCodeSender emailCodeSender = mock(EmailCodeSender.class);
@@ -92,7 +94,7 @@ class AuthServiceTest {
     private final JwtTokenProvider tokenProvider = new JwtTokenProvider(properties);
 
     private AuthService service(List<SocialTokenVerifier> verifiers) {
-        return new AuthService(userRepository, identityRepository, null, refreshTokenRepository,
+        return new AuthService(userRepository, identityRepository, deviceRepository, refreshTokenRepository,
                 opsFlagRepository, emailVerificationRepository, tokenProvider, handleGenerator,
                 properties, verifiers, PLAIN, emailCodeSender, identityVerifier);
     }
@@ -103,7 +105,7 @@ class AuthServiceTest {
                 new BookeyProperties.Jwt("unit-test-secret-must-be-at-least-32-bytes-long",
                         Duration.ofHours(1), Duration.ofDays(30), Duration.ofMinutes(30)),
                 AUTH_IDENTITY, null, null, null, null, null, null, null, null);
-        return new AuthService(userRepository, identityRepository, null, refreshTokenRepository,
+        return new AuthService(userRepository, identityRepository, deviceRepository, refreshTokenRepository,
                 opsFlagRepository, emailVerificationRepository,
                 new JwtTokenProvider(identityProps), handleGenerator,
                 identityProps, List.of(), PLAIN, emailCodeSender, identityVerifier);
@@ -188,9 +190,13 @@ class AuthServiceTest {
         verify(refreshTokenRepository, never()).save(any());
     }
 
-    // ───────────── 소셜 로그인 = 연동 계정 전용 ─────────────
+    // ───────────── 소셜 로그인 ─────────────
 
     private SocialTokenVerifier kakaoVerifier(String uid) {
+        return kakaoVerifier(uid, null, null);
+    }
+
+    private SocialTokenVerifier kakaoVerifier(String uid, String email, String nickname) {
         return new SocialTokenVerifier() {
             @Override
             public AuthProvider provider() {
@@ -199,20 +205,47 @@ class AuthServiceTest {
 
             @Override
             public SocialProfile verify(String token) {
-                return new SocialProfile(AuthProvider.KAKAO, uid, null, null, null);
+                return new SocialProfile(AuthProvider.KAKAO, uid, email, nickname, "https://img.example/avatar.png");
             }
         };
     }
 
     @Test
-    @DisplayName("소셜 로그인 — 연동되지 않은 소셜 계정은 SOCIAL_SIGNUP_DISABLED (이메일 가입 후 연동 유도, 자동 가입 없음)")
-    void socialLoginUnlinkedIdentityIsRejected() {
+    @DisplayName("소셜 로그인 — 연동되지 않은 소셜 계정은 신규 가입되고 newUser=true 로 토큰이 발급된다")
+    void socialLoginUnlinkedIdentityCreatesUser() {
         when(identityRepository.findByProviderAndProviderUid(AuthProvider.KAKAO, "kakao-1"))
                 .thenReturn(Optional.empty());
+        when(userRepository.existsByEmailIgnoreCase("social@dev.local")).thenReturn(false);
+        when(handleGenerator.generate("social")).thenReturn("social");
+        stubUserSave();
 
-        assertApiError(() -> service(List.of(kakaoVerifier("kakao-1")))
-                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token")), ErrorCode.SOCIAL_SIGNUP_DISABLED);
+        TokenResponse res = service(List.of(kakaoVerifier("kakao-1", "Social@Dev.Local", "소셜")))
+                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token"));
+
+        assertThat(res.newUser()).isTrue();
+        assertThat(res.user().id()).isEqualTo(42L);
+        assertThat(res.user().handle()).isEqualTo("social");
+        assertThat(res.user().email()).isEqualTo("social@dev.local");
+
+        ArgumentCaptor<UserIdentity> identity = ArgumentCaptor.forClass(UserIdentity.class);
+        verify(identityRepository).save(identity.capture());
+        assertThat(identity.getValue().getUserId()).isEqualTo(42L);
+        assertThat(identity.getValue().getProvider()).isEqualTo(AuthProvider.KAKAO);
+        assertThat(identity.getValue().getProviderUid()).isEqualTo("kakao-1");
+        verify(refreshTokenRepository).save(any(RefreshToken.class));
+    }
+
+    @Test
+    @DisplayName("소셜 로그인 — provider 이메일이 기존 계정과 같으면 자동 병합하지 않고 EMAIL_ALREADY_EXISTS")
+    void socialLoginUnlinkedIdentityWithExistingEmailIsRejected() {
+        when(identityRepository.findByProviderAndProviderUid(AuthProvider.KAKAO, "kakao-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.existsByEmailIgnoreCase("linked@dev.local")).thenReturn(true);
+
+        assertApiError(() -> service(List.of(kakaoVerifier("kakao-1", "linked@dev.local", "소셜")))
+                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token")), ErrorCode.EMAIL_ALREADY_EXISTS);
         verify(userRepository, never()).save(any());
+        verify(identityRepository, never()).save(any(UserIdentity.class));
         verify(refreshTokenRepository, never()).save(any());
     }
 
@@ -524,5 +557,25 @@ class AuthServiceTest {
                 ErrorCode.USER_SUSPENDED);
         assertThat(service.emailLogin(new EmailLoginRequest("banned@dev.local", "password1234")).user().status())
                 .isEqualTo("WRITE_BANNED");
+    }
+
+    @Test
+    @DisplayName("계정 삭제 — 개인정보를 익명화하고 소셜 연동·푸시 토큰·리프레시 토큰을 제거한다")
+    void deleteAccountAnonymizesAndRevokesCredentials() {
+        User user = user(42L, "delete-me@dev.local", "password1234");
+        when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+
+        service(List.of()).deleteAccount(42L);
+
+        assertThat(user.getStatus()).isEqualTo(UserStatus.TERMINATED);
+        assertThat(user.getHandle()).isEqualTo("deleted_42");
+        assertThat(user.getNickname()).isEqualTo("탈퇴한 사용자");
+        assertThat(user.getEmail()).isNull();
+        assertThat(user.getPasswordHash()).isNull();
+        assertThat(user.getAvatarUrl()).isNull();
+        assertThat(user.getPreferredCategories()).isEmpty();
+        verify(identityRepository).deleteAllByUserId(42L);
+        verify(deviceRepository).deleteAllByUserId(42L);
+        verify(refreshTokenRepository).revokeAllByUserId(org.mockito.ArgumentMatchers.eq(42L), any(Instant.class));
     }
 }

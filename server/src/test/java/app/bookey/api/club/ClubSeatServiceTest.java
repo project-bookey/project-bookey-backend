@@ -43,7 +43,7 @@ class ClubSeatServiceTest {
     private static final BookeyProperties.Club CLUB_POLICY =
             new BookeyProperties.Club(3, 6, 3, 4, Duration.ofHours(24), 3, 10);
     private static final BookeyProperties.Social SOCIAL =
-            new BookeyProperties.Social(5, 16, 1, 2, 50, 30, 17900);
+            new BookeyProperties.Social(5, 16, 1, 2, 200, 50, 30, 17900);
 
     private final ClubRepository clubRepository = mock(ClubRepository.class);
     private final WalletRepository walletRepository = mock(WalletRepository.class);

@@ -128,6 +128,14 @@ public class WalletService {
         record(userId, WalletTransactionKind.ADMIN_ADJUST, bookmarks, postcards, stamps, null, null);
     }
 
+    @Transactional
+    public WalletView grantPurchasedBookmarks(Long userId, int bookmarks, Long purchaseId) {
+        Wallet wallet = prepared(userId);
+        wallet.add(bookmarks, 0, 0);
+        record(userId, WalletTransactionKind.PURCHASE, bookmarks, 0, 0, "BOOKMARK_PURCHASE", purchaseId);
+        return toView(userId, wallet);
+    }
+
     private void record(Long userId, WalletTransactionKind kind,
                         int bookmarkDelta, int postcardDelta, int stampDelta,
                         String refType, Long refId) {

@@ -149,6 +149,26 @@ public class User extends BaseTimeEntity {
         this.status = status;
     }
 
+    /** 계정 삭제 요청 시 로그인·식별 가능한 개인정보를 영구 제거한다. */
+    public void anonymizeForDeletion() {
+        this.handle = "deleted_" + id;
+        this.email = null;
+        this.passwordHash = null;
+        this.emailVerifiedAt = null;
+        this.realName = null;
+        this.phone = null;
+        this.birthDate = null;
+        this.gender = null;
+        this.ci = null;
+        this.di = null;
+        this.identityVerifiedAt = null;
+        this.nickname = "탈퇴한 사용자";
+        this.avatarUrl = null;
+        this.preferredCategories = new String[0];
+        this.allowNudge = false;
+        this.status = UserStatus.TERMINATED;
+    }
+
     public void setPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
     }

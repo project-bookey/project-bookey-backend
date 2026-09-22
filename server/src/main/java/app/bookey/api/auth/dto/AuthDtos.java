@@ -11,7 +11,7 @@ public final class AuthDtos {
 
     private AuthDtos() {}
 
-    /** 소셜 로그인·연동. token 은 provider 가 발급한 idToken/accessToken. 신규 가입은 이메일 가입으로만 가능하다. */
+    /** 소셜 로그인·연동. token 은 provider 가 발급한 idToken/accessToken. */
     public record SocialLoginRequest(
             @NotNull AuthProvider provider,
             @NotBlank String token

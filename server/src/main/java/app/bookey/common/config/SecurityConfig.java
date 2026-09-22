@@ -73,6 +73,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .requestMatchers("/docs/**", "/swagger-ui/**", "/openapi.json").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/legal/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // 공개 웹(SEO)용 읽기 전용 엔드포인트
                         .requestMatchers(HttpMethod.GET, "/api/v1/banners").permitAll()

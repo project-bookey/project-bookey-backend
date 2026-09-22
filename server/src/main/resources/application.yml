@@ -114,6 +114,7 @@ bookey:
     postcard-max-length: 16             # 16글자 (grapheme)
     postcard-cost-bookmarks: 1          # 엽서 1장 = 책갈피 1
     stamp-cost-bookmarks: 2             # 우표 1개 = 책갈피 2
+    bookmark-price-krw: 200             # 책갈피 1개 단건 구매가
     subscription-monthly-postcards: 50  # 구독 월 지급 엽서
     subscription-monthly-stamps: 30     # 구독 월 지급 우표
     subscription-price-krw: 17900       # 월 구독가 (§14.9 확정) — 스토어 상품 구성 시 기준
@@ -132,12 +133,16 @@ bookey:
       private-key: ${APPSTORE_PRIVATE_KEY:}
       environment: ${APPSTORE_ENVIRONMENT:SANDBOX} # SANDBOX | PRODUCTION
   storage:
-    type: ${STORAGE_TYPE:local}                    # local | gcs | none(업로드 끔). prod 기본값은 application-prod.yml 에서 none
+    type: ${STORAGE_TYPE:local}                    # local | gcs | s3 | none(업로드 끔). prod 기본값은 application-prod.yml 에서 none
     local:
       dir: ${STORAGE_LOCAL_DIR:./uploads}          # npm run dev 는 server/ 에서 기동 → server/uploads
       public-base-url: ${STORAGE_PUBLIC_BASE_URL:} # origin 만(예: http://192.168.0.10:8098). 비우면 요청 origin
     gcs:
       bucket: ${GCS_BUCKET:}
+    s3:
+      bucket: ${S3_BUCKET:}
+      region: ${AWS_REGION:ap-northeast-2}
+      public-base-url: ${S3_PUBLIC_BASE_URL:}
     image:
       max-bytes: 10485760                          # 10MB
       max-per-post: 10

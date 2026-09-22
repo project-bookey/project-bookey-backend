@@ -68,4 +68,11 @@ public class MeController {
         authService.registerDevice(user.id(), request);
         return ResponseEntity.noContent().build();
     }
+
+    @Operation(summary = "계정 영구 삭제 — 개인정보·로그인 수단 제거 및 계정 종료")
+    @DeleteMapping
+    public ResponseEntity<Void> deleteAccount(@AuthenticationPrincipal AuthUser user) {
+        authService.deleteAccount(user.id());
+        return ResponseEntity.noContent().build();
+    }
 }

@@ -33,7 +33,7 @@ import static org.mockito.Mockito.when;
 class SubscriptionServiceTest {
 
     private static final BookeyProperties.Social SOCIAL =
-            new BookeyProperties.Social(5, 16, 1, 2, 50, 30, 17900);
+            new BookeyProperties.Social(5, 16, 1, 2, 200, 50, 30, 17900);
     private static final BookeyProperties.Payment PAYMENT = new BookeyProperties.Payment(
             "bookey.plus.monthly",
             new BookeyProperties.Payment.Toss(

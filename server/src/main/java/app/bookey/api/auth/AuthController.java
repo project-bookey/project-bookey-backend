@@ -18,7 +18,7 @@ public class AuthController {
 
     private final AuthService authService;
 
-    @Operation(summary = "소셜 로그인 (Apple/Google/Kakao) — 연동된 계정만, 신규 가입 불가")
+    @Operation(summary = "소셜 로그인 (Apple/Google/Kakao) — 미가입 소셜 계정은 바로 가입")
     @PostMapping("/social")
     public TokenResponse socialLogin(@Valid @RequestBody SocialLoginRequest request) {
         return authService.socialLogin(request);

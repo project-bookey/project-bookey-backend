@@ -44,7 +44,7 @@ import static org.mockito.Mockito.when;
 class PostcardServiceTest {
 
     private static final BookeyProperties.Social SOCIAL =
-            new BookeyProperties.Social(5, 16, 1, 2, 50, 30, 17900);
+            new BookeyProperties.Social(5, 16, 1, 2, 200, 50, 30, 17900);
 
     private final PostcardRepository postcardRepository = mock(PostcardRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
