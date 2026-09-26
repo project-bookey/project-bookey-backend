@@ -101,7 +101,7 @@ jobs:
             temp_file=$(mktemp)
             sudo awk -v key="${key}" 'index($0, key "=") != 1' "${env_file}" > "${temp_file}"
             printf '%s=%s\n' "${key}" "${value}" >> "${temp_file}"
-            sudo install -m 600 "${temp_file}" "${env_file}"
+            sudo install -o "$(id -u)" -g "$(id -g)" -m 600 "${temp_file}" "${env_file}"
             rm -f "${temp_file}"
           }
 
