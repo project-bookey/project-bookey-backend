@@ -7,10 +7,12 @@ public final class AttendanceDtos {
 
     public record AttendanceView(
             boolean checkedInToday,
-            int streakDays,
-            int dailyRewardBookmarks,
-            int rewardedBookmarks,
-            int bookmarkBalance,
+            int monthlyAttendanceDays,
+            int monthlyMaxDays,
+            int rewardEveryDays,
+            Integer nextRewardDay,
+            int rewardedStamps,
+            int stampBalance,
             LocalDate attendanceDate
     ) {}
 }

@@ -136,17 +136,29 @@ public class WalletService {
         return toView(userId, wallet);
     }
 
-    /** 일일 출석 보상 — AttendanceService가 중복 지급을 막은 뒤 호출한다. */
+    /** 과거 일일 출석 책갈피 보상 경로 — 기존 원장 호환을 위해 남긴다. */
     @Transactional
     public void grantAttendanceBookmarks(Long userId, Wallet wallet, int bookmarks) {
         wallet.add(bookmarks, 0, 0);
         record(userId, WalletTransactionKind.ATTENDANCE, bookmarks, 0, 0, "ATTENDANCE", null);
     }
 
+    /** 월간 출석 7일 단위 우표 보상. */
+    @Transactional
+    public void grantAttendanceStamps(Long userId, Wallet wallet, int stamps) {
+        wallet.add(0, 0, stamps);
+        record(userId, WalletTransactionKind.ATTENDANCE, 0, 0, stamps, "ATTENDANCE", null);
+    }
+
     /** 읽기 전용 잔액 조회. 지갑이 아직 없으면 0으로 본다. */
     @Transactional(readOnly = true)
     public int balance(Long userId) {
         return walletRepository.findByUserId(userId).map(Wallet::getBookmarkBalance).orElse(0);
+    }
+
+    @Transactional(readOnly = true)
+    public int stampBalance(Long userId) {
+        return walletRepository.findByUserId(userId).map(Wallet::getStampBalance).orElse(0);
     }
 
     private void record(Long userId, WalletTransactionKind kind,

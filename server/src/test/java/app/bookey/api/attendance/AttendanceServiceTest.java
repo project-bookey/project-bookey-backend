@@ -25,57 +25,75 @@ class AttendanceServiceTest {
 
     private final DailyAttendanceRepository repository = mock(DailyAttendanceRepository.class);
     private final WalletService walletService = mock(WalletService.class);
-    private final AttendanceService service = new AttendanceService(repository, walletService, CLOCK, 1);
+    private final AttendanceService service = new AttendanceService(repository, walletService, CLOCK);
 
     @Test
-    void firstCheckInGrantsOneBookmark() {
+    void firstCheckInStartsMonthlyBoardWithoutReward() {
         Wallet wallet = new Wallet(USER_ID, TODAY);
         when(walletService.prepared(USER_ID)).thenReturn(wallet);
         when(repository.findByUserIdAndAttendanceDate(USER_ID, TODAY)).thenReturn(Optional.empty());
-        when(repository.findTopByUserIdOrderByAttendanceDateDesc(USER_ID)).thenReturn(Optional.empty());
-        doAnswer(invocation -> {
-            Wallet target = invocation.getArgument(1);
-            target.add(invocation.getArgument(2), 0, 0);
-            return null;
-        }).when(walletService).grantAttendanceBookmarks(eq(USER_ID), same(wallet), eq(1));
+        when(repository.countByUserIdAndAttendanceDateBetween(eq(USER_ID), any(), any())).thenReturn(0L);
 
         var result = service.checkIn(USER_ID);
 
         assertThat(result.checkedInToday()).isTrue();
-        assertThat(result.streakDays()).isEqualTo(1);
-        assertThat(result.rewardedBookmarks()).isEqualTo(1);
-        assertThat(result.bookmarkBalance()).isEqualTo(1);
+        assertThat(result.monthlyAttendanceDays()).isEqualTo(1);
+        assertThat(result.rewardedStamps()).isZero();
+        assertThat(result.nextRewardDay()).isEqualTo(7);
         verify(repository).save(any(DailyAttendance.class));
-        verify(walletService).grantAttendanceBookmarks(USER_ID, wallet, 1);
+        verify(walletService, never()).grantAttendanceStamps(anyLong(), any(), anyInt());
     }
 
     @Test
     void duplicateCheckInDoesNotGrantAgain() {
         Wallet wallet = new Wallet(USER_ID, TODAY);
-        wallet.add(3, 0, 0);
-        DailyAttendance existing = new DailyAttendance(USER_ID, TODAY, 4, 1);
+        wallet.add(0, 0, 2);
+        DailyAttendance existing = new DailyAttendance(USER_ID, TODAY, 4, 0, 0);
         when(walletService.prepared(USER_ID)).thenReturn(wallet);
         when(repository.findByUserIdAndAttendanceDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
+        when(repository.countByUserIdAndAttendanceDateBetween(eq(USER_ID), any(), any())).thenReturn(4L);
 
         var result = service.checkIn(USER_ID);
 
-        assertThat(result.streakDays()).isEqualTo(4);
-        assertThat(result.rewardedBookmarks()).isZero();
-        assertThat(result.bookmarkBalance()).isEqualTo(3);
+        assertThat(result.monthlyAttendanceDays()).isEqualTo(4);
+        assertThat(result.rewardedStamps()).isZero();
+        assertThat(result.stampBalance()).isEqualTo(2);
         verify(repository, never()).save(any());
-        verify(walletService, never()).grantAttendanceBookmarks(anyLong(), any(), anyInt());
+        verify(walletService, never()).grantAttendanceStamps(anyLong(), any(), anyInt());
     }
 
     @Test
-    void yesterdayAttendanceContinuesStreak() {
+    void seventhCheckInGrantsOneStamp() {
         Wallet wallet = new Wallet(USER_ID, TODAY);
-        DailyAttendance yesterday = new DailyAttendance(USER_ID, TODAY.minusDays(1), 6, 1);
         when(walletService.prepared(USER_ID)).thenReturn(wallet);
         when(repository.findByUserIdAndAttendanceDate(USER_ID, TODAY)).thenReturn(Optional.empty());
-        when(repository.findTopByUserIdOrderByAttendanceDateDesc(USER_ID)).thenReturn(Optional.of(yesterday));
+        when(repository.countByUserIdAndAttendanceDateBetween(eq(USER_ID), any(), any())).thenReturn(6L);
+        doAnswer(invocation -> {
+            Wallet target = invocation.getArgument(1);
+            target.add(0, 0, invocation.getArgument(2));
+            return null;
+        }).when(walletService).grantAttendanceStamps(eq(USER_ID), same(wallet), eq(1));
 
         var result = service.checkIn(USER_ID);
 
-        assertThat(result.streakDays()).isEqualTo(7);
+        assertThat(result.monthlyAttendanceDays()).isEqualTo(7);
+        assertThat(result.rewardedStamps()).isEqualTo(1);
+        assertThat(result.stampBalance()).isEqualTo(1);
+        assertThat(result.nextRewardDay()).isEqualTo(14);
+    }
+
+    @Test
+    void monthlyBoardStopsAtTwentyEightDays() {
+        Wallet wallet = new Wallet(USER_ID, TODAY);
+        when(walletService.prepared(USER_ID)).thenReturn(wallet);
+        when(repository.findByUserIdAndAttendanceDate(USER_ID, TODAY)).thenReturn(Optional.empty());
+        when(repository.countByUserIdAndAttendanceDateBetween(eq(USER_ID), any(), any())).thenReturn(28L);
+
+        var result = service.checkIn(USER_ID);
+
+        assertThat(result.checkedInToday()).isFalse();
+        assertThat(result.monthlyAttendanceDays()).isEqualTo(28);
+        assertThat(result.nextRewardDay()).isNull();
+        verify(repository, never()).save(any());
     }
 }
