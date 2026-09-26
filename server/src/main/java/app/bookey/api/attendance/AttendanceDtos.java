@@ -11,7 +11,10 @@ public final class AttendanceDtos {
             int monthlyMaxDays,
             int rewardEveryDays,
             Integer nextRewardDay,
+            String nextRewardType,
+            int rewardedPostcards,
             int rewardedStamps,
+            int postcardBalance,
             int stampBalance,
             LocalDate attendanceDate
     ) {}

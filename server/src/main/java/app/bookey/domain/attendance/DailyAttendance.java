@@ -34,12 +34,16 @@ public class DailyAttendance extends BaseTimeEntity {
     @Column(name = "reward_stamps", nullable = false)
     private int rewardStamps;
 
+    @Column(name = "reward_postcards", nullable = false)
+    private int rewardPostcards;
+
     public DailyAttendance(Long userId, LocalDate attendanceDate, int streakDays,
-                           int rewardBookmarks, int rewardStamps) {
+                           int rewardBookmarks, int rewardPostcards, int rewardStamps) {
         this.userId = userId;
         this.attendanceDate = attendanceDate;
         this.streakDays = streakDays;
         this.rewardBookmarks = rewardBookmarks;
+        this.rewardPostcards = rewardPostcards;
         this.rewardStamps = rewardStamps;
     }
 }

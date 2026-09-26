@@ -41,14 +41,14 @@ class AttendanceServiceTest {
         assertThat(result.rewardedStamps()).isZero();
         assertThat(result.nextRewardDay()).isEqualTo(7);
         verify(repository).save(any(DailyAttendance.class));
-        verify(walletService, never()).grantAttendanceStamps(anyLong(), any(), anyInt());
+        verify(walletService, never()).grantAttendanceReward(anyLong(), any(), anyInt(), anyInt());
     }
 
     @Test
     void duplicateCheckInDoesNotGrantAgain() {
         Wallet wallet = new Wallet(USER_ID, TODAY);
         wallet.add(0, 0, 2);
-        DailyAttendance existing = new DailyAttendance(USER_ID, TODAY, 4, 0, 0);
+        DailyAttendance existing = new DailyAttendance(USER_ID, TODAY, 4, 0, 0, 0);
         when(walletService.prepared(USER_ID)).thenReturn(wallet);
         when(repository.findByUserIdAndAttendanceDate(USER_ID, TODAY)).thenReturn(Optional.of(existing));
         when(repository.countByUserIdAndAttendanceDateBetween(eq(USER_ID), any(), any())).thenReturn(4L);
@@ -59,27 +59,51 @@ class AttendanceServiceTest {
         assertThat(result.rewardedStamps()).isZero();
         assertThat(result.stampBalance()).isEqualTo(2);
         verify(repository, never()).save(any());
-        verify(walletService, never()).grantAttendanceStamps(anyLong(), any(), anyInt());
+        verify(walletService, never()).grantAttendanceReward(anyLong(), any(), anyInt(), anyInt());
     }
 
     @Test
-    void seventhCheckInGrantsOneStamp() {
+    void seventhCheckInGrantsOnePostcard() {
         Wallet wallet = new Wallet(USER_ID, TODAY);
         when(walletService.prepared(USER_ID)).thenReturn(wallet);
         when(repository.findByUserIdAndAttendanceDate(USER_ID, TODAY)).thenReturn(Optional.empty());
         when(repository.countByUserIdAndAttendanceDateBetween(eq(USER_ID), any(), any())).thenReturn(6L);
         doAnswer(invocation -> {
             Wallet target = invocation.getArgument(1);
-            target.add(0, 0, invocation.getArgument(2));
+            target.add(0, invocation.getArgument(2), invocation.getArgument(3));
             return null;
-        }).when(walletService).grantAttendanceStamps(eq(USER_ID), same(wallet), eq(1));
+        }).when(walletService).grantAttendanceReward(eq(USER_ID), same(wallet), eq(1), eq(0));
 
         var result = service.checkIn(USER_ID);
 
         assertThat(result.monthlyAttendanceDays()).isEqualTo(7);
+        assertThat(result.rewardedPostcards()).isEqualTo(1);
+        assertThat(result.rewardedStamps()).isZero();
+        assertThat(result.postcardBalance()).isEqualTo(1);
+        assertThat(result.nextRewardDay()).isEqualTo(14);
+        assertThat(result.nextRewardType()).isEqualTo("STAMP");
+    }
+
+    @Test
+    void fourteenthCheckInGrantsOneStamp() {
+        Wallet wallet = new Wallet(USER_ID, TODAY);
+        when(walletService.prepared(USER_ID)).thenReturn(wallet);
+        when(repository.findByUserIdAndAttendanceDate(USER_ID, TODAY)).thenReturn(Optional.empty());
+        when(repository.countByUserIdAndAttendanceDateBetween(eq(USER_ID), any(), any())).thenReturn(13L);
+        doAnswer(invocation -> {
+            Wallet target = invocation.getArgument(1);
+            target.add(0, invocation.getArgument(2), invocation.getArgument(3));
+            return null;
+        }).when(walletService).grantAttendanceReward(eq(USER_ID), same(wallet), eq(0), eq(1));
+
+        var result = service.checkIn(USER_ID);
+
+        assertThat(result.monthlyAttendanceDays()).isEqualTo(14);
+        assertThat(result.rewardedPostcards()).isZero();
         assertThat(result.rewardedStamps()).isEqualTo(1);
         assertThat(result.stampBalance()).isEqualTo(1);
-        assertThat(result.nextRewardDay()).isEqualTo(14);
+        assertThat(result.nextRewardDay()).isEqualTo(21);
+        assertThat(result.nextRewardType()).isEqualTo("POSTCARD");
     }
 
     @Test

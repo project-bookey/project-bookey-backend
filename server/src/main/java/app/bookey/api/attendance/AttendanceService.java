@@ -41,8 +41,10 @@ public class AttendanceService {
         DailyAttendance todayAttendance = attendanceRepository
                 .findByUserIdAndAttendanceDate(userId, today).orElse(null);
         int monthlyDays = monthlyDays(userId, today);
-        int stampBalance = walletService.stampBalance(userId);
-        return view(todayAttendance != null, monthlyDays, 0, stampBalance,
+        Wallet balances = walletService.find(userId);
+        return view(todayAttendance != null, monthlyDays, 0, 0,
+                balances == null ? 0 : balances.getPostcardBalance(),
+                balances == null ? 0 : balances.getStampBalance(),
                 todayAttendance == null ? null : today);
     }
 
@@ -55,19 +57,25 @@ public class AttendanceService {
         int monthlyDays = monthlyDays(userId, today);
         DailyAttendance existing = attendanceRepository.findByUserIdAndAttendanceDate(userId, today).orElse(null);
         if (existing != null) {
-            return view(true, monthlyDays, 0, wallet.getStampBalance(), today);
+            return view(true, monthlyDays, 0, 0,
+                    wallet.getPostcardBalance(), wallet.getStampBalance(), today);
         }
         if (monthlyDays >= MONTHLY_MAX_DAYS) {
-            return view(false, MONTHLY_MAX_DAYS, 0, wallet.getStampBalance(), null);
+            return view(false, MONTHLY_MAX_DAYS, 0, 0,
+                    wallet.getPostcardBalance(), wallet.getStampBalance(), null);
         }
 
         int checkedDays = monthlyDays + 1;
-        int rewardedStamps = checkedDays % REWARD_EVERY_DAYS == 0 ? 1 : 0;
-        attendanceRepository.save(new DailyAttendance(userId, today, checkedDays, 0, rewardedStamps));
-        if (rewardedStamps > 0) {
-            walletService.grantAttendanceStamps(userId, wallet, rewardedStamps);
+        boolean milestone = checkedDays % REWARD_EVERY_DAYS == 0;
+        int rewardedPostcards = milestone && (checkedDays == 7 || checkedDays == 21) ? 1 : 0;
+        int rewardedStamps = milestone && (checkedDays == 14 || checkedDays == 28) ? 1 : 0;
+        attendanceRepository.save(new DailyAttendance(
+                userId, today, checkedDays, 0, rewardedPostcards, rewardedStamps));
+        if (rewardedPostcards > 0 || rewardedStamps > 0) {
+            walletService.grantAttendanceReward(userId, wallet, rewardedPostcards, rewardedStamps);
         }
-        return view(true, checkedDays, rewardedStamps, wallet.getStampBalance(), today);
+        return view(true, checkedDays, rewardedPostcards, rewardedStamps,
+                wallet.getPostcardBalance(), wallet.getStampBalance(), today);
     }
 
     private int monthlyDays(Long userId, LocalDate today) {
@@ -77,12 +85,17 @@ public class AttendanceService {
                 attendanceRepository.countByUserIdAndAttendanceDateBetween(userId, first, last));
     }
 
-    private AttendanceView view(boolean checkedToday, int monthlyDays, int rewardedStamps,
-                                int stampBalance, LocalDate attendanceDate) {
+    private AttendanceView view(boolean checkedToday, int monthlyDays,
+                                int rewardedPostcards, int rewardedStamps,
+                                int postcardBalance, int stampBalance, LocalDate attendanceDate) {
         Integer nextRewardDay = monthlyDays >= MONTHLY_MAX_DAYS
                 ? null
                 : Math.min(MONTHLY_MAX_DAYS, ((monthlyDays / REWARD_EVERY_DAYS) + 1) * REWARD_EVERY_DAYS);
+        String nextRewardType = nextRewardDay == null
+                ? null
+                : (nextRewardDay == 7 || nextRewardDay == 21 ? "POSTCARD" : "STAMP");
         return new AttendanceView(checkedToday, monthlyDays, MONTHLY_MAX_DAYS, REWARD_EVERY_DAYS,
-                nextRewardDay, rewardedStamps, stampBalance, attendanceDate);
+                nextRewardDay, nextRewardType, rewardedPostcards, rewardedStamps,
+                postcardBalance, stampBalance, attendanceDate);
     }
 }

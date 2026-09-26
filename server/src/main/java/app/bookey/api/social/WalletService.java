@@ -150,6 +150,13 @@ public class WalletService {
         record(userId, WalletTransactionKind.ATTENDANCE, 0, 0, stamps, "ATTENDANCE", null);
     }
 
+    /** 월간 출석 보상 — 7·21일 엽서, 14·28일 우표. */
+    @Transactional
+    public void grantAttendanceReward(Long userId, Wallet wallet, int postcards, int stamps) {
+        wallet.add(0, postcards, stamps);
+        record(userId, WalletTransactionKind.ATTENDANCE, 0, postcards, stamps, "ATTENDANCE", null);
+    }
+
     /** 읽기 전용 잔액 조회. 지갑이 아직 없으면 0으로 본다. */
     @Transactional(readOnly = true)
     public int balance(Long userId) {
@@ -159,6 +166,11 @@ public class WalletService {
     @Transactional(readOnly = true)
     public int stampBalance(Long userId) {
         return walletRepository.findByUserId(userId).map(Wallet::getStampBalance).orElse(0);
+    }
+
+    @Transactional(readOnly = true)
+    public Wallet find(Long userId) {
+        return walletRepository.findByUserId(userId).orElse(null);
     }
 
     private void record(Long userId, WalletTransactionKind kind,
