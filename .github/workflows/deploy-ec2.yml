@@ -34,6 +34,16 @@ jobs:
   deploy:
     needs: validate
     runs-on: [self-hosted, bookey-prod]
+    env:
+      KAKAO_REST_KEY: ${{ secrets.KAKAO_REST_KEY }}
+      ALADIN_TTB_KEY: ${{ secrets.ALADIN_TTB_KEY }}
+      GOOGLE_BOOKS_KEY: ${{ secrets.GOOGLE_BOOKS_KEY }}
+      YES24_API_KEY: ${{ secrets.YES24_API_KEY }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -54,6 +64,17 @@ jobs:
           RELEASE_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           BACKUP_DIR="${APP_DIR}/backups/${RELEASE_ID}"
 
+          required_secrets=(
+            KAKAO_REST_KEY ALADIN_TTB_KEY GOOGLE_BOOKS_KEY YES24_API_KEY
+            SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD MAIL_FROM
+          )
+          for key in "${required_secrets[@]}"; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "Missing required GitHub Actions secret: ${key}" >&2
+              exit 1
+            fi
+          done
+
           sudo mkdir -p "${BACKUP_DIR}"
 
           DB_USER=$(docker exec bookey-postgres-1 printenv POSTGRES_USER)
@@ -69,6 +90,29 @@ jobs:
           sudo tar -xzf "/tmp/bookey-backend-${GITHUB_RUN_ID}.tgz" \
             -C "${APP_DIR}/project-bookey-backend"
           sudo chown -R ec2-user:ec2-user "${APP_DIR}/project-bookey-backend"
+
+          # GitHub가 관리하는 외부 연동 Secret만 서버 .env에 갱신한다.
+          # DB/JWT/S3 등 EC2 로컬 설정은 기존 값을 보존한다.
+          update_env() {
+            local key="$1"
+            local value="$2"
+            local env_file="${APP_DIR}/.env"
+            local temp_file
+            temp_file=$(mktemp)
+            sudo awk -v key="${key}" 'index($0, key "=") != 1' "${env_file}" > "${temp_file}"
+            printf '%s=%s\n' "${key}" "${value}" >> "${temp_file}"
+            sudo install -m 600 "${temp_file}" "${env_file}"
+            rm -f "${temp_file}"
+          }
+
+          for key in "${required_secrets[@]}"; do
+            update_env "${key}" "${!key}"
+          done
+
+          # EC2 운영 Compose도 저장소를 단일 원천으로 사용한다.
+          sudo install -m 644 \
+            "${APP_DIR}/project-bookey-backend/infra/docker-compose.ec2.yml" \
+            "${APP_DIR}/docker-compose.yml"
 
           cd "${APP_DIR}"
           docker compose build backend

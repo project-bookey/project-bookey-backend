@@ -221,7 +221,7 @@ PostgreSQL/Redis 컨테이너와 Docker volume은 유지됩니다.
 | S3 | `bookey-prod-media-755610386590` | 독후감/프로필 이미지 저장. 공개 읽기, EC2 role 쓰기 |
 | IAM Role | `bookey-ec2-s3-role` | EC2 instance profile `bookey-ec2-profile` 로 연결 |
 | Docker volume | `bookey_postgres-data`, `bookey_redis-data` | DB/Redis 데이터 보존 |
-| `/opt/bookey/.env` | 서버 로컬 파일 | 운영 secret 원천. GitHub Actions가 덮어쓰지 않음 |
+| `/opt/bookey/.env` | 서버 로컬 파일 | DB·JWT·S3 설정 원천. 외부 API·SMTP 값은 GitHub Actions가 동기화 |
 
 GitHub Repository Variables:
 
@@ -236,11 +236,14 @@ GitHub Repository Secrets:
 | `EC2_HOST` | EC2 public IP 또는 DNS |
 | `EC2_USER` | 예: `ec2-user` |
 | `EC2_SSH_KEY` | EC2 접속용 private key 전체 내용 |
+| `KAKAO_REST_KEY` / `ALADIN_TTB_KEY` / `GOOGLE_BOOKS_KEY` / `YES24_API_KEY` | 도서 검색 API 키 |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` | 가입 인증 메일 SMTP 설정 |
+| `MAIL_FROM` | 가입 인증 메일 발신 주소 |
 
 최초 1회 순서:
 
 1. EC2에 Docker, Docker Compose, Buildx를 설치한다.
-2. `/opt/bookey/docker-compose.yml` 과 `/opt/bookey/.env` 를 만든다.
+2. `/opt/bookey/.env` 에 DB·JWT·S3 등 EC2 로컬 설정을 만든다. Compose는 배포 시 `infra/docker-compose.ec2.yml`에서 동기화된다.
 3. S3 버킷을 만들고 공개 읽기 bucket policy와 EC2 role의 `s3:GetObject`/`PutObject`/`DeleteObject` 권한을 붙인다.
 4. backend 환경변수에 `STORAGE_TYPE=s3`, `S3_BUCKET=bookey-prod-media-755610386590`, `AWS_REGION=ap-northeast-2` 를 넣는다.
 5. GitHub Secrets에 `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY` 를 등록한다.
