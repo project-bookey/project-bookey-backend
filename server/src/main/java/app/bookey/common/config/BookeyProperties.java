@@ -93,7 +93,9 @@ public record BookeyProperties(
             int dailyCap,
             int weeklyCap,
             int clubDailyCap,
-            int defaultSendHour
+            int defaultSendHour,
+            String expoPushUrl,
+            String expoAccessToken
     ) {}
 
     /** 구독 결제 연동. Apple/Google IAP 와 웹 Toss Payments 를 같은 구독 계약으로 맞춘다. */

@@ -49,4 +49,9 @@ public class UserDevice {
         this.pushEnabled = pushEnabled;
         this.lastSeenAt = Instant.now();
     }
+
+    public void disablePush() {
+        this.pushEnabled = false;
+        this.lastSeenAt = Instant.now();
+    }
 }

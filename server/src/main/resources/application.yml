@@ -109,6 +109,9 @@ bookey:
     weekly-cap: 7
     club-daily-cap: 3
     default-send-hour: 20
+    expo-push-url: ${EXPO_PUSH_URL:https://exp.host/--/api/v2/push/send}
+    # Expo Push Security를 켠 경우에만 설정. 비워 두면 일반 Expo Push API로 발송한다.
+    expo-access-token: ${EXPO_ACCESS_TOKEN:}
   social:
     postcard-daily-free: 5              # 무료 엽서 일 5장 — KST 자정 리셋 (§14.9 확정)
     postcard-max-length: 16             # 16글자 (grapheme)

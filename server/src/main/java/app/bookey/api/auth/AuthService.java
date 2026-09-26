@@ -322,6 +322,8 @@ public class AuthService {
     @Transactional
     public void logout(Long userId) {
         refreshTokenRepository.revokeAllByUserId(userId, Instant.now());
+        deviceRepository.findAllByUserIdAndPushEnabledTrue(userId)
+                .forEach(UserDevice::disablePush);
     }
 
     @Transactional
