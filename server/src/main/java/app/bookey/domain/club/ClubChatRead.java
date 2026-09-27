@@ -1,0 +1,4 @@
+package app.bookey.domain.club;
+import jakarta.persistence.*; import lombok.*; import java.io.Serializable; import java.time.Instant;
+@Getter @Entity @Table(name="club_chat_reads") @IdClass(ClubChatRead.Key.class) @NoArgsConstructor(access=AccessLevel.PROTECTED)
+public class ClubChatRead { @Id @Column(name="club_id") private Long clubId; @Id @Column(name="user_id") private Long userId; @Column(name="last_read_message_id") private Long lastReadMessageId; @Column(name="updated_at") private Instant updatedAt; public ClubChatRead(Long c,Long u,Long m){clubId=c;userId=u;lastReadMessageId=m;updatedAt=Instant.now();} public void read(Long m){if(m!=null&&(lastReadMessageId==null||m>lastReadMessageId))lastReadMessageId=m;updatedAt=Instant.now();} @Data @NoArgsConstructor @AllArgsConstructor public static class Key implements Serializable {private Long clubId;private Long userId;} }

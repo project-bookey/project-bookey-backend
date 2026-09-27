@@ -1,0 +1,34 @@
+package app.bookey.api.club;
+
+import app.bookey.api.club.dto.ClubCommunityDtos.*;
+import app.bookey.api.social.WalletService;
+import app.bookey.common.error.*;
+import app.bookey.domain.club.*;
+import app.bookey.domain.user.*;
+import app.bookey.domain.wallet.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.Instant; import java.util.*; import java.util.function.Function; import java.util.stream.Collectors;
+
+@Service @RequiredArgsConstructor
+public class ClubCommunityService {
+ private static final int CHAT_COST=2;
+ private final ClubService clubService; private final ClubRepository clubRepository; private final ClubChatUnlockRepository unlocks; private final ClubChatMessageRepository messages; private final ClubChatReadRepository reads; private final ClubMeetingRepository meetings; private final ClubMeetingAttendeeRepository attendees; private final UserRepository users; private final WalletService walletService;
+ @Transactional(readOnly=true) public ChatState chatState(Long userId,Long clubId){clubService.activeMember(clubId,userId); boolean unlocked=unlocks.existsByClubIdAndUserId(clubId,userId); long total=messages.countByClubId(clubId); Long last=messages.lastId(clubId); long unread=reads.findById(new ClubChatRead.Key(clubId,userId)).map(r->last==null?0:messages.countByClubIdAndIdGreaterThan(clubId,Optional.ofNullable(r.getLastReadMessageId()).orElse(0L))).orElse(total); Instant activity=last==null?null:messages.findById(last).map(ClubChatMessage::getCreatedAt).orElse(null); return new ChatState(unlocked,CHAT_COST,walletService.balance(userId),unread,total,activity);}
+ @Transactional public UnlockResult unlock(Long userId,Long clubId){clubService.activeMember(clubId,userId); if(unlocks.existsByClubIdAndUserId(clubId,userId))return new UnlockResult(true,walletService.balance(userId)); Wallet wallet=walletService.spendBookmarks(userId,CHAT_COST,WalletTransactionKind.CLUB_CHAT_UNLOCK,"CLUB",clubId); unlocks.save(new ClubChatUnlock(clubId,userId,CHAT_COST)); return new UnlockResult(true,wallet.getBookmarkBalance());}
+ @Transactional public ChatMessagesView chatMessages(Long userId,Long clubId,Long beforeId){requireUnlocked(userId,clubId); var page=PageRequest.of(0,50); var list=beforeId==null?messages.findAllByClubIdOrderByIdDesc(clubId,page):messages.findAllByClubIdAndIdLessThanOrderByIdDesc(clubId,beforeId,page); Map<Long,User> authors=users.findAllById(list.stream().map(ClubChatMessage::getSenderId).distinct().toList()).stream().collect(Collectors.toMap(User::getId,Function.identity())); Long last=messages.lastId(clubId); var key=new ClubChatRead.Key(clubId,userId); reads.findById(key).ifPresentOrElse(r->r.read(last),()->reads.save(new ClubChatRead(clubId,userId,last))); return new ChatMessagesView(list.stream().map(m->new ChatMessageView(m.getId(),m.getSenderId(),authors.get(m.getSenderId()).getNickname(),m.getBody(),m.getCreatedAt(),m.getSenderId().equals(userId))).toList(),list.size()==50?list.get(49).getId():null);}
+ @Transactional public ChatMessageView send(Long userId,Long clubId,SendChatRequest request){requireUnlocked(userId,clubId); if(clubRepository.findById(clubId).orElseThrow(()->ApiException.of(ErrorCode.CLUB_NOT_FOUND)).getStatus().isOver())throw ApiException.of(ErrorCode.CLUB_ENDED); ClubChatMessage m=messages.save(new ClubChatMessage(clubId,userId,request.body().trim())); User u=users.findById(userId).orElseThrow(); reads.save(new ClubChatRead(clubId,userId,m.getId())); return new ChatMessageView(m.getId(),userId,u.getNickname(),m.getBody(),m.getCreatedAt(),true);}
+ private void requireUnlocked(Long u,Long c){clubService.activeMember(c,u);if(!unlocks.existsByClubIdAndUserId(c,u))throw ApiException.of(ErrorCode.CLUB_CHAT_LOCKED);}
+ @Transactional(readOnly=true) public List<MeetingView> meetingList(Long u,Long c){clubService.activeMember(c,u);return meetings.findAllByClubIdOrderByStartsAtAsc(c).stream().map(m->meetingView(m,u)).toList();}
+ @Transactional public MeetingView createMeeting(Long u,Long c,UpsertMeetingRequest r){requireHost(u,c);validateMeeting(r);return meetingView(meetings.save(new ClubMeeting(c,u,r.title(),r.description(),r.startsAt(),r.endsAt(),r.placeName(),r.address(),r.latitude(),r.longitude(),r.mapUrl(),r.responseDeadline())),u);}
+ @Transactional public MeetingView updateMeeting(Long u,Long c,Long id,UpsertMeetingRequest r){requireHost(u,c);validateMeeting(r);ClubMeeting m=meeting(c,id);if(!m.isOpen())throw ApiException.of(ErrorCode.INVALID_REQUEST);m.update(r.title(),r.description(),r.startsAt(),r.endsAt(),r.placeName(),r.address(),r.latitude(),r.longitude(),r.mapUrl(),r.responseDeadline());return meetingView(m,u);}
+ @Transactional public void cancelMeeting(Long u,Long c,Long id){requireHost(u,c);meeting(c,id).cancel();}
+ @Transactional public MeetingView attend(Long u,Long c,Long id){clubService.activeMember(c,u);ClubMeeting m=meeting(c,id);if(!m.isOpen()||(m.getResponseDeadline()!=null&&m.getResponseDeadline().isBefore(Instant.now())))throw ApiException.of(ErrorCode.INVALID_REQUEST);attendees.save(new ClubMeetingAttendee(id,u));return meetingView(m,u);}
+ @Transactional public MeetingView unattend(Long u,Long c,Long id){clubService.activeMember(c,u);ClubMeeting m=meeting(c,id);attendees.deleteById(new ClubMeetingAttendee.Key(id,u));return meetingView(m,u);}
+ private void requireHost(Long u,Long c){if(!clubService.activeMember(c,u).getRole().canManageClub())throw ApiException.of(ErrorCode.CLUB_NOT_HOST);}
+ private ClubMeeting meeting(Long c,Long id){ClubMeeting m=meetings.findById(id).orElseThrow(()->ApiException.of(ErrorCode.CLUB_MEETING_NOT_FOUND));if(!m.getClubId().equals(c))throw ApiException.of(ErrorCode.CLUB_MEETING_NOT_FOUND);return m;}
+ private void validateMeeting(UpsertMeetingRequest r){if(r.endsAt()!=null&&!r.endsAt().isAfter(r.startsAt()))throw new ApiException(ErrorCode.INVALID_REQUEST,"종료 시각은 시작 시각보다 늦어야 합니다.");if(r.responseDeadline()!=null&&r.responseDeadline().isAfter(r.startsAt()))throw new ApiException(ErrorCode.INVALID_REQUEST,"참여 응답 마감은 시작 전이어야 합니다.");}
+ private MeetingView meetingView(ClubMeeting m,Long u){var list=attendees.findAllByMeetingId(m.getId());var ids=list.stream().map(ClubMeetingAttendee::getUserId).toList();var names=users.findAllById(ids).stream().map(User::getNickname).toList();return new MeetingView(m.getId(),m.getClubId(),m.getTitle(),m.getDescription(),m.getStartsAt(),m.getEndsAt(),m.getPlaceName(),m.getAddress(),m.getLatitude(),m.getLongitude(),m.getMapUrl(),m.getResponseDeadline(),m.getStatus(),list.size(),ids.contains(u),m.getCreatedBy().equals(u),names);}
+}

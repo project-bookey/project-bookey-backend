@@ -24,6 +24,7 @@ public class ClubController {
     private final ClubService clubService;
     private final ClubSeatService seatService;
     private final ClubNudgeService nudgeService;
+    private final ClubCommunityService communityService;
 
     @Operation(summary = "모임 만들기 — 초대 코드 자동 발급")
     @PostMapping
@@ -165,4 +166,25 @@ public class ClubController {
         nudgeService.nudge(user.id(), clubId, request);
         return Map.of("remainingToday", nudgeService.remainingToday(user.id()));
     }
+
+    @GetMapping("/{clubId}/chat")
+    public app.bookey.api.club.dto.ClubCommunityDtos.ChatState chatState(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return communityService.chatState(user.id(),clubId);}
+    @PostMapping("/{clubId}/chat/unlock")
+    public app.bookey.api.club.dto.ClubCommunityDtos.UnlockResult unlockChat(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return communityService.unlock(user.id(),clubId);}
+    @GetMapping("/{clubId}/chat/messages")
+    public app.bookey.api.club.dto.ClubCommunityDtos.ChatMessagesView chatMessages(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@RequestParam(required=false) Long beforeId){return communityService.chatMessages(user.id(),clubId,beforeId);}
+    @PostMapping("/{clubId}/chat/messages")
+    public app.bookey.api.club.dto.ClubCommunityDtos.ChatMessageView sendChat(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@Valid @RequestBody app.bookey.api.club.dto.ClubCommunityDtos.SendChatRequest request){return communityService.send(user.id(),clubId,request);}
+    @GetMapping("/{clubId}/meetings")
+    public java.util.List<app.bookey.api.club.dto.ClubCommunityDtos.MeetingView> meetings(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return communityService.meetingList(user.id(),clubId);}
+    @PostMapping("/{clubId}/meetings")
+    public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView createMeeting(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@Valid @RequestBody app.bookey.api.club.dto.ClubCommunityDtos.UpsertMeetingRequest request){return communityService.createMeeting(user.id(),clubId,request);}
+    @PutMapping("/{clubId}/meetings/{meetingId}")
+    public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView updateMeeting(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId,@Valid @RequestBody app.bookey.api.club.dto.ClubCommunityDtos.UpsertMeetingRequest request){return communityService.updateMeeting(user.id(),clubId,meetingId,request);}
+    @DeleteMapping("/{clubId}/meetings/{meetingId}")
+    public ResponseEntity<Void> cancelMeeting(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){communityService.cancelMeeting(user.id(),clubId,meetingId);return ResponseEntity.noContent().build();}
+    @PostMapping("/{clubId}/meetings/{meetingId}/attendees/me")
+    public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView attend(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){return communityService.attend(user.id(),clubId,meetingId);}
+    @DeleteMapping("/{clubId}/meetings/{meetingId}/attendees/me")
+    public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView unattend(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){return communityService.unattend(user.id(),clubId,meetingId);}
 }

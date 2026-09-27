@@ -1,0 +1,3 @@
+package app.bookey.domain.club;
+import org.springframework.data.domain.Pageable; import org.springframework.data.jpa.repository.*; import org.springframework.data.repository.query.Param; import java.util.List;
+public interface ClubChatMessageRepository extends JpaRepository<ClubChatMessage,Long>{ List<ClubChatMessage> findAllByClubIdOrderByIdDesc(Long clubId,Pageable pageable); List<ClubChatMessage> findAllByClubIdAndIdLessThanOrderByIdDesc(Long clubId,Long beforeId,Pageable pageable); long countByClubId(Long clubId); long countByClubIdAndIdGreaterThan(Long clubId,Long id); @Query("select max(m.id) from ClubChatMessage m where m.clubId=:clubId") Long lastId(@Param("clubId") Long clubId); }

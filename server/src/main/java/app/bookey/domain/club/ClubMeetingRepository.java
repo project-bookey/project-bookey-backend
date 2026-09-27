@@ -1,0 +1,1 @@
+package app.bookey.domain.club; import org.springframework.data.jpa.repository.JpaRepository; import java.util.List; public interface ClubMeetingRepository extends JpaRepository<ClubMeeting,Long>{List<ClubMeeting> findAllByClubIdOrderByStartsAtAsc(Long clubId);}

@@ -1,0 +1,1 @@
+package app.bookey.domain.club; import org.springframework.data.jpa.repository.JpaRepository; public interface ClubChatUnlockRepository extends JpaRepository<ClubChatUnlock,Long>{ boolean existsByClubIdAndUserId(Long clubId,Long userId); }

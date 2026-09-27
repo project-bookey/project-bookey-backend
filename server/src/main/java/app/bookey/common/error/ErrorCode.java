@@ -76,6 +76,8 @@ public enum ErrorCode {
     CLUB_NOT_HOST(HttpStatus.FORBIDDEN, "호스트만 할 수 있는 작업입니다."),
     CLUB_KICKED(HttpStatus.FORBIDDEN, "다시 참가할 수 없는 모임입니다."),
     CLUB_HOST_CANNOT_LEAVE(HttpStatus.CONFLICT, "호스트는 권한을 넘긴 뒤 나갈 수 있습니다."),
+    CLUB_CHAT_LOCKED(HttpStatus.PAYMENT_REQUIRED, "책갈피 2개로 모임 채팅을 먼저 열어 주세요."),
+    CLUB_MEETING_NOT_FOUND(HttpStatus.NOT_FOUND, "약속을 찾을 수 없습니다."),
     NUDGE_COOLDOWN(HttpStatus.TOO_MANY_REQUESTS, "이미 찔렀어요. 24시간 뒤에 다시 보낼 수 있습니다."),
     NUDGE_DAILY_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "오늘 보낼 수 있는 찌르기를 모두 썼습니다."),
     NUDGE_BLOCKED(HttpStatus.FORBIDDEN, "상대가 찌르기를 받지 않도록 설정했습니다."),

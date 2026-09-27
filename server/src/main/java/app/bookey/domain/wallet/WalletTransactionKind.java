@@ -22,6 +22,8 @@ public enum WalletTransactionKind {
     REPLY_STAMP,
     /** 모임 자리 늘리기 — 자리당 책갈피 차감, ref = CLUB */
     CLUB_SEAT,
+    /** 모임별 채팅 열기 */
+    CLUB_CHAT_UNLOCK,
     /** 일일 출석 보상 */
     ATTENDANCE,
     /** 관리자 수동 조정 */
