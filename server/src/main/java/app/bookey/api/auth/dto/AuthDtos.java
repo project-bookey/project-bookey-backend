@@ -37,7 +37,11 @@ public final class AuthDtos {
             /** EMAIL_CODE 모드 — 이메일로 받은 6자리 인증 코드. */
             @Size(min = 6, max = 6) String code,
             /** IDENTITY 모드 — 포트원 본인인증 완료 id. */
-            @Size(max = 100) String identityVerificationId
+            @Size(max = 100) String identityVerificationId,
+            @NotNull Boolean termsAgreed,
+            @NotBlank @Size(max = 20) String termsVersion,
+            @NotNull Boolean privacyAgreed,
+            @NotBlank @Size(max = 20) String privacyVersion
     ) {}
 
     /** 가입 화면 구성용 — 어떤 인증을 요구하는지, 포트원 SDK 키, 개발 스텁 여부. */

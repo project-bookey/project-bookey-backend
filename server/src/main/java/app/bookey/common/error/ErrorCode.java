@@ -27,6 +27,7 @@ public enum ErrorCode {
     IDENTITY_VERIFICATION_REQUIRED(HttpStatus.BAD_REQUEST, "본인인증이 필요합니다."),
     IDENTITY_VERIFICATION_FAILED(HttpStatus.BAD_REQUEST, "본인인증에 실패했습니다. 다시 시도해 주세요."),
     IDENTITY_ALREADY_REGISTERED(HttpStatus.CONFLICT, "이미 본인인증으로 가입된 계정이 있습니다."),
+    LEGAL_CONSENT_REQUIRED(HttpStatus.BAD_REQUEST, "이용약관과 개인정보 수집·이용에 동의해 주세요."),
     SOCIAL_SIGNUP_DISABLED(HttpStatus.FORBIDDEN, "소셜 계정으로는 가입할 수 없습니다. 이메일로 가입한 뒤 소셜 계정을 연동해 주세요."),
     SOCIAL_ACCOUNT_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 계정에 연결된 소셜 계정입니다."),
     WRITE_BANNED(HttpStatus.FORBIDDEN, "글쓰기가 제한된 계정입니다."),

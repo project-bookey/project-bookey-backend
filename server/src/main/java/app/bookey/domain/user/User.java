@@ -52,6 +52,18 @@ public class User extends BaseTimeEntity {
     @Column(name = "identity_verified_at")
     private java.time.Instant identityVerifiedAt;
 
+    @Column(name = "terms_version", length = 20)
+    private String termsVersion;
+
+    @Column(name = "terms_agreed_at")
+    private java.time.Instant termsAgreedAt;
+
+    @Column(name = "privacy_version", length = 20)
+    private String privacyVersion;
+
+    @Column(name = "privacy_agreed_at")
+    private java.time.Instant privacyAgreedAt;
+
     @Column(nullable = false, length = 50)
     private String nickname;
 
@@ -186,6 +198,14 @@ public class User extends BaseTimeEntity {
         this.ci = ci;
         this.di = di;
         this.identityVerifiedAt = at;
+    }
+
+    /** 가입 당시 동의한 법적 문서의 버전과 시각을 감사 가능한 형태로 남긴다. */
+    public void recordLegalConsent(String termsVersion, String privacyVersion, java.time.Instant at) {
+        this.termsVersion = termsVersion;
+        this.termsAgreedAt = at;
+        this.privacyVersion = privacyVersion;
+        this.privacyAgreedAt = at;
     }
 
     public void updatePreferredCategories(String[] categories) {

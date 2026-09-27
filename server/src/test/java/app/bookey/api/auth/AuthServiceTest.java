@@ -314,7 +314,13 @@ class AuthServiceTest {
     // ───────────── 이메일 가입 (인증 코드 필수) ─────────────
 
     private EmailSignupRequest signupRequest(String code) {
-        return new EmailSignupRequest("new@dev.local", "password1234", "새 독서가", code, null);
+        return agreedSignupRequest(code, null);
+    }
+
+    private EmailSignupRequest agreedSignupRequest(String code, String identityVerificationId) {
+        return new EmailSignupRequest("new@dev.local", "password1234", "새 독서가", code,
+                identityVerificationId, true, AuthService.TERMS_VERSION,
+                true, AuthService.PRIVACY_VERSION);
     }
 
     @Test
@@ -421,8 +427,7 @@ class AuthServiceTest {
                 "홍길동", "01012341234", java.time.LocalDate.of(1995, 1, 1), "ci-1", "di-1"));
         when(userRepository.existsByCi("ci-1")).thenReturn(false);
 
-        TokenResponse res = identityService().emailSignup(new EmailSignupRequest(
-                "new@dev.local", "password1234", "새 독서가", null, "dev-abc"));
+        TokenResponse res = identityService().emailSignup(agreedSignupRequest(null, "dev-abc"));
 
         assertThat(res.newUser()).isTrue();
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
@@ -431,6 +436,8 @@ class AuthServiceTest {
         assertThat(saved.getValue().getRealName()).isEqualTo("홍길동");
         assertThat(saved.getValue().getIdentityVerifiedAt()).isNotNull();
         assertThat(saved.getValue().getEmailVerifiedAt()).isNull();
+        assertThat(saved.getValue().getTermsVersion()).isEqualTo(AuthService.TERMS_VERSION);
+        assertThat(saved.getValue().getPrivacyVersion()).isEqualTo(AuthService.PRIVACY_VERSION);
         verify(emailVerificationRepository, never()).findTopByEmailOrderByIdDesc(any());
     }
 
@@ -440,15 +447,13 @@ class AuthServiceTest {
         when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
         AuthService service = identityService();
 
-        assertApiError(() -> service.emailSignup(new EmailSignupRequest(
-                "new@dev.local", "password1234", "새 독서가", null, null)),
+        assertApiError(() -> service.emailSignup(agreedSignupRequest(null, null)),
                 ErrorCode.IDENTITY_VERIFICATION_REQUIRED);
 
         when(identityVerifier.verify("dev-abc")).thenReturn(new app.bookey.api.auth.VerifiedIdentity(
                 "홍길동", "01012341234", null, "ci-1", "di-1"));
         when(userRepository.existsByCi("ci-1")).thenReturn(true);
-        assertApiError(() -> service.emailSignup(new EmailSignupRequest(
-                "new@dev.local", "password1234", "새 독서가", null, "dev-abc")),
+        assertApiError(() -> service.emailSignup(agreedSignupRequest(null, "dev-abc")),
                 ErrorCode.IDENTITY_ALREADY_REGISTERED);
         verify(userRepository, never()).save(any());
     }
@@ -458,8 +463,23 @@ class AuthServiceTest {
     void emailSignupWithoutCodeField() {
         when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
 
-        assertApiError(() -> service(List.of()).emailSignup(new EmailSignupRequest(
-                "new@dev.local", "password1234", "새 독서가", null, null)), ErrorCode.EMAIL_CODE_INVALID);
+        assertApiError(() -> service(List.of()).emailSignup(agreedSignupRequest(null, null)),
+                ErrorCode.EMAIL_CODE_INVALID);
+    }
+
+    @Test
+    @DisplayName("가입 — 필수 약관 미동의 또는 구버전이면 LEGAL_CONSENT_REQUIRED")
+    void emailSignupRequiresCurrentLegalConsent() {
+        EmailSignupRequest missing = new EmailSignupRequest(
+                "new@dev.local", "password1234", "새 독서가", "123456", null,
+                false, AuthService.TERMS_VERSION, true, AuthService.PRIVACY_VERSION);
+        assertApiError(() -> service(List.of()).emailSignup(missing), ErrorCode.LEGAL_CONSENT_REQUIRED);
+
+        EmailSignupRequest stale = new EmailSignupRequest(
+                "new@dev.local", "password1234", "새 독서가", "123456", null,
+                true, "2025-01-01", true, AuthService.PRIVACY_VERSION);
+        assertApiError(() -> service(List.of()).emailSignup(stale), ErrorCode.LEGAL_CONSENT_REQUIRED);
+        verify(userRepository, never()).save(any());
     }
 
     // ───────────── 이메일 로그인 ─────────────

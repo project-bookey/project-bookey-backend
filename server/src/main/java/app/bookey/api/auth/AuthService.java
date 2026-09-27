@@ -30,6 +30,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthService {
 
+    public static final String TERMS_VERSION = "2026-09-27";
+    public static final String PRIVACY_VERSION = "2026-09-27";
+
     private final UserRepository userRepository;
     private final UserIdentityRepository identityRepository;
     private final UserDeviceRepository deviceRepository;
@@ -157,6 +160,7 @@ public class AuthService {
     @Transactional(noRollbackFor = ApiException.class)
     public TokenResponse emailSignup(EmailSignupRequest request) {
         requireSignupOpen();
+        requireLegalConsent(request);
         String email = normalizeEmail(request.email());
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
@@ -187,7 +191,17 @@ public class AuthService {
         } else {
             user.markEmailVerified(now);
         }
+        user.recordLegalConsent(request.termsVersion(), request.privacyVersion(), now);
         return issueTokens(userRepository.save(user), true);
+    }
+
+    private void requireLegalConsent(EmailSignupRequest request) {
+        if (!Boolean.TRUE.equals(request.termsAgreed())
+                || !TERMS_VERSION.equals(request.termsVersion())
+                || !Boolean.TRUE.equals(request.privacyAgreed())
+                || !PRIVACY_VERSION.equals(request.privacyVersion())) {
+            throw ApiException.of(ErrorCode.LEGAL_CONSENT_REQUIRED);
+        }
     }
 
     /** 본인인증 결과를 포트원에서 재조회하고, 같은 사람(CI)의 중복 가입을 막는다. */

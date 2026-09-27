@@ -67,7 +67,7 @@ cd server && ./mvnw spring-boot:run
 # 가입 (최초 1회, 비밀번호 8자 이상) → TokenResponse
 curl -X POST http://localhost:8080/api/v1/auth/signup \
   -H 'Content-Type: application/json' \
-  -d '{"email":"tester1@dev.local","password":"password1234","nickname":"테스터"}'
+  -d '{"email":"tester1@dev.local","password":"password1234","nickname":"테스터","identityVerificationId":"dev-tester1","termsAgreed":true,"termsVersion":"2026-09-27","privacyAgreed":true,"privacyVersion":"2026-09-27"}'
 
 # 로그인 → TokenResponse
 curl -X POST http://localhost:8080/api/v1/auth/login \
