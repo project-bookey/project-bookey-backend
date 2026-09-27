@@ -1,0 +1,4 @@
+package app.bookey.domain.club;
+import jakarta.persistence.*; import lombok.*; import java.time.*;
+@Getter @Entity @Table(name="club_activity_sessions") @NoArgsConstructor(access=AccessLevel.PROTECTED)
+public class ClubActivitySession { @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id; @Column(name="club_id",nullable=false) private Long clubId; @Column(name="user_id",nullable=false) private Long userId; @Column(name="started_at",nullable=false) private Instant startedAt=Instant.now(); @Column(name="ended_at") private Instant endedAt; @Column(name="duration_sec") private Integer durationSec; public ClubActivitySession(Long c,Long u){clubId=c;userId=u;} public void end(Instant now){endedAt=now;durationSec=Math.max(1,Math.toIntExact(Math.min(Integer.MAX_VALUE,Duration.between(startedAt,now).getSeconds())));} }

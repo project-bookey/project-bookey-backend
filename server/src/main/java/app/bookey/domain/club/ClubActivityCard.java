@@ -1,0 +1,4 @@
+package app.bookey.domain.club;
+import jakarta.persistence.*; import lombok.*;
+@Getter @Entity @Table(name="club_activity_cards") @NoArgsConstructor(access=AccessLevel.PROTECTED)
+public class ClubActivityCard { @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id; @Column(name="club_id",nullable=false) private Long clubId; @Column(name="session_id",nullable=false) private Long sessionId; @Column(name="user_id",nullable=false) private Long userId; @Column(length=500) private String caption; @Column(name="decorations_json",nullable=false,columnDefinition="TEXT") private String decorationsJson="[]"; @Column(name="photo_url") private String photoUrl; @Column(name="photo_key") private String photoKey; public ClubActivityCard(Long c,Long s,Long u){clubId=c;sessionId=s;userId=u;} public void decorate(String text,String json,String url,String key){caption=text;decorationsJson=json==null?"[]":json;photoUrl=url;photoKey=key;} }

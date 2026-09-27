@@ -25,6 +25,7 @@ public class ClubController {
     private final ClubSeatService seatService;
     private final ClubNudgeService nudgeService;
     private final ClubCommunityService communityService;
+    private final ClubActivityService activityService;
 
     @Operation(summary = "모임 만들기 — 초대 코드 자동 발급")
     @PostMapping
@@ -171,6 +172,10 @@ public class ClubController {
     public app.bookey.api.club.dto.ClubCommunityDtos.ChatState chatState(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return communityService.chatState(user.id(),clubId);}
     @PostMapping("/{clubId}/chat/unlock")
     public app.bookey.api.club.dto.ClubCommunityDtos.UnlockResult unlockChat(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return communityService.unlock(user.id(),clubId);}
+    @GetMapping("/{clubId}/chat/gift-candidates")
+    public java.util.List<app.bookey.api.club.dto.ClubCommunityDtos.ChatGiftCandidate> giftCandidates(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return communityService.giftCandidates(user.id(),clubId);}
+    @PostMapping("/{clubId}/chat/gifts")
+    public app.bookey.api.club.dto.ClubCommunityDtos.UnlockResult giftChat(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@Valid @RequestBody app.bookey.api.club.dto.ClubCommunityDtos.GiftChatRequest request){return communityService.giftUnlock(user.id(),clubId,request.userId());}
     @GetMapping("/{clubId}/chat/messages")
     public app.bookey.api.club.dto.ClubCommunityDtos.ChatMessagesView chatMessages(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@RequestParam(required=false) Long beforeId){return communityService.chatMessages(user.id(),clubId,beforeId);}
     @PostMapping("/{clubId}/chat/messages")
@@ -187,4 +192,14 @@ public class ClubController {
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView attend(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){return communityService.attend(user.id(),clubId,meetingId);}
     @DeleteMapping("/{clubId}/meetings/{meetingId}/attendees/me")
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView unattend(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){return communityService.unattend(user.id(),clubId,meetingId);}
+    @GetMapping("/{clubId}/activity/current")
+    public app.bookey.api.club.dto.ClubCommunityDtos.ActivitySessionView currentActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.current(user.id(),clubId);}
+    @PostMapping("/{clubId}/activity/start")
+    public app.bookey.api.club.dto.ClubCommunityDtos.ActivitySessionView startActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.start(user.id(),clubId);}
+    @PostMapping("/{clubId}/activity/end")
+    public app.bookey.api.club.dto.ClubCommunityDtos.ActivityCardView endActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.end(user.id(),clubId);}
+    @GetMapping("/{clubId}/activity/cards")
+    public java.util.List<app.bookey.api.club.dto.ClubCommunityDtos.ActivityCardView> activityCards(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.list(user.id(),clubId);}
+    @PostMapping(value="/{clubId}/activity/cards/{cardId}",consumes=org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public app.bookey.api.club.dto.ClubCommunityDtos.ActivityCardView decorateActivityCard(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long cardId,@RequestParam(required=false) String caption,@RequestParam(required=false) String decorationsJson,@RequestPart(value="file",required=false) org.springframework.web.multipart.MultipartFile file){return activityService.decorate(user.id(),clubId,cardId,caption,decorationsJson,file);}
 }

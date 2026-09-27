@@ -29,6 +29,11 @@ public final class StorageKeys {
                 + UUID.randomUUID() + "." + safeExtension(extension);
     }
 
+    public static String forClubActivityCard(long clubId, long userId, Instant now, String extension) {
+        return "clubs/" + clubId + "/cards/" + userId + "/" + YEAR_MONTH.format(now) + "/"
+                + UUID.randomUUID() + "." + safeExtension(extension);
+    }
+
     /** avatars/{userId}/{uuid}.{ext} — 프로필 사진. */
     public static String forAvatar(long userId, String extension) {
         return "avatars/" + userId + "/" + UUID.randomUUID() + "." + safeExtension(extension);
