@@ -110,6 +110,7 @@ bookey:
     club-daily-cap: 3
     default-send-hour: 20
     expo-push-url: ${EXPO_PUSH_URL:https://exp.host/--/api/v2/push/send}
+    expo-receipt-url: ${EXPO_RECEIPT_URL:https://exp.host/--/api/v2/push/getReceipts}
     # Expo Push Security를 켠 경우에만 설정. 비워 두면 일반 Expo Push API로 발송한다.
     expo-access-token: ${EXPO_ACCESS_TOKEN:}
   social:

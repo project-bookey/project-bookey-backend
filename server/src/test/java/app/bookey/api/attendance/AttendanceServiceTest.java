@@ -107,6 +107,63 @@ class AttendanceServiceTest {
     }
 
     @Test
+    void twentyFirstCheckInGrantsOnePostcard() {
+        Wallet wallet = new Wallet(USER_ID, TODAY);
+        when(walletService.prepared(USER_ID)).thenReturn(wallet);
+        when(repository.findByUserIdAndAttendanceDate(USER_ID, TODAY)).thenReturn(Optional.empty());
+        when(repository.countByUserIdAndAttendanceDateBetween(eq(USER_ID), any(), any())).thenReturn(20L);
+        doAnswer(invocation -> {
+            Wallet target = invocation.getArgument(1);
+            target.add(0, invocation.getArgument(2), invocation.getArgument(3));
+            return null;
+        }).when(walletService).grantAttendanceReward(eq(USER_ID), same(wallet), eq(1), eq(0));
+
+        var result = service.checkIn(USER_ID);
+
+        assertThat(result.monthlyAttendanceDays()).isEqualTo(21);
+        assertThat(result.rewardedPostcards()).isEqualTo(1);
+        assertThat(result.nextRewardDay()).isEqualTo(28);
+        assertThat(result.nextRewardType()).isEqualTo("STAMP");
+    }
+
+    @Test
+    void twentyEighthCheckInGrantsOneStampAndCompletesBoard() {
+        Wallet wallet = new Wallet(USER_ID, TODAY);
+        when(walletService.prepared(USER_ID)).thenReturn(wallet);
+        when(repository.findByUserIdAndAttendanceDate(USER_ID, TODAY)).thenReturn(Optional.empty());
+        when(repository.countByUserIdAndAttendanceDateBetween(eq(USER_ID), any(), any())).thenReturn(27L);
+        doAnswer(invocation -> {
+            Wallet target = invocation.getArgument(1);
+            target.add(0, invocation.getArgument(2), invocation.getArgument(3));
+            return null;
+        }).when(walletService).grantAttendanceReward(eq(USER_ID), same(wallet), eq(0), eq(1));
+
+        var result = service.checkIn(USER_ID);
+
+        assertThat(result.monthlyAttendanceDays()).isEqualTo(28);
+        assertThat(result.rewardedStamps()).isEqualTo(1);
+        assertThat(result.nextRewardDay()).isNull();
+        assertThat(result.nextRewardType()).isNull();
+    }
+
+    @Test
+    void monthRangeUsesKoreanDateAcrossUtcBoundary() {
+        LocalDate octoberFirst = LocalDate.of(2026, 10, 1);
+        Clock boundaryClock = Clock.fixed(Instant.parse("2026-09-30T15:00:01Z"), ZoneId.of("UTC"));
+        AttendanceService boundaryService = new AttendanceService(repository, walletService, boundaryClock);
+        Wallet wallet = new Wallet(USER_ID, octoberFirst);
+        when(walletService.prepared(USER_ID)).thenReturn(wallet);
+        when(repository.findByUserIdAndAttendanceDate(USER_ID, octoberFirst)).thenReturn(Optional.empty());
+        when(repository.countByUserIdAndAttendanceDateBetween(
+                USER_ID, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31))).thenReturn(0L);
+
+        var result = boundaryService.checkIn(USER_ID);
+
+        assertThat(result.attendanceDate()).isEqualTo(octoberFirst);
+        assertThat(result.monthlyAttendanceDays()).isEqualTo(1);
+    }
+
+    @Test
     void monthlyBoardStopsAtTwentyEightDays() {
         Wallet wallet = new Wallet(USER_ID, TODAY);
         when(walletService.prepared(USER_ID)).thenReturn(wallet);

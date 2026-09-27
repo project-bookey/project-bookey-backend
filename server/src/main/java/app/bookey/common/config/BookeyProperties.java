@@ -95,6 +95,7 @@ public record BookeyProperties(
             int clubDailyCap,
             int defaultSendHour,
             String expoPushUrl,
+            String expoReceiptUrl,
             String expoAccessToken
     ) {}
 
