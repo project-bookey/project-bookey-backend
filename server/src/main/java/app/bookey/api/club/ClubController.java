@@ -195,6 +195,8 @@ public class ClubController {
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView unattend(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){return communityService.unattend(user.id(),clubId,meetingId);}
     @GetMapping("/{clubId}/places/search")
     public java.util.List<ClubPlaceService.PlaceView> searchPlaces(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@RequestParam String query){return placeService.search(user.id(),clubId,query);}
+    @GetMapping("/{clubId}/places/geocode")
+    public ClubPlaceService.Coordinates geocodePlace(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@RequestParam String address){return placeService.geocode(user.id(),clubId,address);}
     @GetMapping("/{clubId}/activity/current")
     public app.bookey.api.club.dto.ClubCommunityDtos.ActivitySessionView currentActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.current(user.id(),clubId);}
     @PostMapping("/{clubId}/activity/start")
