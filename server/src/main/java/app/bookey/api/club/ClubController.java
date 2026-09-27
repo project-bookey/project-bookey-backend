@@ -26,6 +26,7 @@ public class ClubController {
     private final ClubNudgeService nudgeService;
     private final ClubCommunityService communityService;
     private final ClubActivityService activityService;
+    private final ClubPlaceService placeService;
 
     @Operation(summary = "모임 만들기 — 초대 코드 자동 발급")
     @PostMapping
@@ -192,6 +193,8 @@ public class ClubController {
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView attend(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){return communityService.attend(user.id(),clubId,meetingId);}
     @DeleteMapping("/{clubId}/meetings/{meetingId}/attendees/me")
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView unattend(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){return communityService.unattend(user.id(),clubId,meetingId);}
+    @GetMapping("/{clubId}/places/search")
+    public java.util.List<ClubPlaceService.PlaceView> searchPlaces(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@RequestParam String query){return placeService.search(user.id(),clubId,query);}
     @GetMapping("/{clubId}/activity/current")
     public app.bookey.api.club.dto.ClubCommunityDtos.ActivitySessionView currentActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.current(user.id(),clubId);}
     @PostMapping("/{clubId}/activity/start")
