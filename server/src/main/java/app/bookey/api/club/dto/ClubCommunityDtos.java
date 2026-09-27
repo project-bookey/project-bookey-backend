@@ -10,6 +10,6 @@ public final class ClubCommunityDtos { private ClubCommunityDtos(){}
  public record ChatMessagesView(List<ChatMessageView> messages,Long nextBeforeId){}
  public record UpsertMeetingRequest(@NotBlank @Size(max=100) String title,@Size(max=1000) String description,@NotNull Instant startsAt,Instant endsAt,@NotBlank @Size(max=150) String placeName,@NotBlank @Size(max=300) String address,@DecimalMin("-90") @DecimalMax("90") Double latitude,@DecimalMin("-180") @DecimalMax("180") Double longitude,@Size(max=2000) String mapUrl,Instant responseDeadline){}
  public record MeetingView(Long id,Long clubId,String title,String description,Instant startsAt,Instant endsAt,String placeName,String address,Double latitude,Double longitude,String mapUrl,Instant responseDeadline,String status,long attendeeCount,boolean attending,boolean host,List<String> attendeeNicknames){}
- public record ActivitySessionView(Long id,Instant startedAt,Instant endedAt,Integer durationSec){}
+ public record ActivitySessionView(Long id,Long meetingId,Instant startedAt,Instant endedAt,Integer durationSec){}
  public record ActivityCardView(Long id,Long sessionId,Long userId,String nickname,int durationSec,String caption,String decorationsJson,String photoUrl){}
 }

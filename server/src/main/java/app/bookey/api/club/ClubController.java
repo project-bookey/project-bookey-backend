@@ -185,6 +185,8 @@ public class ClubController {
     public java.util.List<app.bookey.api.club.dto.ClubCommunityDtos.MeetingView> meetings(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return communityService.meetingList(user.id(),clubId);}
     @PostMapping("/{clubId}/meetings")
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView createMeeting(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@Valid @RequestBody app.bookey.api.club.dto.ClubCommunityDtos.UpsertMeetingRequest request){return communityService.createMeeting(user.id(),clubId,request);}
+    @GetMapping("/{clubId}/meetings/{meetingId}")
+    public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView meetingDetail(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){return communityService.meetingDetail(user.id(),clubId,meetingId);}
     @PutMapping("/{clubId}/meetings/{meetingId}")
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView updateMeeting(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId,@Valid @RequestBody app.bookey.api.club.dto.ClubCommunityDtos.UpsertMeetingRequest request){return communityService.updateMeeting(user.id(),clubId,meetingId,request);}
     @DeleteMapping("/{clubId}/meetings/{meetingId}")
@@ -202,7 +204,7 @@ public class ClubController {
     @GetMapping("/{clubId}/activity/current")
     public app.bookey.api.club.dto.ClubCommunityDtos.ActivitySessionView currentActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.current(user.id(),clubId);}
     @PostMapping("/{clubId}/activity/start")
-    public app.bookey.api.club.dto.ClubCommunityDtos.ActivitySessionView startActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.start(user.id(),clubId);}
+    public app.bookey.api.club.dto.ClubCommunityDtos.ActivitySessionView startActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@RequestParam(required=false) Long meetingId){return activityService.start(user.id(),clubId,meetingId);}
     @PostMapping("/{clubId}/activity/end")
     public app.bookey.api.club.dto.ClubCommunityDtos.ActivityCardView endActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.end(user.id(),clubId);}
     @GetMapping("/{clubId}/activity/cards")
