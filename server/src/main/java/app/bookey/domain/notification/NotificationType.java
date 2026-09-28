@@ -32,6 +32,8 @@ public enum NotificationType {
     CLUB_NEW_POST(true),
     CLUB_NUDGE(true),
     CLUB_ENDED(true),
+    /** 노트북에 새 페이지가 생겼다는 알림 — 저장·삭제는 알리지 않는다(자동 저장 소음) */
+    CLUB_NOTE_PAGE(true),
     /** 일요일 밤 — 이번 주 읽기로그 카드가 준비됐다는 알림 */
     CLUB_WEEKLY_LOG(true);
 
