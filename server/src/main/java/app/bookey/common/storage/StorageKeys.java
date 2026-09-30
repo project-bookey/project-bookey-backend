@@ -34,12 +34,6 @@ public final class StorageKeys {
                 + UUID.randomUUID() + "." + safeExtension(extension);
     }
 
-    /** clubs/{clubId}/notebook/{userId}/{yyyy}/{MM}/{uuid}.{ext} — 모임 노트북 사진. */
-    public static String forClubNote(long clubId, long userId, Instant now, String extension) {
-        return "clubs/" + clubId + "/notebook/" + userId + "/" + YEAR_MONTH.format(now) + "/"
-                + UUID.randomUUID() + "." + safeExtension(extension);
-    }
-
     /** avatars/{userId}/{uuid}.{ext} — 프로필 사진. */
     public static String forAvatar(long userId, String extension) {
         return "avatars/" + userId + "/" + UUID.randomUUID() + "." + safeExtension(extension);

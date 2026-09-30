@@ -104,7 +104,7 @@ class PostServiceTest {
         Map<Long, List<PostImage>> images = Map.of(1L, List.of(image(7L, 10L, "u7"), image(3L, 10L, "u3")));
         Map<Long, List<BookQuoteView>> quotes = Map.of(1L, List.of(quoteView(5L), quoteView(2L)));
 
-        List<PostView> views = PostService.assembleViews(List.of(post), 10L, books, authors, images, quotes,
+        List<PostView> views = PostService.assembleViews(List.of(post), 10L, books, authors, Map.of(), images, quotes,
                 Map.of(1L, 3L), Set.of(1L), Map.of(1L, 4L));
 
         PostView view = views.get(0);
@@ -142,7 +142,7 @@ class PostServiceTest {
         Map<Long, Book> books = Map.of(100L, book(100L, "책"));
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
-        List<PostView> views = PostService.assembleViews(List.of(post), 20L, books, authors,
+        List<PostView> views = PostService.assembleViews(List.of(post), 20L, books, authors, Map.of(),
                 Map.of(), Map.of(), Map.of(), Set.of(), Map.of());
 
         PostView view = views.get(0);
@@ -161,7 +161,7 @@ class PostServiceTest {
         Post post = post(3L, 99L, 100L, "본문");
         Map<Long, Book> books = Map.of(100L, book(100L, "책"));
 
-        List<PostView> views = PostService.assembleViews(List.of(post), 1L, books, Map.of(),
+        List<PostView> views = PostService.assembleViews(List.of(post), 1L, books, Map.of(), Map.of(),
                 Map.of(), Map.of(), Map.of(), Set.of(), Map.of());
 
         PostView view = views.get(0);
@@ -179,7 +179,7 @@ class PostServiceTest {
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
         List<PostView> views = PostService.assembleViews(List.of(withMissingBook, withoutBook), 10L,
-                Map.of(), authors, Map.of(), Map.of(), Map.of(), Set.of(), Map.of());
+                Map.of(), authors, Map.of(), Map.of(), Map.of(), Map.of(), Set.of(), Map.of());
 
         assertThat(views.get(0).bookId()).isEqualTo(100L);
         assertThat(views.get(0).bookTitle()).isNull();
@@ -193,7 +193,7 @@ class PostServiceTest {
     void excerptIsTruncatedTo140Chars() {
         Post post = post(6L, 10L, 100L, "가".repeat(200));
 
-        List<PostView> views = PostService.assembleViews(List.of(post), 10L, Map.of(), Map.of(),
+        List<PostView> views = PostService.assembleViews(List.of(post), 10L, Map.of(), Map.of(), Map.of(),
                 Map.of(), Map.of(), Map.of(), Set.of(), Map.of());
 
         assertThat(views.get(0).excerpt()).hasSize(141).startsWith("가".repeat(140)).endsWith("…");
@@ -205,7 +205,7 @@ class PostServiceTest {
         List<Post> posts = List.of(post(5L, 10L, 100L, "a"), post(3L, 10L, 100L, "b"), post(9L, 10L, 100L, "c"));
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
-        List<PostView> views = PostService.assembleViews(posts, 10L, Map.of(), authors,
+        List<PostView> views = PostService.assembleViews(posts, 10L, Map.of(), authors, Map.of(),
                 Map.of(), Map.of(), Map.of(), Set.of(), Map.of());
 
         assertThat(views).extracting(PostView::id).containsExactly(5L, 3L, 9L);
@@ -216,7 +216,7 @@ class PostServiceTest {
     void anonymousViewerIsNeverOwnerNorLiker() {
         Post post = post(7L, 10L, 100L, "본문");
 
-        List<PostView> views = PostService.assembleViews(List.of(post), null, Map.of(), Map.of(),
+        List<PostView> views = PostService.assembleViews(List.of(post), null, Map.of(), Map.of(), Map.of(),
                 Map.of(), Map.of(), Map.of(7L, 2L), Set.of(), Map.of());
 
         assertThat(views.get(0).mine()).isFalse();
