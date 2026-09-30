@@ -55,6 +55,16 @@ public class PostController {
         return postService.feed(user.id(), sort, PageRequest.of(page, size));
     }
 
+    /** 리터럴 {@code clubs} 도 {@code /{postId}} 와 겹치지 않는다(세그먼트 수가 다르고, 리터럴이 먼저 매칭된다). */
+    @Operation(summary = "모임 독후감 목록 — 그 모임 활성 멤버만, 최신순")
+    @GetMapping("/clubs/{clubId}")
+    public PageResponse<PostView> listByClub(@AuthenticationPrincipal AuthUser user,
+                                             @PathVariable Long clubId,
+                                             @RequestParam(defaultValue = "0") int page,
+                                             @RequestParam(defaultValue = "20") int size) {
+        return postService.listByClub(user.id(), clubId, PageRequest.of(page, size));
+    }
+
     @Operation(summary = "독후감 한 건 — 비공개는 작성자만, 남의 글은 조회수를 올린다")
     @GetMapping("/{postId}")
     public PostView get(@AuthenticationPrincipal AuthUser user, @PathVariable Long postId) {

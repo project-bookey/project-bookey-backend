@@ -82,10 +82,6 @@ public enum ErrorCode {
     NUDGE_DAILY_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "오늘 보낼 수 있는 찌르기를 모두 썼습니다."),
     NUDGE_BLOCKED(HttpStatus.FORBIDDEN, "상대가 찌르기를 받지 않도록 설정했습니다."),
     SPOILER_BLOCKED(HttpStatus.FORBIDDEN, "아직 읽지 않은 범위의 글입니다."),
-    CLUB_NOTE_PAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "노트 페이지를 찾을 수 없습니다."),
-    CLUB_NOTE_CONFLICT(HttpStatus.CONFLICT, "다른 멤버가 먼저 저장했습니다. 최신 페이지를 불러온 뒤 다시 저장해 주세요."),
-    CLUB_NOTE_PAGE_LIMIT(HttpStatus.CONFLICT, "노트 페이지는 30장까지 만들 수 있습니다."),
-    CLUB_NOTE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "페이지 내용이 너무 큽니다. 요소를 줄여 주세요."),
 
     // 관리자
     ADMIN_INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 올바르지 않습니다."),

@@ -9,7 +9,7 @@ public enum ClubEventType {
     CHECKPOINT_MET,
     CHECKPOINT_MISSED,
     POSTED,
-    /** 노트북에 새 페이지가 생김 — payload {pageId, seq} */
+    // 폐기됨(모임 노트북) — 옛 모임 이벤트 행 호환용
     NOTE_PAGE_ADDED,
     ENDED
 }

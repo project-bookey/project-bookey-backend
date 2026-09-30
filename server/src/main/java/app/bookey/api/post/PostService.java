@@ -1,5 +1,6 @@
 package app.bookey.api.post;
 
+import app.bookey.api.club.ClubService;
 import app.bookey.api.post.dto.PostDtos.*;
 import app.bookey.api.notification.NotificationService;
 import app.bookey.api.quote.QuoteService;
@@ -10,11 +11,16 @@ import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookRepository;
+import app.bookey.domain.club.Club;
+import app.bookey.domain.club.ClubMember;
+import app.bookey.domain.club.ClubMemberRepository;
+import app.bookey.domain.club.ClubRepository;
 import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.post.Post;
 import app.bookey.domain.post.PostCommentRepository;
 import app.bookey.domain.post.PostCommentRepository.PostCommentCount;
 import app.bookey.domain.post.PostExcerpt;
+import app.bookey.domain.post.PostFormat;
 import app.bookey.domain.post.PostImage;
 import app.bookey.domain.post.PostImageRepository;
 import app.bookey.domain.post.PostLike;
@@ -23,6 +29,7 @@ import app.bookey.domain.post.PostLikeRepository.PostLikeCount;
 import app.bookey.domain.post.PostQuote;
 import app.bookey.domain.post.PostQuoteRepository;
 import app.bookey.domain.post.PostRepository;
+import app.bookey.domain.post.PostRules;
 import app.bookey.domain.post.PostVisibility;
 import app.bookey.domain.quote.BookQuote;
 import app.bookey.domain.quote.BookQuoteRepository;
@@ -35,6 +42,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tools.jackson.databind.ObjectMapper;
 
 import java.text.Normalizer;
 import java.time.Duration;
@@ -52,7 +60,12 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** 독후감 (§F7) — 작성 · 수정 · 삭제 · 내 목록 · 광장 피드 · 단건(조회수) · 좋아요 · 책별 · 공개 블로그. */
+/**
+ * 독후감 (§F7) — 작성 · 수정 · 삭제 · 내 목록 · 광장 피드 · 단건(조회수) · 좋아요 · 책별 · 공개 블로그 · 모임별.
+ *
+ * <p>형식은 TEXT(마크다운)와 NOTE(캔버스 문서) 둘이고, 모임 안에서 쓴 글은 clubId 를 가진다.
+ * 형식·공개 범위 규칙은 {@link PostRules} 가 정한다. CLUB 공개 글은 작성자와 그 모임 활성 멤버만 읽는다.
+ */
 @Service
 @RequiredArgsConstructor
 public class PostService {
@@ -73,12 +86,24 @@ public class PostService {
     private final BookRepository bookRepository;
     private final ReadingRecordRepository recordRepository;
     private final UserRepository userRepository;
+    private final ClubService clubService;
+    private final ClubRepository clubRepository;
+    private final ClubMemberRepository clubMemberRepository;
+    private final ObjectMapper objectMapper;
     private final QuoteService quoteService;
     private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
 
     @Transactional
     public PostView create(Long userId, CreatePostRequest request) {
+        PostFormat format = request.format() == null ? PostFormat.TEXT : request.format();
+        PostRules.requireVisibility(request.clubId() != null, request.visibility());
+        PostRules.requireContent(format, true, request.bodyMd(), request.document(),
+                request.imageIds(), request.quoteIds());
+        requireDocumentSize(request.document());
+        if (request.clubId() != null) {
+            requireOpenClubMember(userId, request.clubId());
+        }
         Long readingRecordId = null;
         if (request.bookId() != null) {
             requireBook(request.bookId());
@@ -96,21 +121,29 @@ public class PostService {
                 .bodyMd(request.bodyMd())
                 .visibility(request.visibility())
                 .tags(toTags(request.tags()))
+                .format(format)
+                .document(format == PostFormat.NOTE ? request.document() : null)
+                .clubId(request.clubId())
                 .build());
         attachImages(post, userId, request.imageIds());
         attachQuotes(post, request.quoteIds());
         return toView(post, userId);
     }
 
-    /** null 필드는 유지, 빈 목록은 비움. 책은 바꿀 수만 있고 없앨 수는 없다. */
+    /** null 필드는 유지, 빈 목록은 비움. 책은 바꿀 수만 있고 없앨 수는 없다. 형식·모임은 바꿀 수 없다. */
     @Transactional
     public PostView update(Long userId, Long postId, UpdatePostRequest request) {
         Post post = owned(userId, postId);
+        PostRules.requireVisibility(post.isClubPost(), request.visibility());
+        PostRules.requireContent(post.getFormat(), false, request.bodyMd(), request.document(),
+                request.imageIds(), request.quoteIds());
+        requireDocumentSize(request.document());
         if (request.bookId() != null && !request.bookId().equals(post.getBookId())) {
             requireBook(request.bookId());
             post.changeBook(request.bookId());
         }
         post.edit(request.title(), request.bodyMd(), toTags(request.tags()));
+        post.changeDocument(request.document());
         if (request.visibility() != null) {
             post.changeVisibility(request.visibility());
         }
@@ -163,6 +196,7 @@ public class PostService {
                 userId, PostVisibility.PUBLIC, pageable), viewerId);
     }
 
+    /** 내 독후감 — 모임 독후감까지 전부. */
     @Transactional(readOnly = true)
     public PageResponse<PostView> listMine(Long userId, Pageable pageable) {
         return toPage(postRepository.findAllByUserIdOrderByCreatedAtDesc(userId, pageable), userId);
@@ -174,6 +208,14 @@ public class PostService {
         requireBook(bookId);
         return toPage(postRepository.findAllByBookIdAndVisibilityOrderByPublishedAtDescIdDesc(
                 bookId, PostVisibility.PUBLIC, pageable), viewerId);
+    }
+
+    /** 모임 독후감 — 그 모임 활성 멤버만, 모임에서 쓴 글(PUBLIC·CLUB) 최신순. 끝난 모임도 읽을 수는 있다. */
+    @Transactional(readOnly = true)
+    public PageResponse<PostView> listByClub(Long viewerId, Long clubId, Pageable pageable) {
+        clubService.getClub(clubId);
+        clubService.activeMember(clubId, viewerId);
+        return toPage(postRepository.findAllByClubIdOrderByCreatedAtDescIdDesc(clubId, pageable), viewerId);
     }
 
     /** 좋아요 토글 — BookService.toggleLike 미러. 읽을 수 없는 글은 없는 것으로 본다. */
@@ -208,7 +250,8 @@ public class PostService {
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         Post post = postRepository.findByUserIdAndSlug(user.getId(), slug)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        if (post.getVisibility() == PostVisibility.PRIVATE) {
+        // 공개 블로그는 비회원 경로라 비공개·모임 공개 글은 없는 것으로 본다.
+        if (post.getVisibility() == PostVisibility.PRIVATE || post.getVisibility() == PostVisibility.CLUB) {
             throw ApiException.of(ErrorCode.NOT_FOUND);
         }
         post.increaseView();
@@ -239,10 +282,43 @@ public class PostService {
     Post readable(Long viewerId, Long postId) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.POST_NOT_FOUND));
-        if (!post.isReadableBy(viewerId)) {
+        if (!post.isReadableBy(viewerId, isClubReader(viewerId, post))) {
             throw ApiException.of(ErrorCode.POST_NOT_FOUND);
         }
         return post;
+    }
+
+    /** CLUB 공개 글일 때만 멤버십을 조회한다 — 나머지 공개 범위는 멤버 여부와 무관하다. */
+    private boolean isClubReader(Long viewerId, Post post) {
+        if (post.getVisibility() != PostVisibility.CLUB || viewerId == null || post.getClubId() == null) {
+            return false;
+        }
+        return clubMemberRepository.findByClubIdAndUserId(post.getClubId(), viewerId)
+                .filter(ClubMember::isActive)
+                .isPresent();
+    }
+
+    /** 모임 독후감은 그 모임 활성 멤버가 진행 중인 모임에서만 쓴다 — 없으면 404, 멤버가 아니면 403, 끝났으면 409. */
+    private void requireOpenClubMember(Long userId, Long clubId) {
+        Club club = clubService.getClub(clubId);
+        clubService.activeMember(clubId, userId);
+        if (club.getStatus().isOver()) {
+            throw ApiException.of(ErrorCode.CLUB_ENDED);
+        }
+    }
+
+    /** 노트 문서는 직렬화해 1MB 이하인지 본다. null 이면 검사할 것이 없다. */
+    private void requireDocumentSize(Map<String, Object> document) {
+        if (document == null) {
+            return;
+        }
+        byte[] bytes;
+        try {
+            bytes = objectMapper.writeValueAsBytes(document);
+        } catch (RuntimeException e) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "노트 문서를 읽을 수 없습니다.");
+        }
+        PostRules.requireDocumentSize(bytes.length);
     }
 
     private void requireBook(Long bookId) {
@@ -388,7 +464,8 @@ public class PostService {
         List<Long> postIds = posts.stream().map(Post::getId).toList();
         Map<Long, Book> books = loadBooks(posts.stream().map(Post::getBookId).filter(Objects::nonNull).distinct().toList());
         Map<Long, User> authors = loadAuthors(posts.stream().map(Post::getUserId).distinct().toList());
-        return assembleViews(posts, viewerId, books, authors,
+        Map<Long, Club> clubs = loadClubs(posts.stream().map(Post::getClubId).filter(Objects::nonNull).distinct().toList());
+        return assembleViews(posts, viewerId, books, authors, clubs,
                 loadImages(postIds), loadQuoteViews(postIds, viewerId, books),
                 loadLikeCounts(postIds), loadMyLiked(viewerId, postIds), loadCommentCounts(postIds));
     }
@@ -399,6 +476,14 @@ public class PostService {
         }
         return bookRepository.findAllById(bookIds).stream()
                 .collect(Collectors.toMap(Book::getId, Function.identity()));
+    }
+
+    private Map<Long, Club> loadClubs(List<Long> clubIds) {
+        if (clubIds.isEmpty()) {
+            return Map.of();
+        }
+        return clubRepository.findAllById(clubIds).stream()
+                .collect(Collectors.toMap(Club::getId, Function.identity()));
     }
 
     private Map<Long, User> loadAuthors(List<Long> userIds) {
@@ -471,10 +556,10 @@ public class PostService {
     /**
      * 배치 맵으로 뷰를 조립한다(QuoteService.assembleViews 선례). 입력 순서를 지킨다.
      * likeCount·commentCount 결측은 0, 사진·밑줄 결측은 빈 목록, 탈퇴한 작성자는 "알 수 없음",
-     * 책 결측은 제목·표지만 null(bookId 는 그대로). 비로그인 조회자(null)는 mine·likedByMe 가 false.
+     * 책 결측은 제목·표지만 null(bookId 는 그대로), 모임 결측도 이름만 null. 비로그인 조회자(null)는 mine·likedByMe 가 false.
      */
     static List<PostView> assembleViews(List<Post> posts, Long viewerId,
-                                        Map<Long, Book> books, Map<Long, User> authors,
+                                        Map<Long, Book> books, Map<Long, User> authors, Map<Long, Club> clubs,
                                         Map<Long, List<PostImage>> imagesByPost,
                                         Map<Long, List<BookQuoteView>> quotesByPost,
                                         Map<Long, Long> likeCounts, Set<Long> myLiked,
@@ -483,6 +568,7 @@ public class PostService {
                 .map(post -> {
                     Book book = post.getBookId() == null ? null : books.get(post.getBookId());
                     User author = authors.get(post.getUserId());
+                    Club club = post.getClubId() == null ? null : clubs.get(post.getClubId());
                     List<PostImageView> images = imagesByPost.getOrDefault(post.getId(), List.of()).stream()
                             .map(image -> new PostImageView(image.getId(), image.getUrl(),
                                     image.getWidth(), image.getHeight()))
@@ -505,7 +591,9 @@ public class PostService {
                             myLiked.contains(post.getId()),
                             commentCounts.getOrDefault(post.getId(), 0L),
                             post.isOwnedBy(viewerId),
-                            post.getCreatedAt() == null ? Instant.now() : post.getCreatedAt());
+                            post.getCreatedAt() == null ? Instant.now() : post.getCreatedAt(),
+                            post.getFormat(), post.getDocument(), post.getClubId(),
+                            club == null ? null : club.getName());
                 })
                 .toList();
     }

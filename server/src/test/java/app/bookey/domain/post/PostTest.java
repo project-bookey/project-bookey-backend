@@ -3,6 +3,9 @@ package app.bookey.domain.post;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PostTest {
@@ -26,9 +29,9 @@ class PostTest {
     void publicIsReadableByEveryone() {
         Post post = post(PostVisibility.PUBLIC);
 
-        assertThat(post.isReadableBy(OWNER)).isTrue();
-        assertThat(post.isReadableBy(99L)).isTrue();
-        assertThat(post.isReadableBy(null)).isTrue();
+        assertThat(post.isReadableBy(OWNER, false)).isTrue();
+        assertThat(post.isReadableBy(99L, false)).isTrue();
+        assertThat(post.isReadableBy(null, false)).isTrue();
     }
 
     @Test
@@ -36,9 +39,9 @@ class PostTest {
     void linkIsReadableByEveryone() {
         Post post = post(PostVisibility.LINK);
 
-        assertThat(post.isReadableBy(OWNER)).isTrue();
-        assertThat(post.isReadableBy(99L)).isTrue();
-        assertThat(post.isReadableBy(null)).isTrue();
+        assertThat(post.isReadableBy(OWNER, false)).isTrue();
+        assertThat(post.isReadableBy(99L, false)).isTrue();
+        assertThat(post.isReadableBy(null, false)).isTrue();
     }
 
     @Test
@@ -46,9 +49,9 @@ class PostTest {
     void privateIsReadableByOwnerOnly() {
         Post post = post(PostVisibility.PRIVATE);
 
-        assertThat(post.isReadableBy(OWNER)).isTrue();
-        assertThat(post.isReadableBy(99L)).isFalse();
-        assertThat(post.isReadableBy(null)).isFalse();
+        assertThat(post.isReadableBy(OWNER, false)).isTrue();
+        assertThat(post.isReadableBy(99L, false)).isFalse();
+        assertThat(post.isReadableBy(null, false)).isFalse();
     }
 
     @Test
@@ -118,5 +121,56 @@ class PostTest {
 
         assertThat(withBook.hasBook()).isTrue();
         assertThat(withoutBook.hasBook()).isFalse();
+    }
+
+    @Test
+    @DisplayName("모임 공개(CLUB) 독후감은 작성자와 그 모임 활성 멤버만 읽을 수 있다")
+    void clubIsReadableByOwnerAndActiveMembersOnly() {
+        Post post = Post.builder()
+                .userId(OWNER).slug("모임글").title("제목").bodyMd("본문")
+                .visibility(PostVisibility.CLUB).clubId(3L)
+                .build();
+
+        assertThat(post.isReadableBy(OWNER, false)).isTrue();
+        assertThat(post.isReadableBy(99L, true)).isTrue();
+        assertThat(post.isReadableBy(99L, false)).isFalse();
+        assertThat(post.isReadableBy(null, false)).isFalse();
+        assertThat(post.isClubPost()).isTrue();
+        assertThat(post.getPublishedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("비공개 글은 모임 멤버라도 작성자가 아니면 읽을 수 없다")
+    void privateIgnoresClubMembership() {
+        Post post = post(PostVisibility.PRIVATE);
+
+        assertThat(post.isReadableBy(99L, true)).isFalse();
+    }
+
+    @Test
+    @DisplayName("형식을 주지 않으면 TEXT 이고 문서·모임은 비어 있다")
+    void defaultsToTextWithoutDocumentOrClub() {
+        Post post = post(PostVisibility.PUBLIC);
+
+        assertThat(post.getFormat()).isEqualTo(PostFormat.TEXT);
+        assertThat(post.getDocument()).isNull();
+        assertThat(post.isClubPost()).isFalse();
+    }
+
+    @Test
+    @DisplayName("changeDocument 는 문서를 통째로 바꾸고, null 이면 유지한다")
+    void changeDocumentKeepsOnNull() {
+        Map<String, Object> first = Map.of("pages", List.of(Map.of("id", "p1")));
+        Map<String, Object> second = Map.of("pages", List.of(Map.of("id", "p1"), Map.of("id", "p2")));
+        Post post = Post.builder()
+                .userId(OWNER).slug("노트").title("제목").bodyMd("")
+                .format(PostFormat.NOTE).document(first)
+                .build();
+
+        post.changeDocument(null);
+        assertThat(post.getDocument()).isEqualTo(first);
+
+        post.changeDocument(second);
+        assertThat(post.getDocument()).isEqualTo(second);
     }
 }

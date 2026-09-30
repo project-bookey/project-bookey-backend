@@ -46,5 +46,8 @@ public interface PostRepository extends JpaRepository<Post, Long> {
             nativeQuery = true)
     Page<Post> findHotFeed(Pageable pageable);
 
+    /** 모임 독후감 — 모임 글은 PUBLIC·CLUB 만 가질 수 있어 공개 범위로 거르지 않는다. */
+    Page<Post> findAllByClubIdOrderByCreatedAtDescIdDesc(Long clubId, Pageable pageable);
+
     long countByUserIdAndVisibility(Long userId, PostVisibility visibility);
 }
