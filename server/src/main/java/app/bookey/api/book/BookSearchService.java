@@ -107,7 +107,13 @@ public class BookSearchService {
         if (cached.isPresent()) {
             Book book = cached.get();
             if (!book.hasTotalPages()) {
-                aladinClient.lookupByIsbn13(isbn13).ifPresent(meta -> book.enrichMeta(
+                Optional<ExternalBook> pageMeta = aladinClient.lookupByIsbn13(isbn13);
+                if (pageMeta.isEmpty() || pageMeta.get().totalPages() == null) {
+                    pageMeta = googleClient.search("isbn:" + isbn13, 3).stream()
+                            .filter(meta -> meta.totalPages() != null && meta.totalPages() > 0)
+                            .findFirst();
+                }
+                pageMeta.ifPresent(meta -> book.enrichMeta(
                         meta.totalPages(), meta.category(), meta.description(),
                         meta.coverUrl(), meta.publishedAt()));
             }

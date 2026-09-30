@@ -45,6 +45,9 @@ public class ReadingRecord extends BaseTimeEntity {
     @Column(name = "target_finish_date")
     private LocalDate targetFinishDate;
 
+    @Column(name = "commitment", length = 200)
+    private String commitment;
+
     @Column(name = "started_at")
     private Instant startedAt;
 
@@ -62,13 +65,14 @@ public class ReadingRecord extends BaseTimeEntity {
 
     @Builder
     private ReadingRecord(Long userId, Long bookId, short round, ReadingStatus status,
-                          Integer totalPagesOverride, LocalDate targetFinishDate) {
+                          Integer totalPagesOverride, LocalDate targetFinishDate, String commitment) {
         this.userId = userId;
         this.bookId = bookId;
         this.round = round == 0 ? 1 : round;
         this.status = status == null ? ReadingStatus.WANT_TO_READ : status;
         this.totalPagesOverride = totalPagesOverride;
         this.targetFinishDate = targetFinishDate;
+        this.commitment = commitment == null || commitment.isBlank() ? null : commitment.trim();
     }
 
     /** 세션 종료 시 진도 반영. 뒤로 읽기는 진도를 낮추지 않는다(§8.1). */
@@ -124,6 +128,9 @@ public class ReadingRecord extends BaseTimeEntity {
 
     public void overrideTotalPages(Integer totalPages) {
         this.totalPagesOverride = totalPages;
+        if (totalPages != null && totalPages > 0 && this.currentPage > totalPages) {
+            this.currentPage = totalPages;
+        }
     }
 
     public void rate(Short rating) {

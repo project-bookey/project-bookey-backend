@@ -36,6 +36,14 @@ public class NotificationController {
         return ResponseEntity.noContent().build();
     }
 
+    @Operation(summary = "내 알림 삭제")
+    @DeleteMapping("/{notificationId}")
+    public ResponseEntity<Void> delete(@AuthenticationPrincipal AuthUser user,
+                                       @PathVariable Long notificationId) {
+        notificationService.delete(user.id(), notificationId);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "알림 설정 변경 — 톤 · 조용시간 · 빈도")
     @PatchMapping("/settings")
     public ResponseEntity<Void> updateSettings(@AuthenticationPrincipal AuthUser user,

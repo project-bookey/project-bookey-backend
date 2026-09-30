@@ -64,6 +64,9 @@ public class BookService {
     @Transactional
     public BookDetail detail(Long userId, Long bookId) {
         Book book = getBook(bookId);
+        if (!book.hasTotalPages() && book.getIsbn13() != null) {
+            book = searchService.findOrFetchByIsbn(book.getIsbn13()).orElse(book);
+        }
         enrichYes24IfMissing(book);
         Long myRecordId = userId == null ? null
                 : readingRecordRepository.findFirstByUserIdAndBookIdOrderByRoundDesc(userId, bookId)

@@ -234,8 +234,7 @@ public class SessionService {
             throw ApiException.of(ErrorCode.INVALID_PAGE_RANGE);
         }
         if (startPage != null && endPage < startPage) {
-            // 뒤로 읽기는 허용하되 진도는 낮추지 않는다(§8.1). 세션 자체는 기록된다.
-            log.debug("Backward reading recorded: {} -> {}", startPage, endPage);
+            throw ApiException.of(ErrorCode.INVALID_PAGE_RANGE);
         }
     }
 

@@ -174,7 +174,7 @@ public class ChallengeService {
     }
 
     private ReadingRecord addToLibraryReading(Long userId, Long bookId) {
-        libraryService.addBook(userId, new AddBookRequest(bookId, ReadingStatus.READING, null, null, null));
+        libraryService.addBook(userId, new AddBookRequest(bookId, ReadingStatus.READING, null, null, null, null));
         return recordRepository.findFirstByUserIdAndBookIdOrderByRoundDesc(userId, bookId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.RECORD_NOT_FOUND));
     }
