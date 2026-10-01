@@ -49,6 +49,7 @@ public class ProfileService {
     private final PostRepository postRepository;
     private final PostLikeRepository likeRepository;
     private final SubscriptionService subscriptionService;
+    private final ChatService chatService;
     private final Clock clock;
 
     /** 유저 프로필 — 남의 프로필을 열면 방문 기록이 남는다(방문자·날짜당 1건, KST). */
@@ -68,7 +69,8 @@ public class ProfileService {
                 followRepository.countByFollowerId(userId),
                 visitRepository.countByHostId(userId),
                 postRepository.countByUserIdAndVisibility(userId, PostVisibility.PUBLIC),
-                iFollow, followsMe, iFollow && followsMe, me);
+                iFollow, followsMe, iFollow && followsMe,
+                !me && chatService.canChat(viewerId, userId), me);
     }
 
     /** 같은 방문자가 하루에 여러 번 열어도 1건 — 유니크 제약 충돌은 조용히 무시한다. */

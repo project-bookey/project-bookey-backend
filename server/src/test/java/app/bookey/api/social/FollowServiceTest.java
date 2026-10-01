@@ -1,16 +1,13 @@
 package app.bookey.api.social;
 
-import app.bookey.api.social.dto.SocialDtos.FollowCodeView;
 import app.bookey.api.social.dto.SocialDtos.FollowUserView;
 import app.bookey.api.notification.NotificationService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
-import app.bookey.common.support.PublicIdGenerator;
+import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.social.FollowSource;
 import app.bookey.domain.social.UserFollow;
 import app.bookey.domain.social.UserFollowRepository;
-import app.bookey.domain.social.UserPublicId;
-import app.bookey.domain.social.UserPublicIdRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -26,23 +23,21 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 팔로우 계약 단위 테스트 (§14.3) — 경로는 코드와 상호 엽서뿐, 코드 팔로우는 즉시 맞팔로우. */
+/** 팔로우 계약 단위 테스트 (§14.3) — 버튼 한 번, 한 방향. */
 class FollowServiceTest {
 
     private final UserFollowRepository followRepository = mock(UserFollowRepository.class);
-    private final UserPublicIdRepository publicIdRepository = mock(UserPublicIdRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
     private final NotificationService notificationService = mock(NotificationService.class);
     private final Clock clock = mock(Clock.class);
     private final FollowService service =
-            new FollowService(followRepository, publicIdRepository, userRepository, notificationService, clock);
+            new FollowService(followRepository, userRepository, notificationService, clock);
 
     private static void set(Object target, String field, Object value) {
         try {
@@ -54,98 +49,93 @@ class FollowServiceTest {
         }
     }
 
-    @Test
-    @DisplayName("내 코드 — 없으면 16자리로 만들고, 딥링크를 함께 준다")
-    void myCodeCreatesWhenMissing() {
-        when(publicIdRepository.findByUserId(1L)).thenReturn(Optional.empty());
-        when(publicIdRepository.save(any(UserPublicId.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        FollowCodeView view = service.myCode(1L);
-
-        assertThat(view.code()).hasSize(16);
-        assertThat(PublicIdGenerator.isValidFormat(view.code())).isTrue();
-        assertThat(view.deepLink()).isEqualTo("https://bookey.app/u/" + view.code());
+    private User user(long id, String nickname) {
+        User u = User.builder().handle("h" + id).email(id + "@dev.local").nickname(nickname).build();
+        set(u, "id", id);
+        return u;
     }
 
     @Test
-    @DisplayName("코드 회전 — 새 16자리 코드로 바뀐다 (유출 무효화)")
-    void rotateChangesCode() {
-        when(clock.instant()).thenReturn(Instant.parse("2026-09-06T03:00:00Z"));
-        UserPublicId publicId = new UserPublicId(1L, "AAAABBBBCCCCDDDD");
-        when(publicIdRepository.findByUserId(1L)).thenReturn(Optional.of(publicId));
+    @DisplayName("팔로우 — 한 방향 한 행(BUTTON)만 만들고, 상대에게 '새 팔로워' 알림")
+    void followCreatesOneDirection() {
+        when(clock.instant()).thenReturn(Instant.parse("2026-10-01T03:00:00Z"));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user(2L, "친구")));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(user(1L, "나")));
+        when(followRepository.findByFollowerIdAndFolloweeId(1L, 2L)).thenReturn(Optional.empty());
+        when(followRepository.save(any(UserFollow.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        FollowCodeView view = service.rotate(1L);
-
-        assertThat(view.code()).isNotEqualTo("AAAABBBBCCCCDDDD").hasSize(16);
-        assertThat(publicId.getRotatedAt()).isNotNull();
-    }
-
-    @Test
-    @DisplayName("코드 팔로우 — 즉시 맞팔로우(양방향 두 행), 소문자·하이픈 입력도 받아준다")
-    void followByCodeCreatesMutual() {
-        when(clock.instant()).thenReturn(Instant.parse("2026-09-06T03:00:00Z"));
-        when(publicIdRepository.findByCode("AAAABBBBCCCCDDDD"))
-                .thenReturn(Optional.of(new UserPublicId(2L, "AAAABBBBCCCCDDDD")));
-        User target = User.builder().handle("friend").email("f@dev.local").nickname("친구").build();
-        set(target, "id", 2L);
-        when(userRepository.findById(2L)).thenReturn(Optional.of(target));
-
-        FollowUserView view = service.followByCode(1L, "aaaa-bbbb-cccc-dddd");
+        FollowUserView view = service.follow(1L, 2L);
 
         assertThat(view.userId()).isEqualTo(2L);
-        assertThat(view.mutual()).isTrue();
+        assertThat(view.mutual()).isFalse();
         ArgumentCaptor<UserFollow> saved = ArgumentCaptor.forClass(UserFollow.class);
-        verify(followRepository, times(2)).save(saved.capture());
-        assertThat(saved.getAllValues()).extracting(UserFollow::getFollowerId).containsExactly(1L, 2L);
-        assertThat(saved.getAllValues()).extracting(UserFollow::getFolloweeId).containsExactly(2L, 1L);
-        assertThat(saved.getAllValues()).extracting(UserFollow::getSource).containsOnly(FollowSource.CODE);
+        verify(followRepository, times(1)).save(saved.capture());
+        assertThat(saved.getValue().getFollowerId()).isEqualTo(1L);
+        assertThat(saved.getValue().getFolloweeId()).isEqualTo(2L);
+        assertThat(saved.getValue().getSource()).isEqualTo(FollowSource.BUTTON);
+        ArgumentCaptor<NotificationService.NotificationRequest> sent =
+                ArgumentCaptor.forClass(NotificationService.NotificationRequest.class);
+        verify(notificationService).inApp(sent.capture());
+        assertThat(sent.getValue().type()).isEqualTo(NotificationType.FOLLOWED);
     }
 
     @Test
-    @DisplayName("코드 팔로우 — 내 코드는 FOLLOW_SELF, 없는 코드·형식 불량은 FOLLOW_CODE_INVALID, 이미 맞팔이면 ALREADY_FOLLOWING")
-    void followByCodeGuards() {
-        when(publicIdRepository.findByCode("AAAABBBBCCCCDDDD"))
-                .thenReturn(Optional.of(new UserPublicId(1L, "AAAABBBBCCCCDDDD")));
-        assertThatThrownBy(() -> service.followByCode(1L, "AAAABBBBCCCCDDDD"))
+    @DisplayName("팔로우 — 상대가 이미 나를 팔로우 중이면 맞팔로우, '연결됐어요' 알림")
+    void followBackBecomesMutual() {
+        when(clock.instant()).thenReturn(Instant.parse("2026-10-01T03:00:00Z"));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user(2L, "친구")));
+        when(followRepository.existsByFollowerIdAndFolloweeId(2L, 1L)).thenReturn(true);
+        when(followRepository.findByFollowerIdAndFolloweeId(1L, 2L)).thenReturn(Optional.empty());
+        when(followRepository.save(any(UserFollow.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        FollowUserView view = service.follow(1L, 2L);
+
+        assertThat(view.mutual()).isTrue();
+        ArgumentCaptor<NotificationService.NotificationRequest> sent =
+                ArgumentCaptor.forClass(NotificationService.NotificationRequest.class);
+        verify(notificationService).inApp(sent.capture());
+        assertThat(sent.getValue().type()).isEqualTo(NotificationType.FOLLOW_CONNECTED);
+    }
+
+    @Test
+    @DisplayName("팔로우 — 이미 팔로우 중이면 그대로 성공(저장·알림 없음), 자기 자신은 FOLLOW_SELF")
+    void followIsIdempotentAndGuardsSelf() {
+        when(clock.instant()).thenReturn(Instant.parse("2026-10-01T03:00:00Z"));
+        when(userRepository.findById(2L)).thenReturn(Optional.of(user(2L, "친구")));
+        UserFollow existing = UserFollow.builder().followerId(1L).followeeId(2L).source(FollowSource.BUTTON).build();
+        when(followRepository.findByFollowerIdAndFolloweeId(1L, 2L)).thenReturn(Optional.of(existing));
+
+        assertThat(service.follow(1L, 2L).userId()).isEqualTo(2L);
+        verify(followRepository, never()).save(any());
+        verify(notificationService, never()).inApp(any());
+
+        assertThatThrownBy(() -> service.follow(1L, 1L))
                 .isInstanceOf(ApiException.class)
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(ErrorCode.FOLLOW_SELF);
-
-        assertThatThrownBy(() -> service.followByCode(1L, "too-short"))
-                .isInstanceOf(ApiException.class)
-                .extracting(e -> ((ApiException) e).getErrorCode())
-                .isEqualTo(ErrorCode.FOLLOW_CODE_INVALID);
-
-        when(publicIdRepository.findByCode("EEEEFFFFGGGGHHHH"))
-                .thenReturn(Optional.of(new UserPublicId(2L, "EEEEFFFFGGGGHHHH")));
-        when(followRepository.existsByFollowerIdAndFolloweeId(1L, 2L)).thenReturn(true);
-        when(followRepository.existsByFollowerIdAndFolloweeId(2L, 1L)).thenReturn(true);
-        assertThatThrownBy(() -> service.followByCode(1L, "EEEEFFFFGGGGHHHH"))
-                .isInstanceOf(ApiException.class)
-                .extracting(e -> ((ApiException) e).getErrorCode())
-                .isEqualTo(ErrorCode.ALREADY_FOLLOWING);
-        verify(followRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("ensureMutual — 이미 있는 방향은 두고 없는 방향만 만든다 (엽서 답장 경로)")
-    void ensureMutualFillsMissingDirection() {
-        when(followRepository.existsByFollowerIdAndFolloweeId(1L, 2L)).thenReturn(true);
-        when(followRepository.existsByFollowerIdAndFolloweeId(2L, 1L)).thenReturn(false);
+    @DisplayName("팔로우 — 없는 사용자는 NOT_FOUND")
+    void followUnknownUser() {
+        when(userRepository.findById(9L)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> service.follow(1L, 9L))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
+    }
 
-        service.ensureMutual(1L, 2L, FollowSource.POSTCARD);
-
-        ArgumentCaptor<UserFollow> saved = ArgumentCaptor.forClass(UserFollow.class);
-        verify(followRepository, times(1)).save(saved.capture());
-        assertThat(saved.getValue().getFollowerId()).isEqualTo(2L);
-        assertThat(saved.getValue().getFolloweeId()).isEqualTo(1L);
-        assertThat(saved.getValue().getSource()).isEqualTo(FollowSource.POSTCARD);
+    @Test
+    @DisplayName("팔로잉 id — 저장소가 준 id 를 그대로 싣는다")
+    void followingIds() {
+        when(followRepository.findFolloweeIdsByFollowerId(1L)).thenReturn(List.of(2L, 3L));
+        assertThat(service.followingIds(1L).ids()).containsExactly(2L, 3L);
     }
 
     @Test
     @DisplayName("언팔로우 — 내 방향만 끊고 상대의 팔로우는 남긴다")
     void unfollowRemovesOnlyMyDirection() {
-        UserFollow mine = UserFollow.builder().followerId(1L).followeeId(2L).source(FollowSource.CODE).build();
+        UserFollow mine = UserFollow.builder().followerId(1L).followeeId(2L).source(FollowSource.BUTTON).build();
         when(followRepository.findByFollowerIdAndFolloweeId(1L, 2L)).thenReturn(Optional.of(mine));
 
         service.unfollow(1L, 2L);
@@ -158,7 +148,7 @@ class FollowServiceTest {
     @DisplayName("팔로잉 목록 — 상대가 나를 팔로우하는지(역방향)로 맞팔을 판정한다")
     void followingListMutualFlag() {
         when(clock.instant()).thenReturn(Instant.parse("2026-09-06T03:00:00Z"));
-        UserFollow follow = UserFollow.builder().followerId(1L).followeeId(2L).source(FollowSource.CODE).build();
+        UserFollow follow = UserFollow.builder().followerId(1L).followeeId(2L).source(FollowSource.BUTTON).build();
         when(followRepository.findAllByFollowerIdOrderByIdDesc(any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(follow)));
         when(followRepository.findAllByFolloweeIdAndFollowerIdIn(any(), any())).thenReturn(List.of());

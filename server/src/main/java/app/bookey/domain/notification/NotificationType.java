@@ -17,6 +17,9 @@ public enum NotificationType {
     // 소셜 즉시 알림 — 푸시 설정과 별개로 인앱 목록에는 항상 남긴다.
     POSTCARD_RECEIVED(false),
     POSTCARD_REPLIED(false),
+    /** 누군가 나를 팔로우했다(한 방향) */
+    FOLLOWED(false),
+    /** 팔로우가 맞팔로우로 이어졌다 */
     FOLLOW_CONNECTED(false),
     CHAT_MESSAGE(false),
     POST_LIKED(false),

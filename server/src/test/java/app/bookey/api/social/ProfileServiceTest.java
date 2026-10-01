@@ -43,10 +43,11 @@ class ProfileServiceTest {
     private final PostRepository postRepository = mock(PostRepository.class);
     private final PostLikeRepository likeRepository = mock(PostLikeRepository.class);
     private final SubscriptionService subscriptionService = mock(SubscriptionService.class);
+    private final ChatService chatService = mock(ChatService.class);
     private final Clock clock = mock(Clock.class);
     private final ProfileService service = new ProfileService(
             userRepository, followRepository, visitRepository, postRepository,
-            likeRepository, subscriptionService, clock);
+            likeRepository, subscriptionService, chatService, clock);
 
     private static void set(Object target, String field, Object value) {
         try {

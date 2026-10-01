@@ -12,6 +12,7 @@ import app.bookey.domain.social.Chat;
 import app.bookey.domain.social.ChatMessage;
 import app.bookey.domain.social.ChatMessageRepository;
 import app.bookey.domain.social.ChatRepository;
+import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -34,18 +35,18 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 1:1 채팅 계약 단위 테스트 (§14.3) — 맞팔로우 게이트, 쌍 정규화, 참가자 검사, 읽음 처리. */
+/** 1:1 채팅 계약 단위 테스트 (§14.3) — 엽서 답장 게이트, 쌍 정규화, 참가자 검사, 읽음 처리. */
 class ChatServiceTest {
 
     private final ChatRepository chatRepository = mock(ChatRepository.class);
     private final ChatMessageRepository messageRepository = mock(ChatMessageRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
-    private final FollowService followService = mock(FollowService.class);
+    private final PostcardRepository postcardRepository = mock(PostcardRepository.class);
     private final NotificationService notificationService = mock(NotificationService.class);
     private final RateLimiter rateLimiter = mock(RateLimiter.class);
     private final Clock clock = mock(Clock.class);
     private final ChatService service = new ChatService(
-            chatRepository, messageRepository, userRepository, followService, notificationService, rateLimiter, clock);
+            chatRepository, messageRepository, userRepository, postcardRepository, notificationService, rateLimiter, clock);
 
     private static void set(Object target, String field, Object value) {
         Class<?> type = target.getClass();
@@ -79,11 +80,11 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("열기 — 맞팔로우면 쌍을 정규화(a<b)해 방을 만든다. 순서가 뒤집혀도 같은 방")
+    @DisplayName("열기 — 엽서 답장이 오갔으면 쌍을 정규화(a<b)해 방을 만든다. 순서가 뒤집혀도 같은 방")
     void openNormalizesPair() {
         when(clock.instant()).thenReturn(Instant.parse("2026-09-06T03:00:00Z"));
         other(2L);
-        when(followService.isMutual(5L, 2L)).thenReturn(true);
+        when(postcardRepository.existsRepliedBetween(5L, 2L)).thenReturn(true);
         when(chatRepository.findPair(2L, 5L)).thenReturn(Optional.empty());
         ArgumentCaptor<Chat> saved = ArgumentCaptor.forClass(Chat.class);
         when(chatRepository.save(saved.capture())).thenAnswer(inv -> {
@@ -106,7 +107,6 @@ class ChatServiceTest {
     void openReturnsExisting() {
         when(clock.instant()).thenReturn(Instant.parse("2026-09-06T03:00:00Z"));
         other(2L);
-        when(followService.isMutual(1L, 2L)).thenReturn(true);
         Chat existing = Chat.of(1L, 2L);
         set(existing, "id", 10L);
         when(chatRepository.findPair(1L, 2L)).thenReturn(Optional.of(existing));
@@ -118,10 +118,11 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("열기 — 맞팔로우가 아니면 CHAT_NOT_ALLOWED, 자신과는 INVALID_REQUEST")
+    @DisplayName("열기 — 방이 없고 엽서 답장도 없으면 CHAT_NOT_ALLOWED, 자신과는 INVALID_REQUEST")
     void openGuards() {
         other(2L);
-        when(followService.isMutual(1L, 2L)).thenReturn(false);
+        when(chatRepository.findPair(1L, 2L)).thenReturn(Optional.empty());
+        when(postcardRepository.existsRepliedBetween(1L, 2L)).thenReturn(false);
         assertApiError(() -> service.open(1L, 2L), ErrorCode.CHAT_NOT_ALLOWED);
 
         assertApiError(() -> service.open(1L, 1L), ErrorCode.INVALID_REQUEST);
@@ -141,19 +142,6 @@ class ChatServiceTest {
     }
 
     @Test
-    @DisplayName("보내기 — 언팔로우된 상대에게는 CHAT_NOT_ALLOWED (방은 남지만 쓰기가 막힌다)")
-    void sendAfterUnfollow() {
-        Chat chat = Chat.of(1L, 2L);
-        set(chat, "id", 10L);
-        when(chatRepository.findById(10L)).thenReturn(Optional.of(chat));
-        when(followService.isMutual(1L, 2L)).thenReturn(false);
-
-        assertApiError(() -> service.send(1L, 10L, new SendMessageRequest("아직 있니")),
-                ErrorCode.CHAT_NOT_ALLOWED);
-        verify(messageRepository, never()).save(any());
-    }
-
-    @Test
     @DisplayName("보내기 — 저장하고 마지막 메시지 시각과 내 읽음 시각을 함께 갱신한다")
     void sendUpdatesChat() {
         Instant now = Instant.parse("2026-09-06T03:00:00Z");
@@ -161,7 +149,6 @@ class ChatServiceTest {
         Chat chat = Chat.of(1L, 2L);
         set(chat, "id", 10L);
         when(chatRepository.findById(10L)).thenReturn(Optional.of(chat));
-        when(followService.isMutual(1L, 2L)).thenReturn(true);
         when(messageRepository.save(any(ChatMessage.class))).thenAnswer(inv -> {
             ChatMessage message = inv.getArgument(0);
             set(message, "id", 100L);

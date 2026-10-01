@@ -3,6 +3,8 @@ package app.bookey.domain.social;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
@@ -29,4 +31,8 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, Long> {
 
     /** 맞팔로우 플래그 배치 판정용 — 이 사람들이 나를 팔로우하는가. */
     List<UserFollow> findAllByFolloweeIdAndFollowerIdIn(Long followeeId, Collection<Long> followerIds);
+
+    /** 내가 팔로우하는 사람 id 전부 — 팔로우 버튼 상태 판정용. */
+    @Query("SELECT f.followeeId FROM UserFollow f WHERE f.followerId = :followerId")
+    List<Long> findFolloweeIdsByFollowerId(@Param("followerId") Long followerId);
 }

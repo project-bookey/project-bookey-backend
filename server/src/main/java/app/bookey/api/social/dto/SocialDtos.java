@@ -9,6 +9,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
+import java.util.List;
 
 public final class SocialDtos {
 
@@ -63,9 +64,8 @@ public final class SocialDtos {
 
     // ── 팔로우 ───────────────────────────────────────────
 
-    public record FollowCodeView(@NotNull String code, @NotNull String deepLink) {}
-
-    public record FollowByCodeRequest(@NotBlank @Size(max = 32) String code) {}
+    /** 내가 팔로우하는 사람 id 전부 — 피드·댓글의 팔로우 버튼 상태를 한 번에 판정한다. */
+    public record FollowingIdsView(@NotNull List<Long> ids) {}
 
     public record FollowUserView(
             @NotNull Long userId,
@@ -90,6 +90,8 @@ public final class SocialDtos {
             boolean iFollow,
             boolean followsMe,
             boolean mutual,
+            /** 채팅을 열 수 있는가 — 엽서 답장이 오갔거나 이미 방이 있다(팔로우와 무관). */
+            boolean canChat,
             boolean me
     ) {}
 
