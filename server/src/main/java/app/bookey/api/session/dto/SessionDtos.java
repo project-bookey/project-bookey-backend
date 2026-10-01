@@ -13,14 +13,14 @@ public final class SessionDtos {
 
     public record StartRequest(
             @NotNull Long readingRecordId,
-            @Min(0) Integer startPage,
+            @Min(0) @Max(20000) Integer startPage,
             /** 오프라인 복원용 — 앱이 죽어도 시작 시각으로 복원한다(§9 기술 리스크). */
             Instant startedAt,
             UUID clientUuid
     ) {}
 
     public record EndRequest(
-            @Min(0) Integer endPage,
+            @Min(0) @Max(20000) Integer endPage,
             Instant endedAt,
             @DecimalMin("0.0") @DecimalMax("1.0") Double foregroundRatio,
             @Min(0) Integer interactionCount,
@@ -31,8 +31,8 @@ public final class SessionDtos {
             @NotNull Long readingRecordId,
             @NotNull Instant startedAt,
             @NotNull @Min(60) @Max(86400) Integer durationSec,
-            @Min(0) Integer startPage,
-            @Min(0) Integer endPage,
+            @Min(0) @Max(20000) Integer startPage,
+            @Min(0) @Max(20000) Integer endPage,
             @Size(max = 2000) String memo,
             UUID clientUuid
     ) {}

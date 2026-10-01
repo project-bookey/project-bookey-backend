@@ -6,6 +6,7 @@ import app.bookey.domain.reading.ReadingStatus;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -20,7 +21,8 @@ public final class LibraryDtos {
             LocalDate targetFinishDate,
             @Min(1) @Max(20000) Integer totalPagesOverride,
             /** true 면 이미 완독한 책이라도 새 회차(재독)로 등록한다. */
-            Boolean reread
+            Boolean reread,
+            @Size(max = 200) String commitment
     ) {}
 
     public record UpdateGoalRequest(
@@ -60,7 +62,8 @@ public final class LibraryDtos {
             Instant finishedAt,
             Instant lastReadAt,
             Short rating,
-            String abandonReason
+            String abandonReason,
+            String commitment
     ) {}
 
     public record LibrarySummary(

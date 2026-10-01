@@ -1,5 +1,6 @@
 package app.bookey.api.library;
 
+import app.bookey.api.book.BookSearchService;
 import app.bookey.api.book.dto.BookDtos.BookSummary;
 import app.bookey.api.library.dto.LibraryDtos.*;
 import app.bookey.common.error.ApiException;
@@ -27,6 +28,7 @@ public class LibraryService {
     private final ReadingRecordRepository recordRepository;
     private final BookRepository bookRepository;
     private final ProgressService progressService;
+    private final BookSearchService bookSearchService;
 
     @Transactional
     public ReadingRecordView addBook(Long userId, AddBookRequest request) {
@@ -53,6 +55,7 @@ public class LibraryService {
                 .status(request.status() == null ? ReadingStatus.WANT_TO_READ : request.status())
                 .targetFinishDate(request.targetFinishDate())
                 .totalPagesOverride(request.totalPagesOverride())
+                .commitment(request.commitment())
                 .build();
         return toView(recordRepository.save(record), book);
     }
@@ -76,10 +79,14 @@ public class LibraryService {
                 recordRepository.countByUserIdAndStatus(userId, ReadingStatus.PAUSED));
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ReadingRecordView detail(Long userId, Long recordId) {
         ReadingRecord record = getOwnedRecord(userId, recordId);
-        return toView(record, bookRepository.findById(record.getBookId()).orElse(null));
+        Book book = bookRepository.findById(record.getBookId()).orElse(null);
+        if (book != null && !book.hasTotalPages() && book.getIsbn13() != null) {
+            book = bookSearchService.findOrFetchByIsbn(book.getIsbn13()).orElse(book);
+        }
+        return toView(record, book);
     }
 
     @Transactional
@@ -165,7 +172,8 @@ public class LibraryService {
                 record.getFinishedAt(),
                 record.getLastReadAt(),
                 record.getRating(),
-                record.getAbandonReason() == null ? null : record.getAbandonReason().name());
+                record.getAbandonReason() == null ? null : record.getAbandonReason().name(),
+                record.getCommitment());
     }
 
     private Map<Long, Book> loadBooks(List<ReadingRecord> records) {

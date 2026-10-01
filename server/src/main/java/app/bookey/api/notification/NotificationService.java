@@ -187,6 +187,16 @@ public class NotificationService {
     }
 
     @Transactional
+    public void delete(Long userId, Long notificationId) {
+        Notification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        if (!notification.getUserId().equals(userId)) {
+            throw ApiException.of(ErrorCode.FORBIDDEN);
+        }
+        notificationRepository.delete(notification);
+    }
+
+    @Transactional
     public void updateSettings(Long userId, NotificationSettingsRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
