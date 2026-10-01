@@ -12,5 +12,6 @@ public final class ClubCommunityDtos { private ClubCommunityDtos(){}
  public record MeetingAttendeeView(Long userId,String nickname,String avatarUrl){}
  public record MeetingView(Long id,Long clubId,String title,String description,Instant startsAt,Instant endsAt,String placeName,String address,Double latitude,Double longitude,String mapUrl,Instant responseDeadline,String status,long attendeeCount,boolean attending,boolean host,List<String> attendeeNicknames,List<MeetingAttendeeView> attendees){}
  public record ActivitySessionView(Long id,Long meetingId,Instant startedAt,Instant endedAt,Integer durationSec){}
- public record ActivityCardView(Long id,Long sessionId,Long userId,String nickname,int durationSec,String caption,String decorationsJson,String photoUrl){}
+ /** 함께 독서 기록 카드 — 노트 스티커로 붙일 때 이 값들을 스냅숏으로 담는다. */
+ public record ActivityCardView(Long id,Long clubId,String clubName,String meetingTitle,String nickname,int durationSec,Instant endedAt){}
 }

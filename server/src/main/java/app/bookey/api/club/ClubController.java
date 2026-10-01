@@ -207,8 +207,7 @@ public class ClubController {
     public app.bookey.api.club.dto.ClubCommunityDtos.ActivitySessionView startActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@RequestParam(required=false) Long meetingId){return activityService.start(user.id(),clubId,meetingId);}
     @PostMapping("/{clubId}/activity/end")
     public app.bookey.api.club.dto.ClubCommunityDtos.ActivityCardView endActivity(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.end(user.id(),clubId);}
-    @GetMapping("/{clubId}/activity/cards")
-    public java.util.List<app.bookey.api.club.dto.ClubCommunityDtos.ActivityCardView> activityCards(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return activityService.list(user.id(),clubId);}
-    @PostMapping(value="/{clubId}/activity/cards/{cardId}",consumes=org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
-    public app.bookey.api.club.dto.ClubCommunityDtos.ActivityCardView decorateActivityCard(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long cardId,@RequestParam(required=false) String caption,@RequestParam(required=false) String decorationsJson,@RequestPart(value="file",required=false) org.springframework.web.multipart.MultipartFile file){return activityService.decorate(user.id(),clubId,cardId,caption,decorationsJson,file);}
+    @Operation(summary = "내 함께 독서 기록 카드 — 모든 클럽, 최근 50장(노트 스티커용)")
+    @GetMapping("/activity-cards/mine")
+    public java.util.List<app.bookey.api.club.dto.ClubCommunityDtos.ActivityCardView> myActivityCards(@AuthenticationPrincipal AuthUser user){return activityService.mine(user.id());}
 }
