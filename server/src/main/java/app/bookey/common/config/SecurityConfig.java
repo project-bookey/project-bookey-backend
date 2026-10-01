@@ -75,6 +75,8 @@ public class SecurityConfig {
                         .requestMatchers("/docs/**", "/swagger-ui/**", "/openapi.json").permitAll()
                         .requestMatchers(HttpMethod.GET, "/legal/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
+                        // 실시간 연결 — 핸드셰이크는 열어 두고, 첫 메시지의 토큰으로 핸들러가 인증한다
+                        .requestMatchers(HttpMethod.GET, "/ws/**").permitAll()
                         // 공개 웹(SEO)용 읽기 전용 엔드포인트
                         .requestMatchers(HttpMethod.GET, "/api/v1/banners").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/**").permitAll()
