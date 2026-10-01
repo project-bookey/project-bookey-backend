@@ -1,20 +1,18 @@
 package app.bookey.api.social;
 
-import app.bookey.api.social.dto.SocialDtos.FollowByCodeRequest;
-import app.bookey.api.social.dto.SocialDtos.FollowCodeView;
 import app.bookey.api.social.dto.SocialDtos.FollowUserView;
+import app.bookey.api.social.dto.SocialDtos.FollowingIdsView;
 import app.bookey.common.security.AuthUser;
 import app.bookey.common.support.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-@Tag(name = "Follow", description = "팔로우 — 16자리 코드(QR) 또는 상호 엽서로만 (§14.3)")
+@Tag(name = "Follow", description = "팔로우 — 버튼 한 번, 한 방향 (§14.3)")
 @RestController
 @RequestMapping("/api/v1/follows")
 @RequiredArgsConstructor
@@ -22,23 +20,16 @@ public class FollowController {
 
     private final FollowService followService;
 
-    @Operation(summary = "내 팔로우 코드 — QR 은 deepLink 로 그린다")
-    @GetMapping("/my-code")
-    public FollowCodeView myCode(@AuthenticationPrincipal AuthUser user) {
-        return followService.myCode(user.id());
+    @Operation(summary = "팔로우 — 한 방향, 이미 팔로우 중이면 그대로 성공")
+    @PostMapping("/{userId}")
+    public FollowUserView follow(@AuthenticationPrincipal AuthUser user, @PathVariable Long userId) {
+        return followService.follow(user.id(), userId);
     }
 
-    @Operation(summary = "팔로우 코드 회전 — 유출 시 무효화")
-    @PostMapping("/my-code/rotate")
-    public FollowCodeView rotate(@AuthenticationPrincipal AuthUser user) {
-        return followService.rotate(user.id());
-    }
-
-    @Operation(summary = "코드로 팔로우 — 지인 전제, 즉시 맞팔로우")
-    @PostMapping("/code")
-    public FollowUserView followByCode(@AuthenticationPrincipal AuthUser user,
-                                       @Valid @RequestBody FollowByCodeRequest request) {
-        return followService.followByCode(user.id(), request.code());
+    @Operation(summary = "내가 팔로우하는 사람 id 전부 — 팔로우 버튼 상태 판정용")
+    @GetMapping("/following-ids")
+    public FollowingIdsView followingIds(@AuthenticationPrincipal AuthUser user) {
+        return followService.followingIds(user.id());
     }
 
     @Operation(summary = "팔로워 목록")

@@ -12,7 +12,6 @@ import app.bookey.common.support.GraphemeCounter;
 import app.bookey.common.support.PageResponse;
 import app.bookey.domain.post.Post;
 import app.bookey.domain.post.PostRepository;
-import app.bookey.domain.social.FollowSource;
 import app.bookey.domain.social.Postcard;
 import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.social.PostcardStatus;
@@ -48,7 +47,6 @@ public class PostcardService {
     private final UserRepository userRepository;
     private final PostRepository postRepository;
     private final WalletService walletService;
-    private final FollowService followService;
     private final NotificationService notificationService;
     private final BookeyProperties properties;
     private final Clock clock;
@@ -89,7 +87,7 @@ public class PostcardService {
         return toView(postcard, fromUserId);
     }
 
-    /** 답장 — 우표 1개 소모(동봉 엽서는 무료). 성립하면 자동 맞팔로우. */
+    /** 답장 — 우표 1개 소모(동봉 엽서는 무료). 답장이 오가면 두 사람 사이에 채팅을 열 수 있다. */
     @Transactional
     public PostcardView reply(Long userId, Long postcardId, ReplyPostcardRequest request) {
         Postcard postcard = postcardRepository.findById(postcardId)
@@ -107,7 +105,6 @@ public class PostcardService {
             walletService.payStamp(userId, wallet, WalletTransactionKind.REPLY_STAMP, postcard.getId());
         }
         postcard.reply(body, Instant.now(clock));
-        followService.ensureMutual(postcard.getFromUserId(), postcard.getToUserId(), FollowSource.POSTCARD);
         notifyPostcardReplied(userId, postcard);
         return toView(postcard, userId);
     }

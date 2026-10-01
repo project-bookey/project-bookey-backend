@@ -8,7 +8,6 @@ import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.domain.post.PostRepository;
-import app.bookey.domain.social.FollowSource;
 import app.bookey.domain.social.Postcard;
 import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.social.PostcardStatus;
@@ -50,13 +49,12 @@ class PostcardServiceTest {
     private final UserRepository userRepository = mock(UserRepository.class);
     private final PostRepository postRepository = mock(PostRepository.class);
     private final WalletService walletService = mock(WalletService.class);
-    private final FollowService followService = mock(FollowService.class);
     private final NotificationService notificationService = mock(NotificationService.class);
     private final Clock clock = mock(Clock.class);
     private final BookeyProperties properties =
             new BookeyProperties(null, null, null, null, null, null, SOCIAL, null, null, null);
     private final PostcardService service = new PostcardService(
-            postcardRepository, userRepository, postRepository, walletService, followService, notificationService, properties, clock);
+            postcardRepository, userRepository, postRepository, walletService, notificationService, properties, clock);
 
     private final Wallet wallet = new Wallet(1L, LocalDate.of(2026, 9, 6));
 
@@ -180,7 +178,7 @@ class PostcardServiceTest {
     }
 
     @Test
-    @DisplayName("답장 — 우표 1개를 차감하고 REPLIED 로 바꾸며 자동 맞팔로우된다")
+    @DisplayName("답장 — 우표 1개를 차감하고 REPLIED 로 바꾼다(팔로우는 건드리지 않는다)")
     void replyConsumesStampAndFollows() {
         stubBasics();
         Postcard card = sentCard(false);
@@ -192,7 +190,6 @@ class PostcardServiceTest {
         assertThat(card.isReplied()).isTrue();
         assertThat(card.getReplyBody()).isEqualTo("반가워요");
         verify(walletService).payStamp(eq(2L), eq(replierWallet), eq(WalletTransactionKind.REPLY_STAMP), eq(100L));
-        verify(followService).ensureMutual(1L, 2L, FollowSource.POSTCARD);
     }
 
     @Test
@@ -204,7 +201,6 @@ class PostcardServiceTest {
         service.reply(2L, 100L, new ReplyPostcardRequest("고마워요"));
 
         verify(walletService, never()).payStamp(anyLong(), any(), any(), anyLong());
-        verify(followService).ensureMutual(1L, 2L, FollowSource.POSTCARD);
     }
 
     @Test

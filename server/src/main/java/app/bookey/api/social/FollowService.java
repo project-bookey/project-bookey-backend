@@ -1,18 +1,15 @@
 package app.bookey.api.social;
 
-import app.bookey.api.social.dto.SocialDtos.FollowCodeView;
 import app.bookey.api.social.dto.SocialDtos.FollowUserView;
+import app.bookey.api.social.dto.SocialDtos.FollowingIdsView;
 import app.bookey.api.notification.NotificationService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
-import app.bookey.common.support.PublicIdGenerator;
 import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.social.FollowSource;
 import app.bookey.domain.social.UserFollow;
 import app.bookey.domain.social.UserFollowRepository;
-import app.bookey.domain.social.UserPublicId;
-import app.bookey.domain.social.UserPublicIdRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -30,85 +27,42 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 팔로우 (§14.3) — 경로는 상호 엽서와 16자리 코드(QR)뿐. 검색·팔로우 버튼은 없다.
- * 코드를 보여주는 행위 = 수락으로 보고, 코드 팔로우는 즉시 맞팔로우를 만든다(지인 전제).
- * 코드가 유출되면 회전으로 무효화한다(모임 초대 코드와 같은 철학).
+ * 팔로우 (§14.3) — 한 방향. 프로필·피드·댓글의 팔로우 버튼 한 번으로 바로 성립하고,
+ * 서로 하면 맞팔로우다. 채팅과는 무관하다(채팅은 엽서 답장 기준 — ChatService).
  */
 @Service
 @RequiredArgsConstructor
 public class FollowService {
 
     private final UserFollowRepository followRepository;
-    private final UserPublicIdRepository publicIdRepository;
     private final UserRepository userRepository;
     private final NotificationService notificationService;
     private final Clock clock;
 
-    /** 내 팔로우 코드 — 없으면 만든다. QR 은 클라이언트가 딥링크로 그린다. */
+    /** 팔로우 — 이미 팔로우 중이면 아무것도 하지 않는다(멱등). 새로 성립하면 상대에게 알린다. */
     @Transactional
-    public FollowCodeView myCode(Long userId) {
-        UserPublicId publicId = publicIdRepository.findByUserId(userId)
-                .orElseGet(() -> publicIdRepository.save(new UserPublicId(userId, uniqueCode())));
-        return toCodeView(publicId);
-    }
-
-    @Transactional
-    public FollowCodeView rotate(Long userId) {
-        UserPublicId publicId = publicIdRepository.findByUserId(userId)
-                .orElseGet(() -> publicIdRepository.save(new UserPublicId(userId, uniqueCode())));
-        publicId.rotate(uniqueCode(), Instant.now(clock));
-        return toCodeView(publicId);
-    }
-
-    /** 코드로 팔로우 — 즉시 맞팔로우. */
-    @Transactional
-    public FollowUserView followByCode(Long userId, String rawCode) {
-        String code = PublicIdGenerator.normalize(rawCode);
-        if (!PublicIdGenerator.isValidFormat(code)) {
-            throw ApiException.of(ErrorCode.FOLLOW_CODE_INVALID);
-        }
-        UserPublicId target = publicIdRepository.findByCode(code)
-                .orElseThrow(() -> ApiException.of(ErrorCode.FOLLOW_CODE_INVALID));
-        if (target.getUserId().equals(userId)) {
+    public FollowUserView follow(Long userId, Long targetUserId) {
+        if (targetUserId.equals(userId)) {
             throw ApiException.of(ErrorCode.FOLLOW_SELF);
         }
-        boolean iFollow = followRepository.existsByFollowerIdAndFolloweeId(userId, target.getUserId());
-        boolean followsMe = followRepository.existsByFollowerIdAndFolloweeId(target.getUserId(), userId);
-        if (iFollow && followsMe) {
-            throw ApiException.of(ErrorCode.ALREADY_FOLLOWING);
-        }
-        ensureMutual(userId, target.getUserId(), FollowSource.CODE);
-        User user = userRepository.findById(target.getUserId())
+        User target = userRepository.findById(targetUserId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        return new FollowUserView(user.getId(), user.getNickname(), user.getAvatarUrl(),
-                true, Instant.now(clock));
+        boolean followsMe = followRepository.existsByFollowerIdAndFolloweeId(targetUserId, userId);
+        UserFollow follow = followRepository.findByFollowerIdAndFolloweeId(userId, targetUserId)
+                .orElseGet(() -> {
+                    UserFollow created = followRepository.save(UserFollow.builder()
+                            .followerId(userId).followeeId(targetUserId).source(FollowSource.BUTTON).build());
+                    notifyFollowed(targetUserId, userId, followsMe);
+                    return created;
+                });
+        return new FollowUserView(target.getId(), target.getNickname(), target.getAvatarUrl(), followsMe,
+                follow.getCreatedAt() == null ? Instant.now(clock) : follow.getCreatedAt());
     }
 
-    /** 양방향 팔로우를 보장한다 — 이미 있는 방향은 그대로 둔다. 엽서 답장 성립 시에도 쓰인다. */
-    @Transactional
-    public void ensureMutual(Long a, Long b, FollowSource source) {
-        boolean createdAtoB = false;
-        boolean createdBtoA = false;
-        if (!followRepository.existsByFollowerIdAndFolloweeId(a, b)) {
-            followRepository.save(UserFollow.builder().followerId(a).followeeId(b).source(source).build());
-            createdAtoB = true;
-        }
-        if (!followRepository.existsByFollowerIdAndFolloweeId(b, a)) {
-            followRepository.save(UserFollow.builder().followerId(b).followeeId(a).source(source).build());
-            createdBtoA = true;
-        }
-        if (createdAtoB) {
-            notifyConnected(b, a);
-        }
-        if (createdBtoA) {
-            notifyConnected(a, b);
-        }
-    }
-
+    /** 내가 팔로우하는 사람 id 전부 — 피드·댓글의 버튼 상태 판정용. */
     @Transactional(readOnly = true)
-    public boolean isMutual(Long a, Long b) {
-        return followRepository.existsByFollowerIdAndFolloweeId(a, b)
-                && followRepository.existsByFollowerIdAndFolloweeId(b, a);
+    public FollowingIdsView followingIds(Long userId) {
+        return new FollowingIdsView(followRepository.findFolloweeIdsByFollowerId(userId));
     }
 
     /** 나를 팔로우하는 사람들 — 상대 정보와 맞팔 여부(내가 그들을 팔로우하는가) 포함. */
@@ -160,27 +114,14 @@ public class FollowService {
         });
     }
 
-    private String uniqueCode() {
-        for (int i = 0; i < 5; i++) {
-            String code = PublicIdGenerator.generate();
-            if (!publicIdRepository.existsByCode(code)) {
-                return code;
-            }
-        }
-        throw ApiException.of(ErrorCode.INTERNAL_ERROR);
-    }
-
-    private void notifyConnected(Long userId, Long counterpartId) {
-        User counterpart = userRepository.findById(counterpartId).orElse(null);
-        String nickname = counterpart == null ? "상대" : counterpart.getNickname();
+    /** 상대에게 알린다 — 맞팔로우가 되면 '연결됐어요', 아니면 '팔로우했어요'. */
+    private void notifyFollowed(Long userId, Long followerId, boolean mutual) {
+        User follower = userRepository.findById(followerId).orElse(null);
+        String nickname = follower == null ? "누군가" : follower.getNickname();
         notificationService.inApp(new NotificationService.NotificationRequest(
-                userId, NotificationType.FOLLOW_CONNECTED, null, null, null,
-                "서로 연결됐어요",
-                nickname + "님과 맞팔로우가 되었습니다.",
-                Map.of("userId", counterpartId), null));
-    }
-
-    private static FollowCodeView toCodeView(UserPublicId publicId) {
-        return new FollowCodeView(publicId.getCode(), "https://bookey.app/u/" + publicId.getCode());
+                userId, mutual ? NotificationType.FOLLOW_CONNECTED : NotificationType.FOLLOWED, null, null, null,
+                mutual ? "서로 연결됐어요" : "새 팔로워",
+                mutual ? nickname + "님과 맞팔로우가 되었습니다." : nickname + "님이 나를 팔로우했어요.",
+                Map.of("userId", followerId), null));
     }
 }

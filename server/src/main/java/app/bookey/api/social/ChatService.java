@@ -16,6 +16,7 @@ import app.bookey.domain.social.ChatMessageRepository;
 import app.bookey.domain.social.ChatMessageRepository.LastMessageId;
 import app.bookey.domain.social.ChatMessageRepository.UnreadCount;
 import app.bookey.domain.social.ChatRepository;
+import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -30,12 +31,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 1:1 채팅 (§14.3) — 맞팔로우끼리만. 실시간 인프라 없이 폴링으로 시작한다 (기획서 §13-11 결정).
- * 열기·보내기 모두 맞팔 상태를 검사한다 — 언팔로우하면 기존 방이 있어도 더 보낼 수 없다.
+ * 1:1 채팅 (§14.3) — 엽서 답장이 오간 사이만 연다. 팔로우와는 무관하다.
+ * 실시간 인프라 없이 폴링으로 시작한다 (기획서 §13-11 결정).
+ * 조건은 새 방을 만들 때만 본다 — 한 번 열린 방은 참가자끼리 계속 쓴다.
  */
 @Service
 @RequiredArgsConstructor
@@ -49,12 +52,12 @@ public class ChatService {
     private final ChatRepository chatRepository;
     private final ChatMessageRepository messageRepository;
     private final UserRepository userRepository;
-    private final FollowService followService;
+    private final PostcardRepository postcardRepository;
     private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
     private final Clock clock;
 
-    /** 채팅방 열기 — 이미 있으면 그 방. 맞팔로우가 아니면 CHAT_NOT_ALLOWED. */
+    /** 채팅방 열기 — 이미 있으면 그 방. 없으면 엽서 답장이 오간 사이여야 한다(아니면 CHAT_NOT_ALLOWED). */
     @Transactional
     public ChatSummaryView open(Long userId, Long otherUserId) {
         if (userId.equals(otherUserId)) {
@@ -62,10 +65,12 @@ public class ChatService {
         }
         User other = userRepository.findById(otherUserId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        requireMutual(userId, otherUserId);
-        Chat chat = chatRepository
-                .findPair(Math.min(userId, otherUserId), Math.max(userId, otherUserId))
-                .orElseGet(() -> chatRepository.save(Chat.of(userId, otherUserId)));
+        Chat chat = findPair(userId, otherUserId).orElseGet(() -> {
+            if (!postcardRepository.existsRepliedBetween(userId, otherUserId)) {
+                throw ApiException.of(ErrorCode.CHAT_NOT_ALLOWED);
+            }
+            return chatRepository.save(Chat.of(userId, otherUserId));
+        });
         return toSummary(chat, userId, other, null, 0L);
     }
 
@@ -113,8 +118,6 @@ public class ChatService {
     @Transactional
     public ChatMessageView send(Long userId, Long chatId, SendMessageRequest request) {
         Chat chat = participantChat(userId, chatId);
-        // 언팔로우된 관계에는 더 보낼 수 없다 — 방은 남지만 쓰기가 막힌다.
-        requireMutual(userId, chat.counterpartOf(userId));
         rateLimiter.require("chat:send:" + userId, MESSAGE_RATE_LIMIT, Duration.ofMinutes(1));
 
         Instant now = Instant.now(clock);
@@ -144,10 +147,18 @@ public class ChatService {
         return chat;
     }
 
-    private void requireMutual(Long userId, Long otherUserId) {
-        if (!followService.isMutual(userId, otherUserId)) {
-            throw ApiException.of(ErrorCode.CHAT_NOT_ALLOWED);
+    /** 채팅을 열 수 있는가 — 이미 방이 있거나 엽서 답장이 오간 사이. 프로필의 채팅 버튼이 쓴다. */
+    @Transactional(readOnly = true)
+    public boolean canChat(Long userId, Long otherUserId) {
+        if (userId.equals(otherUserId)) {
+            return false;
         }
+        return findPair(userId, otherUserId).isPresent()
+                || postcardRepository.existsRepliedBetween(userId, otherUserId);
+    }
+
+    private Optional<Chat> findPair(Long a, Long b) {
+        return chatRepository.findPair(Math.min(a, b), Math.max(a, b));
     }
 
     private Map<Long, User> loadOthers(List<Chat> chats, Long userId) {
