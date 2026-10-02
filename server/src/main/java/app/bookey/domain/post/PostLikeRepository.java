@@ -20,7 +20,7 @@ public interface PostLikeRepository extends JpaRepository<PostLike, Long> {
 
     List<PostLike> findAllByUserIdAndPostIdIn(Long userId, Collection<Long> postIds);
 
-    /** 독후감별 좋아요 수 — 목록 배치 로딩용 GROUP BY 프로젝션(QuoteAgreeRepository.countPerQuote 미러). */
+    /** 독후감별 좋아요 수 — 목록 배치 로딩용 GROUP BY 프로젝션. */
     @Query("""
             SELECT l.postId AS postId, COUNT(l) AS likeCount
             FROM PostLike l

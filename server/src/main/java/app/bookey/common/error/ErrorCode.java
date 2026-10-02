@@ -103,10 +103,6 @@ public enum ErrorCode {
     // 댓글
     COMMENT_REPLY_DEPTH(HttpStatus.BAD_REQUEST, "답글에는 답글을 달 수 없습니다."),
 
-    // 오려둔 문장(밑줄)
-    QUOTE_NOT_FOUND(HttpStatus.NOT_FOUND, "문장을 찾을 수 없습니다."),
-    QUOTE_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."),
-
     // 독후감
     POST_NOT_FOUND(HttpStatus.NOT_FOUND, "독후감을 찾을 수 없습니다."),
     POST_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없습니다."),

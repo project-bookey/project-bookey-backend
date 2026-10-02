@@ -26,7 +26,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** 리뷰에 덧붙인 말(댓글) — 목록(최상위, 오래된 순) · 답글(1단계) · 작성 · 본인 삭제(QuoteCommentService 미러). */
+/** 리뷰에 덧붙인 말(댓글) — 목록(최상위, 오래된 순) · 답글(1단계) · 작성 · 본인 삭제. */
 @Service
 @RequiredArgsConstructor
 public class ReviewCommentService {
@@ -149,7 +149,7 @@ public class ReviewCommentService {
         return parent;
     }
 
-    /** 배치 맵으로 뷰를 조립한다(QuoteCommentService.assembleViews 미러). 탈퇴한 작성자는 "알 수 없음", 답글 수는 결측 시 0. */
+    /** 배치 맵으로 뷰를 조립한다. 탈퇴한 작성자는 "알 수 없음", 답글 수는 결측 시 0. */
     static List<ReviewCommentView> assembleViews(List<ReviewComment> comments, Long viewerId,
                                                  Map<Long, User> authors, Map<Long, Long> replyCounts) {
         return comments.stream()

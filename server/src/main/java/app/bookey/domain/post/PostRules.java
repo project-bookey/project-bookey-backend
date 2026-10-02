@@ -14,7 +14,6 @@ import java.util.Set;
  *   <li>모임 밖 글은 PUBLIC·LINK·PRIVATE, 모임 글은 PUBLIC(모임+광장)·CLUB(모임만)</li>
  *   <li>TEXT: 본문 필수, 문서 없음, 사진 10장까지</li>
  *   <li>NOTE: 문서 필수({@code pages} 배열 1~6장, 직렬화 1MB 이하), 본문은 빈 문자열 허용, 사진 30장까지</li>
- *   <li>오려둔 문장은 형식과 관계없이 10개까지</li>
  * </ul>
  * 문서 내용은 앱이 소유한 스키마라 해석하지 않는다.
  */
@@ -24,7 +23,6 @@ public final class PostRules {
     public static final int MAX_DOCUMENT_BYTES = 1024 * 1024;
     public static final int MAX_TEXT_IMAGES = 10;
     public static final int MAX_NOTE_IMAGES = 30;
-    public static final int MAX_QUOTES = 10;
 
     private static final Set<PostVisibility> CLUB_VISIBILITIES = Set.of(PostVisibility.PUBLIC, PostVisibility.CLUB);
     private static final Set<PostVisibility> PLAIN_VISIBILITIES =
@@ -47,12 +45,12 @@ public final class PostRules {
     }
 
     /**
-     * 본문·문서·첨부 수를 형식에 맞춰 검사한다. 작성 때는 전부, 수정 때는 보낸 값만(null = 유지) 넘긴다.
+     * 본문·문서·사진 수를 형식에 맞춰 검사한다. 작성 때는 전부, 수정 때는 보낸 값만(null = 유지) 넘긴다.
      *
      * @param creating 작성이면 true — NOTE 문서가 필수가 된다
      */
     public static void requireContent(PostFormat format, boolean creating, String bodyMd,
-                                      Map<String, Object> document, List<Long> imageIds, List<Long> quoteIds) {
+                                      Map<String, Object> document, List<Long> imageIds) {
         if (format == PostFormat.NOTE) {
             if (document == null) {
                 if (creating) {
@@ -73,7 +71,6 @@ public final class PostRules {
             }
             requireCount(imageIds, MAX_TEXT_IMAGES, "사진은 " + MAX_TEXT_IMAGES + "장까지 붙일 수 있습니다.");
         }
-        requireCount(quoteIds, MAX_QUOTES, "오려둔 문장은 " + MAX_QUOTES + "개까지 붙일 수 있습니다.");
     }
 
     /** 문서는 객체이고 pages 배열이 1~6장이어야 한다. 페이지 내부는 보지 않는다. */
