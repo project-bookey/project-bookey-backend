@@ -15,6 +15,7 @@ import app.bookey.domain.social.ChatMessage;
 import app.bookey.domain.social.ChatMessageRepository;
 import app.bookey.domain.social.ChatMessageRepository.LastMessageId;
 import app.bookey.domain.social.ChatMessageRepository.UnreadCount;
+import app.bookey.domain.social.ChatMessageType;
 import app.bookey.domain.social.ChatRepository;
 import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.user.User;
@@ -119,10 +120,15 @@ public class ChatService {
     public ChatMessageView send(Long userId, Long chatId, SendMessageRequest request) {
         Chat chat = participantChat(userId, chatId);
         rateLimiter.require("chat:send:" + userId, MESSAGE_RATE_LIMIT, Duration.ofMinutes(1));
+        MessagePayload payload = messagePayload(request);
 
         Instant now = Instant.now(clock);
         ChatMessage message = messageRepository.save(ChatMessage.builder()
-                .chatId(chatId).senderId(userId).body(request.body().trim())
+                .chatId(chatId)
+                .senderId(userId)
+                .body(payload.body())
+                .type(payload.type())
+                .stickerCode(payload.stickerCode())
                 .build());
         chat.touchLastMessage(now);
         chat.markRead(userId, now);   // 내가 보낸 직후의 내 안읽음은 0 이어야 한다
@@ -190,7 +196,9 @@ public class ChatService {
         notificationService.inApp(new NotificationService.NotificationRequest(
                 recipientId, NotificationType.CHAT_MESSAGE, null, null, null,
                 "새 채팅이 도착했어요",
-                nickname + "님이 메시지를 보냈습니다.",
+                nickname + (message.getType() == ChatMessageType.STICKER
+                        ? "님이 이모티콘을 보냈습니다."
+                        : "님이 메시지를 보냈습니다."),
                 Map.of("chatId", chatId, "messageId", message.getId(), "fromUserId", senderId), null));
     }
 
@@ -202,6 +210,8 @@ public class ChatService {
                 other == null ? "알 수 없음" : other.getNickname(),
                 other == null ? null : other.getAvatarUrl(),
                 lastMessage == null ? null : lastMessage.getBody(),
+                lastMessage == null ? null : lastMessage.getType(),
+                lastMessage == null ? null : lastMessage.getStickerCode(),
                 lastMessage == null ? chat.getLastMessageAt() : lastMessage.getCreatedAt(),
                 unreadCount,
                 chat.getCreatedAt() == null ? Instant.now(clock) : chat.getCreatedAt());
@@ -210,7 +220,44 @@ public class ChatService {
     private ChatMessageView toMessageView(ChatMessage message, Long viewerId) {
         return new ChatMessageView(
                 message.getId(), message.getChatId(), message.getSenderId(), message.getBody(),
+                message.getType(), message.getStickerCode(),
                 message.getSenderId().equals(viewerId),
                 message.getCreatedAt() == null ? Instant.now(clock) : message.getCreatedAt());
     }
+
+    private MessagePayload messagePayload(SendMessageRequest request) {
+        String body = trimToNull(request.body());
+        String explicitSticker = trimToNull(request.stickerCode());
+        if (request.type() == ChatMessageType.TEXT && explicitSticker != null) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "텍스트 메시지에는 이모티콘 코드를 지정할 수 없습니다.");
+        }
+        boolean stickerRequest = request.type() == ChatMessageType.STICKER || explicitSticker != null;
+
+        if (stickerRequest) {
+            String code = explicitSticker == null ? body : explicitSticker;
+            if (!BookeyStickerRegistry.isStickerCode(code)) {
+                throw new ApiException(ErrorCode.INVALID_REQUEST, "지원하지 않는 이모티콘입니다.");
+            }
+            return new MessagePayload(code, ChatMessageType.STICKER, code);
+        }
+
+        if (BookeyStickerRegistry.looksLikeStickerCode(body)) {
+            if (!BookeyStickerRegistry.isStickerCode(body)) {
+                throw new ApiException(ErrorCode.INVALID_REQUEST, "지원하지 않는 이모티콘입니다.");
+            }
+            return new MessagePayload(body, ChatMessageType.STICKER, body);
+        }
+        if (body == null) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "메시지 내용을 입력해 주세요.");
+        }
+        return new MessagePayload(body, ChatMessageType.TEXT, null);
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private record MessagePayload(String body, ChatMessageType type, String stickerCode) {}
 }

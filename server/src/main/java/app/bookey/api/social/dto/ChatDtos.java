@@ -1,8 +1,9 @@
 package app.bookey.api.social.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
+import app.bookey.domain.social.ChatMessageType;
 
 import java.time.Instant;
 import java.util.List;
@@ -20,18 +21,30 @@ public final class ChatDtos {
             @NotNull String otherNickname,
             String otherAvatarUrl,
             String lastMessageBody,
+            ChatMessageType lastMessageType,
+            String lastStickerCode,
             Instant lastMessageAt,
             long unreadCount,
             @NotNull Instant createdAt
     ) {}
 
-    public record SendMessageRequest(@NotBlank @Size(max = 1000) String body) {}
+    public record SendMessageRequest(
+            @Size(max = 1000) String body,
+            ChatMessageType type,
+            @Size(max = 100) String stickerCode
+    ) {
+        public SendMessageRequest(String body) {
+            this(body, null, null);
+        }
+    }
 
     public record ChatMessageView(
             @NotNull Long id,
             @NotNull Long chatId,
             @NotNull Long senderId,
             @NotNull String body,
+            @NotNull ChatMessageType type,
+            String stickerCode,
             boolean mine,
             @NotNull Instant createdAt
     ) {}

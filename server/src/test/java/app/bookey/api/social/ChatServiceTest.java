@@ -11,6 +11,7 @@ import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.social.Chat;
 import app.bookey.domain.social.ChatMessage;
 import app.bookey.domain.social.ChatMessageRepository;
+import app.bookey.domain.social.ChatMessageType;
 import app.bookey.domain.social.ChatRepository;
 import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.user.User;
@@ -158,11 +159,61 @@ class ChatServiceTest {
         ChatMessageView view = service.send(1L, 10L, new SendMessageRequest("  잘 지내요?  "));
 
         assertThat(view.body()).isEqualTo("잘 지내요?");
+        assertThat(view.type()).isEqualTo(ChatMessageType.TEXT);
+        assertThat(view.stickerCode()).isNull();
         assertThat(view.mine()).isTrue();
         assertThat(chat.getLastMessageAt()).isEqualTo(now);
         assertThat(chat.lastReadOf(1L)).isEqualTo(now);   // 내가 보낸 직후 내 안읽음은 0
         assertThat(chat.lastReadOf(2L)).isNull();
         verify(rateLimiter).require(eq("chat:send:1"), eq(30), any());
+    }
+
+    @Test
+    @DisplayName("이모티콘 — 기존 body 코드도 인식해 타입과 코드를 별도 저장한다")
+    void sendLegacyStickerCode() {
+        Instant now = Instant.parse("2026-09-06T03:00:00Z");
+        when(clock.instant()).thenReturn(now);
+        Chat chat = Chat.of(1L, 2L);
+        set(chat, "id", 10L);
+        when(chatRepository.findById(10L)).thenReturn(Optional.of(chat));
+        ArgumentCaptor<ChatMessage> saved = ArgumentCaptor.forClass(ChatMessage.class);
+        when(messageRepository.save(saved.capture())).thenAnswer(inv -> {
+            ChatMessage message = inv.getArgument(0);
+            set(message, "id", 100L);
+            return message;
+        });
+
+        String code = "[bookey:sleepy-sprout:classic-clover]";
+        ChatMessageView view = service.send(1L, 10L, new SendMessageRequest(code));
+
+        assertThat(saved.getValue().getType()).isEqualTo(ChatMessageType.STICKER);
+        assertThat(saved.getValue().getStickerCode()).isEqualTo(code);
+        assertThat(view.body()).isEqualTo(code);
+        assertThat(view.type()).isEqualTo(ChatMessageType.STICKER);
+        assertThat(view.stickerCode()).isEqualTo(code);
+    }
+
+    @Test
+    @DisplayName("이모티콘 — 신규 명시형 요청을 지원하고 알 수 없는 코드는 거부한다")
+    void sendExplicitStickerAndRejectUnknownCode() {
+        when(clock.instant()).thenReturn(Instant.parse("2026-09-06T03:00:00Z"));
+        Chat chat = Chat.of(1L, 2L);
+        set(chat, "id", 10L);
+        when(chatRepository.findById(10L)).thenReturn(Optional.of(chat));
+        when(messageRepository.save(any(ChatMessage.class))).thenAnswer(inv -> {
+            ChatMessage message = inv.getArgument(0);
+            set(message, "id", 100L);
+            return message;
+        });
+
+        String code = "[bookey:bookmark-ears:hugging]";
+        ChatMessageView view = service.send(1L, 10L,
+                new SendMessageRequest(null, ChatMessageType.STICKER, code));
+        assertThat(view.type()).isEqualTo(ChatMessageType.STICKER);
+        assertThat(view.stickerCode()).isEqualTo(code);
+
+        assertApiError(() -> service.send(1L, 10L,
+                new SendMessageRequest("[bookey:unknown:nope]")), ErrorCode.INVALID_REQUEST);
     }
 
     @Test
