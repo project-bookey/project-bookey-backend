@@ -15,7 +15,6 @@ import app.bookey.domain.club.ClubRepository;
 import app.bookey.domain.club.ClubStatus;
 import app.bookey.domain.post.Post;
 import app.bookey.domain.post.PostCommentRepository;
-import app.bookey.domain.post.PostFormat;
 import app.bookey.domain.post.PostImageRepository;
 import app.bookey.domain.post.PostLikeRepository;
 import app.bookey.domain.post.PostRepository;
@@ -26,11 +25,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
-import tools.jackson.databind.ObjectMapper;
 
 import java.lang.reflect.Field;
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -60,7 +56,7 @@ class PostServiceClubTest {
         service = new PostService(postRepository, mock(PostImageRepository.class),
                 mock(PostLikeRepository.class), mock(PostCommentRepository.class),
                 mock(BookRepository.class), mock(ReadingRecordRepository.class), mock(UserRepository.class),
-                clubService, mock(ClubRepository.class), memberRepository, new ObjectMapper(),
+                clubService, mock(ClubRepository.class), memberRepository,
                 mock(NotificationService.class), rateLimiter);
     }
 
@@ -76,10 +72,8 @@ class PostServiceClubTest {
         return member;
     }
 
-    private static CreatePostRequest request(PostVisibility visibility, PostFormat format,
-                                             Map<String, Object> document, Long clubId) {
-        return new CreatePostRequest(null, null, "제목", format == PostFormat.NOTE ? "" : "본문", visibility,
-                null, null, null, format, document, clubId);
+    private static CreatePostRequest request(PostVisibility visibility, Long clubId) {
+        return new CreatePostRequest(null, null, "제목", "본문", visibility, null, null, null, clubId);
     }
 
     private static Post clubPost(PostVisibility visibility) {
@@ -113,7 +107,7 @@ class PostServiceClubTest {
         when(clubService.getClub(CLUB_ID)).thenReturn(club);
         when(clubService.activeMember(CLUB_ID, OUTSIDER)).thenThrow(ApiException.of(ErrorCode.CLUB_NOT_MEMBER));
 
-        assertCode(() -> service.create(OUTSIDER, request(PostVisibility.CLUB, null, null, CLUB_ID)),
+        assertCode(() -> service.create(OUTSIDER, request(PostVisibility.CLUB, CLUB_ID)),
                 ErrorCode.CLUB_NOT_MEMBER);
         verify(postRepository, never()).save(any());
     }
@@ -126,7 +120,7 @@ class PostServiceClubTest {
         ClubMember member = activeMember();
         when(clubService.activeMember(CLUB_ID, MEMBER)).thenReturn(member);
 
-        assertCode(() -> service.create(MEMBER, request(PostVisibility.CLUB, null, null, CLUB_ID)),
+        assertCode(() -> service.create(MEMBER, request(PostVisibility.CLUB, CLUB_ID)),
                 ErrorCode.CLUB_ENDED);
         verify(postRepository, never()).save(any());
     }
@@ -134,32 +128,22 @@ class PostServiceClubTest {
     @Test
     @DisplayName("모임 글에 PRIVATE, 모임 밖 글에 CLUB 을 쓰면 멤버십을 보기 전에 400")
     void createRejectsVisibilityMismatch() {
-        assertCode(() -> service.create(MEMBER, request(PostVisibility.PRIVATE, null, null, CLUB_ID)),
+        assertCode(() -> service.create(MEMBER, request(PostVisibility.PRIVATE, CLUB_ID)),
                 ErrorCode.INVALID_REQUEST);
-        assertCode(() -> service.create(MEMBER, request(PostVisibility.CLUB, null, null, null)),
+        assertCode(() -> service.create(MEMBER, request(PostVisibility.CLUB, null)),
                 ErrorCode.INVALID_REQUEST);
         verify(clubService, never()).getClub(any());
-    }
-
-    @Test
-    @DisplayName("노트 문서의 페이지가 7장이면 400")
-    void createRejectsSevenPageNote() {
-        List<Object> pages = List.of(Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
-        assertCode(() -> service.create(MEMBER, request(PostVisibility.PUBLIC, PostFormat.NOTE,
-                Map.of("pages", pages), null)), ErrorCode.INVALID_REQUEST);
     }
 
     // ────────────────────────────── 수정 ──────────────────────────────
 
     @Test
-    @DisplayName("모임 글을 LINK 로 바꿀 수 없고, TEXT 글에 노트 문서를 보낼 수 없다")
-    void updateEnforcesClubVisibilityAndFormat() {
+    @DisplayName("모임 글을 LINK 로 바꿀 수 없다")
+    void updateEnforcesClubVisibility() {
         when(postRepository.findById(1L)).thenReturn(Optional.of(clubPost(PostVisibility.CLUB)));
 
         assertCode(() -> service.update(AUTHOR, 1L, new UpdatePostRequest(null, null, null, null,
-                PostVisibility.LINK, null, null, null)), ErrorCode.INVALID_REQUEST);
-        assertCode(() -> service.update(AUTHOR, 1L, new UpdatePostRequest(null, null, null, null,
-                null, null, null, Map.of("pages", List.of(Map.of())))), ErrorCode.INVALID_REQUEST);
+                PostVisibility.LINK, null, null)), ErrorCode.INVALID_REQUEST);
     }
 
     // ────────────────────────────── 읽기 ──────────────────────────────

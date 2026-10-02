@@ -18,7 +18,6 @@ import app.bookey.domain.post.Post;
 import app.bookey.domain.post.PostCommentRepository;
 import app.bookey.domain.post.PostCommentRepository.PostCommentCount;
 import app.bookey.domain.post.PostExcerpt;
-import app.bookey.domain.post.PostFormat;
 import app.bookey.domain.post.PostImage;
 import app.bookey.domain.post.PostImageRepository;
 import app.bookey.domain.post.PostLike;
@@ -36,7 +35,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import tools.jackson.databind.ObjectMapper;
 
 import java.text.Normalizer;
 import java.time.Duration;
@@ -54,7 +52,7 @@ import java.util.stream.Collectors;
 /**
  * 독후감 (§F7) — 작성 · 수정 · 삭제 · 내 목록 · 광장 피드 · 단건(조회수) · 좋아요 · 책별 · 공개 블로그 · 모임별.
  *
- * <p>형식은 TEXT(마크다운)와 NOTE(캔버스 문서) 둘이고, 모임 안에서 쓴 글은 clubId 를 가진다.
+ * <p>본문은 마크다운이고, 모임 안에서 쓴 글은 clubId 를 가진다.
  * 형식·공개 범위 규칙은 {@link PostRules} 가 정한다. CLUB 공개 글은 작성자와 그 모임 활성 멤버만 읽는다.
  */
 @Service
@@ -78,16 +76,13 @@ public class PostService {
     private final ClubService clubService;
     private final ClubRepository clubRepository;
     private final ClubMemberRepository clubMemberRepository;
-    private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
 
     @Transactional
     public PostView create(Long userId, CreatePostRequest request) {
-        PostFormat format = request.format() == null ? PostFormat.TEXT : request.format();
         PostRules.requireVisibility(request.clubId() != null, request.visibility());
-        PostRules.requireContent(format, true, request.bodyMd(), request.document(), request.imageIds());
-        requireDocumentSize(request.document());
+        PostRules.requireContent(true, request.bodyMd(), request.imageIds());
         if (request.clubId() != null) {
             requireOpenClubMember(userId, request.clubId());
         }
@@ -108,27 +103,23 @@ public class PostService {
                 .bodyMd(request.bodyMd())
                 .visibility(request.visibility())
                 .tags(toTags(request.tags()))
-                .format(format)
-                .document(format == PostFormat.NOTE ? request.document() : null)
                 .clubId(request.clubId())
                 .build());
         attachImages(post, userId, request.imageIds());
         return toView(post, userId);
     }
 
-    /** null 필드는 유지, 빈 목록은 비움. 책은 바꿀 수만 있고 없앨 수는 없다. 형식·모임은 바꿀 수 없다. */
+    /** null 필드는 유지, 빈 목록은 비움. 책은 바꿀 수만 있고 없앨 수는 없다. 모임은 바꿀 수 없다. */
     @Transactional
     public PostView update(Long userId, Long postId, UpdatePostRequest request) {
         Post post = owned(userId, postId);
         PostRules.requireVisibility(post.isClubPost(), request.visibility());
-        PostRules.requireContent(post.getFormat(), false, request.bodyMd(), request.document(), request.imageIds());
-        requireDocumentSize(request.document());
+        PostRules.requireContent(false, request.bodyMd(), request.imageIds());
         if (request.bookId() != null && !request.bookId().equals(post.getBookId())) {
             requireBook(request.bookId());
             post.changeBook(request.bookId());
         }
         post.edit(request.title(), request.bodyMd(), toTags(request.tags()));
-        post.changeDocument(request.document());
         if (request.visibility() != null) {
             post.changeVisibility(request.visibility());
         }
@@ -283,20 +274,6 @@ public class PostService {
         if (club.getStatus().isOver()) {
             throw ApiException.of(ErrorCode.CLUB_ENDED);
         }
-    }
-
-    /** 노트 문서는 직렬화해 1MB 이하인지 본다. null 이면 검사할 것이 없다. */
-    private void requireDocumentSize(Map<String, Object> document) {
-        if (document == null) {
-            return;
-        }
-        byte[] bytes;
-        try {
-            bytes = objectMapper.writeValueAsBytes(document);
-        } catch (RuntimeException e) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "노트 문서를 읽을 수 없습니다.");
-        }
-        PostRules.requireDocumentSize(bytes.length);
     }
 
     private void requireBook(Long bookId) {
@@ -520,7 +497,7 @@ public class PostService {
                             commentCounts.getOrDefault(post.getId(), 0L),
                             post.isOwnedBy(viewerId),
                             post.getCreatedAt() == null ? Instant.now() : post.getCreatedAt(),
-                            post.getFormat(), post.getDocument(), post.getClubId(),
+                            post.getClubId(),
                             club == null ? null : club.getName());
                 })
                 .toList();

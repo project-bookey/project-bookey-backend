@@ -10,7 +10,6 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
-import java.util.Map;
 
 /** 독후감 (§F7). 기본 공개 범위는 비공개. */
 @Getter
@@ -58,15 +57,6 @@ public class Post extends BaseTimeEntity {
     @Column(name = "view_count", nullable = false)
     private int viewCount;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
-    private PostFormat format = PostFormat.TEXT;
-
-    /** NOTE 전용 캔버스 문서 — 앱이 소유한 JSON 이라 서버는 해석하지 않고 그대로 저장·반환한다. TEXT 는 null. */
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(columnDefinition = "jsonb")
-    private Map<String, Object> document;
-
     /** 모임 안에서 만든 독후감이면 그 모임. 만든 뒤에는 바꿀 수 없다. */
     @Column(name = "club_id")
     private Long clubId;
@@ -74,7 +64,7 @@ public class Post extends BaseTimeEntity {
     @Builder
     private Post(Long userId, Long bookId, Long readingRecordId, String slug, String title,
                  String bodyMd, PostVisibility visibility, String[] tags,
-                 PostFormat format, Map<String, Object> document, Long clubId) {
+                 Long clubId) {
         this.userId = userId;
         this.bookId = bookId;
         this.readingRecordId = readingRecordId;
@@ -83,8 +73,6 @@ public class Post extends BaseTimeEntity {
         this.bodyMd = bodyMd;
         this.visibility = visibility == null ? PostVisibility.PRIVATE : visibility;
         this.tags = tags == null ? new String[0] : tags;
-        this.format = format == null ? PostFormat.TEXT : format;
-        this.document = document;
         this.clubId = clubId;
         if (this.visibility != PostVisibility.PRIVATE) {
             this.publishedAt = Instant.now();
@@ -100,13 +88,6 @@ public class Post extends BaseTimeEntity {
         }
         if (tags != null) {
             this.tags = tags;
-        }
-    }
-
-    /** 노트 문서를 통째로 바꾼다 — null 은 유지. 검사는 서비스가 끝냈다. */
-    public void changeDocument(Map<String, Object> document) {
-        if (document != null) {
-            this.document = document;
         }
     }
 

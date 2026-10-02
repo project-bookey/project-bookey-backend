@@ -3,8 +3,6 @@ package app.bookey.domain.post;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -148,29 +146,10 @@ class PostTest {
     }
 
     @Test
-    @DisplayName("형식을 주지 않으면 TEXT 이고 문서·모임은 비어 있다")
-    void defaultsToTextWithoutDocumentOrClub() {
+    @DisplayName("모임을 주지 않으면 모임 독후감이 아니다")
+    void defaultsToNonClubPost() {
         Post post = post(PostVisibility.PUBLIC);
 
-        assertThat(post.getFormat()).isEqualTo(PostFormat.TEXT);
-        assertThat(post.getDocument()).isNull();
         assertThat(post.isClubPost()).isFalse();
-    }
-
-    @Test
-    @DisplayName("changeDocument 는 문서를 통째로 바꾸고, null 이면 유지한다")
-    void changeDocumentKeepsOnNull() {
-        Map<String, Object> first = Map.of("pages", List.of(Map.of("id", "p1")));
-        Map<String, Object> second = Map.of("pages", List.of(Map.of("id", "p1"), Map.of("id", "p2")));
-        Post post = Post.builder()
-                .userId(OWNER).slug("노트").title("제목").bodyMd("")
-                .format(PostFormat.NOTE).document(first)
-                .build();
-
-        post.changeDocument(null);
-        assertThat(post.getDocument()).isEqualTo(first);
-
-        post.changeDocument(second);
-        assertThat(post.getDocument()).isEqualTo(second);
     }
 }
