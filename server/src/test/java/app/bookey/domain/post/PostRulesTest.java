@@ -7,24 +7,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.LongStream;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class PostRulesTest {
-
-    private static Map<String, Object> noteWithPages(int count) {
-        List<Object> pages = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            pages.add(Map.of("id", "p" + i, "elements", List.of()));
-        }
-        return Map.of("v", 1, "kind", "grid", "pages", pages);
-    }
 
     private static List<Long> ids(int count) {
         return LongStream.rangeClosed(1, count).boxed().toList();
@@ -73,93 +62,33 @@ class PostRulesTest {
         assertThatCode(() -> PostRules.requireVisibility(false, null)).doesNotThrowAnyException();
     }
 
-    // ────────────────────────────── TEXT ──────────────────────────────
+    // ────────────────────────────── 본문·사진 ──────────────────────────────
 
     @Test
-    @DisplayName("TEXT 작성 — 본문이 있고 문서가 없으면 통과, 사진 10장까지")
-    void textAcceptsBodyWithoutDocument() {
-        assertThatCode(() -> PostRules.requireContent(PostFormat.TEXT, true, "본문", null, ids(10)))
+    @DisplayName("작성 — 본문이 있으면 통과, 사진 10장까지")
+    void acceptsBodyAndTenImages() {
+        assertThatCode(() -> PostRules.requireContent(true, "본문", ids(10)))
                 .doesNotThrowAnyException();
     }
 
     @Test
-    @DisplayName("TEXT 작성 — 빈 본문은 거절한다")
-    void textRejectsBlankBody() {
-        assertInvalid(() -> PostRules.requireContent(PostFormat.TEXT, true, "  ", null, null));
-        assertInvalid(() -> PostRules.requireContent(PostFormat.TEXT, true, null, null, null));
+    @DisplayName("작성 — 빈 본문은 거절한다")
+    void rejectsBlankBody() {
+        assertInvalid(() -> PostRules.requireContent(true, "  ", null));
+        assertInvalid(() -> PostRules.requireContent(true, null, null));
     }
 
     @Test
-    @DisplayName("TEXT — 노트 문서를 붙이면 거절한다")
-    void textRejectsDocument() {
-        assertInvalid(() -> PostRules.requireContent(PostFormat.TEXT, true, "본문", noteWithPages(1), null));
-        assertInvalid(() -> PostRules.requireContent(PostFormat.TEXT, false, null, noteWithPages(1), null));
+    @DisplayName("사진 11장은 거절한다")
+    void rejectsElevenImages() {
+        assertInvalid(() -> PostRules.requireContent(true, "본문", ids(11)));
     }
 
     @Test
-    @DisplayName("TEXT — 사진 11장은 거절한다")
-    void textRejectsElevenImages() {
-        assertInvalid(() -> PostRules.requireContent(PostFormat.TEXT, true, "본문", null, ids(11)));
-    }
-
-    @Test
-    @DisplayName("TEXT 수정 — 본문 null 은 유지라 통과하지만 빈 본문으로 바꿀 수는 없다")
-    void textUpdateKeepsNullBodyButRejectsBlank() {
-        assertThatCode(() -> PostRules.requireContent(PostFormat.TEXT, false, null, null, null))
+    @DisplayName("수정 — 본문 null 은 유지라 통과하지만 빈 본문으로 바꿀 수는 없다")
+    void updateKeepsNullBodyButRejectsBlank() {
+        assertThatCode(() -> PostRules.requireContent(false, null, null))
                 .doesNotThrowAnyException();
-        assertInvalid(() -> PostRules.requireContent(PostFormat.TEXT, false, "", null, null));
-    }
-
-    // ────────────────────────────── NOTE ──────────────────────────────
-
-    @Test
-    @DisplayName("NOTE 작성 — 문서가 있으면 빈 본문도 통과, 사진 30장까지")
-    void noteAcceptsEmptyBody() {
-        assertThatCode(() -> PostRules.requireContent(PostFormat.NOTE, true, "", noteWithPages(1), ids(30)))
-                .doesNotThrowAnyException();
-        assertThatCode(() -> PostRules.requireContent(PostFormat.NOTE, true, "", noteWithPages(6), null))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    @DisplayName("NOTE 작성 — 문서가 없으면 거절한다")
-    void noteRequiresDocument() {
-        assertInvalid(() -> PostRules.requireContent(PostFormat.NOTE, true, "", null, null));
-    }
-
-    @Test
-    @DisplayName("NOTE 수정 — 문서 null 은 유지라 통과한다")
-    void noteUpdateKeepsNullDocument() {
-        assertThatCode(() -> PostRules.requireContent(PostFormat.NOTE, false, null, null, null))
-                .doesNotThrowAnyException();
-    }
-
-    @Test
-    @DisplayName("NOTE — 페이지 0장·7장은 거절한다")
-    void noteRejectsZeroAndSevenPages() {
-        assertInvalid(() -> PostRules.requireContent(PostFormat.NOTE, true, "", noteWithPages(0), null));
-        assertInvalid(() -> PostRules.requireContent(PostFormat.NOTE, true, "", noteWithPages(7), null));
-        assertInvalid(() -> PostRules.requireContent(PostFormat.NOTE, false, null, noteWithPages(7), null));
-    }
-
-    @Test
-    @DisplayName("NOTE — pages 가 없거나 배열이 아니면 거절한다")
-    void noteRejectsMissingPagesArray() {
-        assertInvalid(() -> PostRules.requireContent(PostFormat.NOTE, true, "", Map.of("v", 1), null));
-        assertInvalid(() -> PostRules.requireContent(PostFormat.NOTE, true, "", Map.of("pages", "p1"), null));
-    }
-
-    @Test
-    @DisplayName("NOTE — 사진 31장은 거절한다")
-    void noteRejectsThirtyOneImages() {
-        assertInvalid(() -> PostRules.requireContent(PostFormat.NOTE, true, "", noteWithPages(1), ids(31)));
-    }
-
-    @Test
-    @DisplayName("문서 크기는 1MB 까지 — 넘으면 거절한다")
-    void documentSizeLimit() {
-        assertThatCode(() -> PostRules.requireDocumentSize(PostRules.MAX_DOCUMENT_BYTES)).doesNotThrowAnyException();
-        assertInvalid(() -> PostRules.requireDocumentSize(PostRules.MAX_DOCUMENT_BYTES + 1));
-        assertThat(PostRules.MAX_DOCUMENT_BYTES).isEqualTo(1024 * 1024);
+        assertInvalid(() -> PostRules.requireContent(false, "", null));
     }
 }
