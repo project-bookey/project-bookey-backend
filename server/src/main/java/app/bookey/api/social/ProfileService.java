@@ -73,6 +73,14 @@ public class ProfileService {
                 !me && chatService.canChat(viewerId, userId), me);
     }
 
+    /** 없는 유저면 404 — 남의 서재·통계를 열 때 빈 목록 대신 '없는 사람'으로 답하게 한다. */
+    @Transactional(readOnly = true)
+    public void requireUser(Long userId) {
+        if (!userRepository.existsById(userId)) {
+            throw ApiException.of(ErrorCode.NOT_FOUND);
+        }
+    }
+
     /** 같은 방문자가 하루에 여러 번 열어도 1건 — 유니크 제약 충돌은 조용히 무시한다. */
     private void recordVisit(Long visitorId, Long hostId) {
         LocalDate today = LocalDate.ofInstant(clock.instant(), KST);
