@@ -1,31 +1,23 @@
 package app.bookey.api.plaza;
 
 import app.bookey.api.plaza.dto.PlazaDtos.PlazaItemView;
+import app.bookey.common.support.PageResponse;
 import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookSource;
-import app.bookey.domain.quote.BookQuote;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.user.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
 
 import java.lang.reflect.Field;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class PlazaServiceTest {
-
-    private BookQuote quote(long id, long userId, long bookId) {
-        BookQuote quote = BookQuote.builder()
-                .userId(userId).bookId(bookId).content("문장 " + id).page(10)
-                .build();
-        set(quote, "id", id);
-        return quote;
-    }
 
     private ReadingRecord finishedRecord(long id, long userId, long bookId, Instant finishedAt) {
         ReadingRecord record = ReadingRecord.builder().userId(userId).bookId(bookId).build();
@@ -34,7 +26,7 @@ class PlazaServiceTest {
         return record;
     }
 
-    // Book.builder()는 id(자동 생성 PK)를 받지 않는다 — QuoteServiceTest처럼 리플렉션으로 채운다.
+    // Book.builder()는 id(자동 생성 PK)를 받지 않는다 — 리플렉션으로 채운다.
     private Book book(long id, String title) {
         Book book = Book.builder().title(title).source(BookSource.MANUAL).build();
         set(book, "id", id);
@@ -57,136 +49,28 @@ class PlazaServiceTest {
         }
     }
 
-    // ────────────────────────────── assembleQuoteItems ──────────────────────────────
+    // ────────────────────────────── feed(QUOTE) ──────────────────────────────
 
     @Test
-    @DisplayName("assembleQuoteItems: agreeCount·agreedByMe를 배치 맵으로 매핑한다")
-    void assembleQuoteItemsMapsAgreeCountAndAgreedByMe() {
-        BookQuote quote = quote(1L, 10L, 100L);
-        Map<Long, Book> books = Map.of(100L, book(100L, "책"));
-        Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
-        Map<Long, Long> agreeCounts = Map.of(1L, 3L);
-        Set<Long> myAgreed = Set.of(1L);
+    @DisplayName("feed: 밑줄(QUOTE)은 걷어냈다 — 옛 앱이 불러도 저장소를 건드리지 않고 빈 페이지를 준다")
+    void quoteFeedIsAlwaysEmpty() {
+        // 저장소 없이 만든다 — QUOTE 경로가 저장소를 부르면 NullPointerException 으로 드러난다.
+        PlazaService service = new PlazaService(null, null, null);
 
-        List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(quote), books, authors, agreeCounts, myAgreed, Set.of(), Map.of());
+        PageResponse<PlazaItemView> page = service.feed(PlazaItemType.QUOTE, PageRequest.of(2, 10));
 
-        PlazaItemView item = items.get(0);
-        assertThat(item.type()).isEqualTo(PlazaItemType.QUOTE);
-        assertThat(item.quoteId()).isEqualTo(1L);
-        assertThat(item.content()).isEqualTo(quote.getContent());
-        assertThat(item.page()).isEqualTo(10);
-        assertThat(item.agreeCount()).isEqualTo(3L);
-        assertThat(item.agreedByMe()).isTrue();
-        assertThat(item.bookId()).isEqualTo(100L);
-        assertThat(item.bookTitle()).isEqualTo("책");
-    }
-
-    @Test
-    @DisplayName("assembleQuoteItems: 나도 그럼 카운트가 없는 문장은 0으로 매핑한다")
-    void assembleQuoteItemsMissingAgreeCountDefaultsToZero() {
-        BookQuote quote = quote(2L, 10L, 100L);
-        Map<Long, Book> books = Map.of(100L, book(100L, "책"));
-        Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
-
-        List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(quote), books, authors, Map.of(), Set.of(), Set.of(), Map.of());
-
-        PlazaItemView item = items.get(0);
-        assertThat(item.agreeCount()).isZero();
-        assertThat(item.agreedByMe()).isFalse();
-    }
-
-    @Test
-    @DisplayName("assembleQuoteItems: 입력 순서를 그대로 유지한다")
-    void assembleQuoteItemsPreservesInputOrder() {
-        BookQuote first = quote(5L, 10L, 100L);
-        BookQuote second = quote(3L, 10L, 100L);
-        BookQuote third = quote(9L, 10L, 100L);
-        Map<Long, Book> books = Map.of(100L, book(100L, "책"));
-        Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
-
-        List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(first, second, third), books, authors, Map.of(), Set.of(), Set.of(), Map.of());
-
-        assertThat(items).extracting(PlazaItemView::quoteId).containsExactly(5L, 3L, 9L);
-    }
-
-    @Test
-    @DisplayName("assembleQuoteItems: 탈퇴한 작성자는 '알 수 없음'으로 대체한다")
-    void assembleQuoteItemsWithdrawnAuthorFallsBackToUnknown() {
-        BookQuote quote = quote(2L, 99L, 100L);
-        Map<Long, Book> books = Map.of(100L, book(100L, "책"));
-
-        List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(quote), books, Map.of(), Map.of(), Set.of(), Set.of(), Map.of());
-
-        PlazaItemView item = items.get(0);
-        assertThat(item.authorNickname()).isEqualTo("알 수 없음");
-        assertThat(item.authorAvatarUrl()).isNull();
-    }
-
-    @Test
-    @DisplayName("assembleQuoteItems: 책이 결측된 행은 필터한다")
-    void assembleQuoteItemsFiltersRowsWithMissingBook() {
-        BookQuote withBook = quote(1L, 10L, 100L);
-        BookQuote withoutBook = quote(2L, 10L, 200L);
-        Map<Long, Book> books = Map.of(100L, book(100L, "책"));
-        Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
-
-        List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(withBook, withoutBook), books, authors, Map.of(), Set.of(), Set.of(), Map.of());
-
-        assertThat(items).extracting(PlazaItemView::quoteId).containsExactly(1L);
-    }
-
-    @Test
-    @DisplayName("assembleQuoteItems: commentCount를 배치 맵으로 매핑하고, 없으면 0이다")
-    void assembleQuoteItemsMapsCommentCount() {
-        BookQuote withComments = quote(1L, 10L, 100L);
-        BookQuote without = quote(2L, 10L, 100L);
-        Map<Long, Book> books = Map.of(100L, book(100L, "책"));
-        Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
-
-        List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(withComments, without), books, authors, Map.of(), Set.of(), Set.of(), Map.of(1L, 2L));
-
-        assertThat(items.get(0).commentCount()).isEqualTo(2L);
-        assertThat(items.get(1).commentCount()).isZero();
-    }
-
-    @Test
-    @DisplayName("assembleQuoteItems: 작성자가 그 책을 완독한 밑줄만 authorFinished 가 true 다")
-    void assembleQuoteItemsMarksAuthorFinished() {
-        BookQuote finishedOne = quote(1L, 10L, 100L);
-        BookQuote notFinished = quote(2L, 10L, 200L);
-        BookQuote otherAuthor = quote(3L, 20L, 100L);
-        Map<Long, Book> books = Map.of(100L, book(100L, "책"), 200L, book(200L, "다른 책"));
-        Map<Long, User> authors = Map.of(10L, user(10L, "작가"), 20L, user(20L, "이웃"));
-        Set<PlazaService.UserBook> finished = Set.of(new PlazaService.UserBook(10L, 100L));
-
-        List<PlazaItemView> items = PlazaService.assembleQuoteItems(
-                List.of(finishedOne, notFinished, otherAuthor), books, authors, Map.of(), Set.of(), finished, Map.of());
-
-        assertThat(items).extracting(PlazaItemView::authorFinished).containsExactly(true, false, false);
-    }
-
-    @Test
-    @DisplayName("assembleFinishItems: 완독 자랑은 authorFinished 가 항상 true 다")
-    void assembleFinishItemsAlwaysAuthorFinished() {
-        ReadingRecord record = finishedRecord(1L, 10L, 100L, Instant.parse("2026-08-01T00:00:00Z"));
-
-        List<PlazaItemView> items = PlazaService.assembleFinishItems(
-                List.of(record), Map.of(100L, book(100L, "책")), Map.of(10L, user(10L, "작가")));
-
-        assertThat(items.get(0).authorFinished()).isTrue();
+        assertThat(page.content()).isEmpty();
+        assertThat(page.page()).isEqualTo(2);
+        assertThat(page.size()).isEqualTo(10);
+        assertThat(page.totalElements()).isZero();
+        assertThat(page.hasNext()).isFalse();
     }
 
     // ────────────────────────────── assembleFinishItems ──────────────────────────────
 
     @Test
-    @DisplayName("assembleFinishItems: occurredAt은 finishedAt이고 QUOTE 전용 필드는 전부 null이다")
-    void assembleFinishItemsOccurredAtIsFinishedAtAndQuoteFieldsAreNull() {
+    @DisplayName("assembleFinishItems: occurredAt은 finishedAt이고 작성자·책을 채운다")
+    void assembleFinishItemsOccurredAtIsFinishedAt() {
         Instant finishedAt = Instant.parse("2026-08-01T00:00:00Z");
         ReadingRecord record = finishedRecord(1L, 10L, 100L, finishedAt);
         Map<Long, Book> books = Map.of(100L, book(100L, "책"));
@@ -201,12 +85,6 @@ class PlazaServiceTest {
         assertThat(item.bookTitle()).isEqualTo("책");
         assertThat(item.authorId()).isEqualTo(10L);
         assertThat(item.authorNickname()).isEqualTo("작가");
-        assertThat(item.quoteId()).isNull();
-        assertThat(item.content()).isNull();
-        assertThat(item.page()).isNull();
-        assertThat(item.agreeCount()).isNull();
-        assertThat(item.agreedByMe()).isNull();
-        assertThat(item.commentCount()).isNull();
     }
 
     @Test

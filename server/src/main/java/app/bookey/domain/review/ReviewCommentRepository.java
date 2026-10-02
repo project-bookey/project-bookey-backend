@@ -18,7 +18,7 @@ public interface ReviewCommentRepository extends JpaRepository<ReviewComment, Lo
     Page<ReviewComment> findAllByParentIdOrderByCreatedAtAscIdAsc(Long parentId, Pageable pageable);
 
     /**
-     * 리뷰별 댓글 수 — 목록 배치 로딩용 GROUP BY 프로젝션(QuoteCommentRepository.countPerQuote 미러).
+     * 리뷰별 댓글 수 — 목록 배치 로딩용 GROUP BY 프로젝션.
      * 답글도 함께 센다 — ReviewView 의 commentCount 는 "이 리뷰에 달린 말 전체 수"다.
      */
     @Query("""

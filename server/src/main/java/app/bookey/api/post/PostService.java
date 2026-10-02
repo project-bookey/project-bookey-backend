@@ -3,8 +3,6 @@ package app.bookey.api.post;
 import app.bookey.api.club.ClubService;
 import app.bookey.api.post.dto.PostDtos.*;
 import app.bookey.api.notification.NotificationService;
-import app.bookey.api.quote.QuoteService;
-import app.bookey.api.quote.dto.QuoteDtos.BookQuoteView;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
@@ -26,13 +24,9 @@ import app.bookey.domain.post.PostImageRepository;
 import app.bookey.domain.post.PostLike;
 import app.bookey.domain.post.PostLikeRepository;
 import app.bookey.domain.post.PostLikeRepository.PostLikeCount;
-import app.bookey.domain.post.PostQuote;
-import app.bookey.domain.post.PostQuoteRepository;
 import app.bookey.domain.post.PostRepository;
 import app.bookey.domain.post.PostRules;
 import app.bookey.domain.post.PostVisibility;
-import app.bookey.domain.quote.BookQuote;
-import app.bookey.domain.quote.BookQuoteRepository;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.user.User;
@@ -47,11 +41,8 @@ import tools.jackson.databind.ObjectMapper;
 import java.text.Normalizer;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -79,10 +70,8 @@ public class PostService {
 
     private final PostRepository postRepository;
     private final PostImageRepository imageRepository;
-    private final PostQuoteRepository postQuoteRepository;
     private final PostLikeRepository likeRepository;
     private final PostCommentRepository commentRepository;
-    private final BookQuoteRepository quoteRepository;
     private final BookRepository bookRepository;
     private final ReadingRecordRepository recordRepository;
     private final UserRepository userRepository;
@@ -90,7 +79,6 @@ public class PostService {
     private final ClubRepository clubRepository;
     private final ClubMemberRepository clubMemberRepository;
     private final ObjectMapper objectMapper;
-    private final QuoteService quoteService;
     private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
 
@@ -98,8 +86,7 @@ public class PostService {
     public PostView create(Long userId, CreatePostRequest request) {
         PostFormat format = request.format() == null ? PostFormat.TEXT : request.format();
         PostRules.requireVisibility(request.clubId() != null, request.visibility());
-        PostRules.requireContent(format, true, request.bodyMd(), request.document(),
-                request.imageIds(), request.quoteIds());
+        PostRules.requireContent(format, true, request.bodyMd(), request.document(), request.imageIds());
         requireDocumentSize(request.document());
         if (request.clubId() != null) {
             requireOpenClubMember(userId, request.clubId());
@@ -126,7 +113,6 @@ public class PostService {
                 .clubId(request.clubId())
                 .build());
         attachImages(post, userId, request.imageIds());
-        attachQuotes(post, request.quoteIds());
         return toView(post, userId);
     }
 
@@ -135,8 +121,7 @@ public class PostService {
     public PostView update(Long userId, Long postId, UpdatePostRequest request) {
         Post post = owned(userId, postId);
         PostRules.requireVisibility(post.isClubPost(), request.visibility());
-        PostRules.requireContent(post.getFormat(), false, request.bodyMd(), request.document(),
-                request.imageIds(), request.quoteIds());
+        PostRules.requireContent(post.getFormat(), false, request.bodyMd(), request.document(), request.imageIds());
         requireDocumentSize(request.document());
         if (request.bookId() != null && !request.bookId().equals(post.getBookId())) {
             requireBook(request.bookId());
@@ -151,17 +136,10 @@ public class PostService {
             detachImagesNotIn(post, request.imageIds());
             attachImages(post, userId, request.imageIds());
         }
-        if (request.quoteIds() != null) {
-            // 연결을 전부 지우고 다시 넣는다. IDENTITY 채번은 persist 때 바로 INSERT 하므로
-            // 삭제를 먼저 flush 해야 같은 밑줄을 다시 붙일 때 (post_id, quote_id) 유니크에 걸리지 않는다.
-            postQuoteRepository.deleteAllByPostId(postId);
-            postQuoteRepository.flush();
-            attachQuotes(post, request.quoteIds());
-        }
         return toView(post, userId);
     }
 
-    /** 사진은 연결만 끊어 남기고(정리 배치가 지운다), 밑줄 연결·좋아요·댓글은 DB CASCADE 로 함께 지워진다. */
+    /** 사진은 연결만 끊어 남기고(정리 배치가 지운다), 좋아요·댓글은 DB CASCADE 로 함께 지워진다. */
     @Transactional
     public void delete(Long userId, Long postId) {
         Post post = owned(userId, postId);
@@ -327,7 +305,7 @@ public class PostService {
         }
     }
 
-    /** 독서 기록은 존재하고 내 것이어야 한다(QuoteService.create 선례). */
+    /** 독서 기록은 존재하고 내 것이어야 한다. */
     private Long ownedRecordId(Long userId, Long readingRecordId) {
         if (readingRecordId == null) {
             return null;
@@ -394,30 +372,6 @@ public class PostService {
                 .forEach(PostImage::detach);
     }
 
-    /** 밑줄을 요청 순서대로 잇는다. 존재만 검사한다 — 책이 없는 글에도, 다른 책·남의 밑줄도 붙일 수 있다. 중복 id 는 첫 것만. */
-    private void attachQuotes(Post post, List<Long> quoteIds) {
-        if (quoteIds == null || quoteIds.isEmpty()) {
-            return;
-        }
-        List<Long> ids = quoteIds.stream().filter(Objects::nonNull).distinct().toList();
-        validateQuoteAttachments(ids, quoteRepository.findAllById(ids));
-        List<PostQuote> links = new ArrayList<>(ids.size());
-        for (int order = 0; order < ids.size(); order++) {
-            links.add(PostQuote.builder()
-                    .postId(post.getId()).quoteId(ids.get(order)).sortOrder((short) order)
-                    .build());
-        }
-        postQuoteRepository.saveAll(links);
-    }
-
-    /** 요청한 밑줄이 모두 존재해야 한다. 밑줄은 공개물이라 남이 오려둔 문장도 인용할 수 있다. */
-    static void validateQuoteAttachments(List<Long> requestedIds, List<BookQuote> found) {
-        Set<Long> foundIds = found.stream().map(BookQuote::getId).collect(Collectors.toSet());
-        if (!foundIds.containsAll(requestedIds)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "없는 밑줄은 붙일 수 없습니다.");
-        }
-    }
-
     private static String[] toTags(List<String> tags) {
         return tags == null ? null : tags.toArray(String[]::new);
     }
@@ -456,7 +410,7 @@ public class PostService {
         return assemble(List.of(post), viewerId).get(0);
     }
 
-    /** 페이지 하나에 쿼리 수가 고정되도록 id 목록으로 한 번씩만 읽어 조립한다(QuoteService·PlazaService 선례). */
+    /** 페이지 하나에 쿼리 수가 고정되도록 id 목록으로 한 번씩만 읽어 조립한다(PlazaService 선례). */
     private List<PostView> assemble(List<Post> posts, Long viewerId) {
         if (posts.isEmpty()) {
             return List.of();
@@ -465,8 +419,7 @@ public class PostService {
         Map<Long, Book> books = loadBooks(posts.stream().map(Post::getBookId).filter(Objects::nonNull).distinct().toList());
         Map<Long, User> authors = loadAuthors(posts.stream().map(Post::getUserId).distinct().toList());
         Map<Long, Club> clubs = loadClubs(posts.stream().map(Post::getClubId).filter(Objects::nonNull).distinct().toList());
-        return assembleViews(posts, viewerId, books, authors, clubs,
-                loadImages(postIds), loadQuoteViews(postIds, viewerId, books),
+        return assembleViews(posts, viewerId, books, authors, clubs, loadImages(postIds),
                 loadLikeCounts(postIds), loadMyLiked(viewerId, postIds), loadCommentCounts(postIds));
     }
 
@@ -503,30 +456,6 @@ public class PostService {
                 .collect(Collectors.groupingBy(PostImage::getPostId));
     }
 
-    /** 독후감별 인용 밑줄 id — sort_order 순. */
-    private Map<Long, List<Long>> loadPostQuotes(List<Long> postIds) {
-        if (postIds.isEmpty()) {
-            return Map.of();
-        }
-        return postQuoteRepository.findAllByPostIdInOrderBySortOrderAscIdAsc(postIds).stream()
-                .collect(Collectors.groupingBy(PostQuote::getPostId, LinkedHashMap::new,
-                        Collectors.mapping(PostQuote::getQuoteId, Collectors.toList())));
-    }
-
-    /** 인용된 밑줄을 한 번에 읽어 BookQuoteView 로 조립하고 독후감별 순서대로 묶는다. 이미 읽은 책은 넘겨 재조회를 피한다. */
-    private Map<Long, List<BookQuoteView>> loadQuoteViews(List<Long> postIds, Long viewerId, Map<Long, Book> books) {
-        Map<Long, List<Long>> quoteIdsByPost = loadPostQuotes(postIds);
-        if (quoteIdsByPost.isEmpty()) {
-            return Map.of();
-        }
-        List<Long> quoteIds = quoteIdsByPost.values().stream().flatMap(List::stream).distinct().toList();
-        Map<Long, BookQuoteView> views = quoteService.viewsOf(quoteRepository.findAllById(quoteIds), viewerId, books);
-        Map<Long, List<BookQuoteView>> byPost = new HashMap<>();
-        quoteIdsByPost.forEach((postId, ids) -> byPost.put(postId,
-                ids.stream().map(views::get).filter(Objects::nonNull).toList()));
-        return byPost;
-    }
-
     private Map<Long, Long> loadLikeCounts(List<Long> postIds) {
         if (postIds.isEmpty()) {
             return Map.of();
@@ -554,14 +483,13 @@ public class PostService {
     }
 
     /**
-     * 배치 맵으로 뷰를 조립한다(QuoteService.assembleViews 선례). 입력 순서를 지킨다.
-     * likeCount·commentCount 결측은 0, 사진·밑줄 결측은 빈 목록, 탈퇴한 작성자는 "알 수 없음",
+     * 배치 맵으로 뷰를 조립한다. 입력 순서를 지킨다.
+     * likeCount·commentCount 결측은 0, 사진 결측은 빈 목록, 밑줄(quotes)은 기능을 걷어내 늘 빈 목록, 탈퇴한 작성자는 "알 수 없음",
      * 책 결측은 제목·표지만 null(bookId 는 그대로), 모임 결측도 이름만 null. 비로그인 조회자(null)는 mine·likedByMe 가 false.
      */
     static List<PostView> assembleViews(List<Post> posts, Long viewerId,
                                         Map<Long, Book> books, Map<Long, User> authors, Map<Long, Club> clubs,
                                         Map<Long, List<PostImage>> imagesByPost,
-                                        Map<Long, List<BookQuoteView>> quotesByPost,
                                         Map<Long, Long> likeCounts, Set<Long> myLiked,
                                         Map<Long, Long> commentCounts) {
         return posts.stream()
@@ -586,7 +514,7 @@ public class PostService {
                             author == null ? null : author.getAvatarUrl(),
                             PostExcerpt.of(post.getBodyMd(), EXCERPT_LENGTH),
                             images,
-                            quotesByPost.getOrDefault(post.getId(), List.of()),
+                            List.of(),
                             likeCounts.getOrDefault(post.getId(), 0L),
                             myLiked.contains(post.getId()),
                             commentCounts.getOrDefault(post.getId(), 0L),

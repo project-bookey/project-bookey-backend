@@ -4,17 +4,8 @@ import app.bookey.api.plaza.dto.PlazaDtos.PlazaItemView;
 import app.bookey.common.support.PageResponse;
 import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookRepository;
-import app.bookey.domain.quote.BookQuote;
-import app.bookey.domain.quote.BookQuoteRepository;
-import app.bookey.domain.quote.QuoteAgree;
-import app.bookey.domain.quote.QuoteAgreeRepository;
-import app.bookey.domain.quote.QuoteAgreeRepository.AgreeCount;
-import app.bookey.domain.quote.QuoteCommentRepository;
-import app.bookey.domain.quote.QuoteCommentRepository.CommentCount;
-import app.bookey.domain.quote.QuoteSearchKeyword;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
-import app.bookey.domain.reading.ReadingStatus;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,50 +14,26 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** 광장(플라자) — 전체 사용자 공개 피드(밑줄 QUOTE · 완독 자랑 FINISH). */
+/** 광장(플라자) — 전체 사용자 공개 피드(완독 자랑 FINISH). 밑줄(QUOTE)은 걷어내 늘 빈 페이지다. */
 @Service
 @RequiredArgsConstructor
 public class PlazaService {
 
-    private final BookQuoteRepository quoteRepository;
-    private final QuoteAgreeRepository agreeRepository;
-    private final QuoteCommentRepository commentRepository;
     private final ReadingRecordRepository recordRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
 
-    /** 광장 피드 — keyword 는 밑줄(QUOTE)에서 문장 내용·책 제목을 찾는다. 완독 자랑(FINISH)에는 문장이 없어 무시한다. */
+    /** 광장 피드 — 완독 자랑만 있다. 옛 앱이 밑줄(QUOTE)을 달라고 하면 빈 페이지를 돌려준다. */
     @Transactional(readOnly = true)
-    public PageResponse<PlazaItemView> feed(Long userId, PlazaItemType type, String keyword, Pageable pageable) {
-        return type == PlazaItemType.FINISH
-                ? finishFeed(pageable)
-                : quoteFeed(userId, QuoteSearchKeyword.normalize(keyword), pageable);
-    }
-
-    private PageResponse<PlazaItemView> quoteFeed(Long userId, String keyword, Pageable pageable) {
-        Page<BookQuote> page = keyword == null
-                ? quoteRepository.findAllByOrderByCreatedAtDescIdDesc(pageable)
-                : quoteRepository.searchAll(keyword, pageable);
-        List<BookQuote> quotes = page.getContent();
-        Map<Long, Book> books = loadBooks(quotes.stream().map(BookQuote::getBookId).distinct().toList());
-        Map<Long, User> authors = loadAuthors(quotes.stream().map(BookQuote::getUserId).distinct().toList());
-        Map<Long, Long> agreeCounts = loadAgreeCounts(quotes);
-        Set<Long> myAgreed = loadMyAgreed(userId, quotes);
-        Set<UserBook> finished = loadFinishedPairs(quotes);
-        Map<Long, Long> commentCounts = loadCommentCounts(quotes);
-        List<PlazaItemView> items = assembleQuoteItems(quotes, books, authors, agreeCounts, myAgreed, finished, commentCounts);
-        return new PageResponse<>(items, page.getNumber(), page.getSize(),
-                page.getTotalElements(), page.getTotalPages(), page.hasNext());
-    }
-
-    private PageResponse<PlazaItemView> finishFeed(Pageable pageable) {
+    public PageResponse<PlazaItemView> feed(PlazaItemType type, Pageable pageable) {
+        if (type == PlazaItemType.QUOTE) {
+            return new PageResponse<>(List.of(), pageable.getPageNumber(), pageable.getPageSize(), 0, 0, false);
+        }
         Page<ReadingRecord> page = recordRepository.findFinishFeed(pageable);
         List<ReadingRecord> records = page.getContent();
         Map<Long, Book> books = loadBooks(records.stream().map(ReadingRecord::getBookId).distinct().toList());
@@ -94,90 +61,9 @@ public class PlazaService {
                 .collect(Collectors.toMap(User::getId, Function.identity()));
     }
 
-    private Map<Long, Long> loadAgreeCounts(List<BookQuote> quotes) {
-        List<Long> ids = quotes.stream().map(BookQuote::getId).toList();
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return agreeRepository.countPerQuote(ids).stream()
-                .collect(Collectors.toMap(AgreeCount::getQuoteId, AgreeCount::getAgreeCount));
-    }
-
-    private Set<Long> loadMyAgreed(Long userId, List<BookQuote> quotes) {
-        List<Long> ids = quotes.stream().map(BookQuote::getId).toList();
-        if (ids.isEmpty()) {
-            return Set.of();
-        }
-        return agreeRepository.findAllByUserIdAndQuoteIdIn(userId, ids).stream()
-                .map(QuoteAgree::getQuoteId)
-                .collect(Collectors.toSet());
-    }
-
-    private Map<Long, Long> loadCommentCounts(List<BookQuote> quotes) {
-        List<Long> ids = quotes.stream().map(BookQuote::getId).toList();
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        return commentRepository.countPerQuote(ids).stream()
-                .collect(Collectors.toMap(CommentCount::getQuoteId, CommentCount::getCommentCount));
-    }
-
-    /** (작성자, 책) 쌍 — 완독 인증 판정 키. */
-    record UserBook(Long userId, Long bookId) {}
-
     /**
-     * 작성자가 그 책을 완독한 (userId, bookId) 쌍 — 밑줄 카드의 완독 인증 마크.
-     * 작성자들×책들 교차 범위를 한 번에 읽고 쌍으로 거른다(회차가 여럿이어도 한 번만 완독했으면 true).
-     */
-    private Set<UserBook> loadFinishedPairs(List<BookQuote> quotes) {
-        if (quotes.isEmpty()) {
-            return Set.of();
-        }
-        List<Long> userIds = quotes.stream().map(BookQuote::getUserId).distinct().toList();
-        List<Long> bookIds = quotes.stream().map(BookQuote::getBookId).distinct().toList();
-        return recordRepository.findAllByUserIdInAndBookIdInAndStatus(userIds, bookIds, ReadingStatus.FINISHED)
-                .stream()
-                .map(record -> new UserBook(record.getUserId(), record.getBookId()))
-                .collect(Collectors.toSet());
-    }
-
-    /**
-     * 밑줄(QUOTE) 아이템을 배치 맵으로 조립한다(QuoteService.assembleViews 선례).
-     * agreeCount·commentCount 결측 0, 책이 결측된 행은 필터하고, 탈퇴한 작성자는 "알 수 없음"으로 대체한다.
-     * authorFinished 는 작성자가 그 책을 완독한 쌍 집합으로 판정한다.
-     */
-    static List<PlazaItemView> assembleQuoteItems(List<BookQuote> quotes, Map<Long, Book> books,
-                                                  Map<Long, User> authors, Map<Long, Long> agreeCounts,
-                                                  Set<Long> myAgreedQuoteIds, Set<UserBook> finishedPairs,
-                                                  Map<Long, Long> commentCounts) {
-        return quotes.stream()
-                .filter(quote -> books.containsKey(quote.getBookId()))
-                .map(quote -> {
-                    Book book = books.get(quote.getBookId());
-                    User author = authors.get(quote.getUserId());
-                    return new PlazaItemView(
-                            PlazaItemType.QUOTE,
-                            quote.getUserId(),
-                            author == null ? "알 수 없음" : author.getNickname(),
-                            author == null ? null : author.getAvatarUrl(),
-                            book.getId(),
-                            book.getTitle(),
-                            book.getCoverUrl(),
-                            quote.getCreatedAt() == null ? Instant.now() : quote.getCreatedAt(),
-                            quote.getId(),
-                            quote.getContent(),
-                            quote.getPage(),
-                            agreeCounts.getOrDefault(quote.getId(), 0L),
-                            myAgreedQuoteIds.contains(quote.getId()),
-                            finishedPairs.contains(new UserBook(quote.getUserId(), quote.getBookId())),
-                            commentCounts.getOrDefault(quote.getId(), 0L));
-                })
-                .toList();
-    }
-
-    /**
-     * 완독 자랑(FINISH) 아이템을 배치 맵으로 조립한다. QUOTE 전용 필드는 전부 null,
-     * occurredAt은 finishedAt이다. 책이 결측된 행은 필터하고, 탈퇴한 작성자는 "알 수 없음"으로 대체한다.
+     * 완독 자랑(FINISH) 아이템을 배치 맵으로 조립한다. occurredAt 은 finishedAt 이다.
+     * 책이 결측된 행은 필터하고, 탈퇴한 작성자는 "알 수 없음"으로 대체한다.
      */
     static List<PlazaItemView> assembleFinishItems(List<ReadingRecord> records, Map<Long, Book> books,
                                                    Map<Long, User> authors) {
@@ -194,9 +80,7 @@ public class PlazaService {
                             book.getId(),
                             book.getTitle(),
                             book.getCoverUrl(),
-                            record.getFinishedAt(),
-                            null, null, null, null, null,
-                            Boolean.TRUE, null);
+                            record.getFinishedAt());
                 })
                 .toList();
     }

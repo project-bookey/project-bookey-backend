@@ -27,7 +27,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** 독후감 댓글 — 목록(오래된 순) · 작성(답글 1단계) · 본인 삭제. QuoteCommentService 미러. */
+/** 독후감 댓글 — 목록(오래된 순) · 작성(답글 1단계) · 본인 삭제. */
 @Service
 @RequiredArgsConstructor
 public class PostCommentService {
@@ -140,7 +140,7 @@ public class PostCommentService {
     }
 
     /**
-     * 배치 맵으로 2단계 스레드를 조립한다(QuoteCommentService.assembleViews 선례).
+     * 배치 맵으로 2단계 스레드를 조립한다(ReviewCommentService.assembleViews 와 같은 꼴).
      * 루트 순서는 그대로, 답글은 넘겨받은 순서(오래된 순)를 지키고 답글 행의 replies 는 빈 목록이다.
      * 탈퇴한 작성자는 "알 수 없음".
      */

@@ -3,8 +3,6 @@ package app.bookey.api.book;
 import app.bookey.api.book.dto.BookDtos.*;
 import app.bookey.api.post.PostService;
 import app.bookey.api.post.dto.PostDtos.PostView;
-import app.bookey.api.quote.QuoteService;
-import app.bookey.api.quote.dto.QuoteDtos.BookQuoteView;
 import app.bookey.common.security.AuthUser;
 import app.bookey.common.support.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,7 +26,6 @@ public class BookController {
 
     private final BookService bookService;
     private final Yes24CurationService yes24CurationService;
-    private final QuoteService quoteService;
     private final PostService postService;
 
     @Operation(summary = "도서 검색 (캐시 → 카카오 → 알라딘 보강 → 구글 폴백)")
@@ -89,16 +86,6 @@ public class BookController {
     public List<BookSummary> recommended(@AuthenticationPrincipal AuthUser user,
                                          @RequestParam(defaultValue = "20") int size) {
         return bookService.recommended(user.id(), size);
-    }
-
-    @Operation(summary = "책별 오려둔 문장 목록 — 최신순, q 로 문장·책 제목 검색")
-    @GetMapping("/{bookId}/quotes")
-    public PageResponse<BookQuoteView> quotes(@AuthenticationPrincipal AuthUser user,
-                                              @PathVariable Long bookId,
-                                              @RequestParam(required = false) String q,
-                                              @RequestParam(defaultValue = "0") int page,
-                                              @RequestParam(defaultValue = "20") int size) {
-        return quoteService.byBook(user.id(), bookId, q, PageRequest.of(page, size));
     }
 
     @Operation(summary = "책별 공개 독후감 목록 — 최신순")

@@ -68,6 +68,9 @@ common/             보안 · 에러 · 설정 · 공용 유틸
 
 `ddl-auto: validate` — 엔티티를 바꾸면 반드시 `server/src/main/resources/db/migration/V<n>__*.sql` 마이그레이션을 추가해야 하고, 스키마와 엔티티가 정확히 일치해야 기동된다.
 
+- **V36 은 SQL 이 아니라 자바 마이그레이션이다** — `server/src/main/java/app/bookey/common/migration/V36__Remove_book_quotes.java`(밑줄 기능 삭제: 엮인 밑줄을 독후감 본문으로 옮기고 밑줄 테이블을 지운다). `db/migration` 폴더에는 V35 다음이 안 보이지만 **새 SQL 마이그레이션은 V37 부터** 매긴다 — V36 을 또 만들면 버전이 겹쳐 서버가 뜨지 않는다.
+- 이 클래스와 그 규칙(`domain/post/LegacyQuoteInliner`)은 쓰이지 않는 코드처럼 보여도 **지우면 안 된다** — 이미 적용된 V36 을 Flyway 가 찾지 못하면 기동이 실패한다.
+
 ### 도서 검색 파이프라인 (`BookSearchService`)
 
 내부 캐시(books 테이블) → 카카오 검색 → 국내 0건이면 Google Books 폴백 → isbn13 기준 upsert → 페이지 수 없는 책은 알라딘으로 **비동기** 보강. 외부 API 키(`KAKAO_REST_KEY` 등)가 없으면 해당 프로바이더를 건너뛰고 내부 캐시로만 검색한다(graceful degradation). API 키는 서버에만 둔다.

@@ -4,7 +4,6 @@ import app.bookey.api.club.ClubService;
 import app.bookey.api.notification.NotificationService;
 import app.bookey.api.post.dto.PostDtos.CreatePostRequest;
 import app.bookey.api.post.dto.PostDtos.UpdatePostRequest;
-import app.bookey.api.quote.QuoteService;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.RateLimiter;
@@ -19,10 +18,8 @@ import app.bookey.domain.post.PostCommentRepository;
 import app.bookey.domain.post.PostFormat;
 import app.bookey.domain.post.PostImageRepository;
 import app.bookey.domain.post.PostLikeRepository;
-import app.bookey.domain.post.PostQuoteRepository;
 import app.bookey.domain.post.PostRepository;
 import app.bookey.domain.post.PostVisibility;
-import app.bookey.domain.quote.BookQuoteRepository;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,11 +57,11 @@ class PostServiceClubTest {
 
     @BeforeEach
     void setUp() {
-        service = new PostService(postRepository, mock(PostImageRepository.class), mock(PostQuoteRepository.class),
-                mock(PostLikeRepository.class), mock(PostCommentRepository.class), mock(BookQuoteRepository.class),
+        service = new PostService(postRepository, mock(PostImageRepository.class),
+                mock(PostLikeRepository.class), mock(PostCommentRepository.class),
                 mock(BookRepository.class), mock(ReadingRecordRepository.class), mock(UserRepository.class),
                 clubService, mock(ClubRepository.class), memberRepository, new ObjectMapper(),
-                mock(QuoteService.class), mock(NotificationService.class), rateLimiter);
+                mock(NotificationService.class), rateLimiter);
     }
 
     private static Club club(ClubStatus status) {

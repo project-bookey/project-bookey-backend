@@ -1,6 +1,5 @@
 package app.bookey.api.post.dto;
 
-import app.bookey.api.quote.dto.QuoteDtos.BookQuoteView;
 import app.bookey.domain.post.PostFormat;
 import app.bookey.domain.post.PostVisibility;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -25,11 +24,14 @@ public final class PostDtos {
      * format 을 생략하면 TEXT. TEXT 는 bodyMd 가 비면 안 되고, NOTE 는 document 가 필수이며 bodyMd 는 빈 문자열이어도 된다
      * (앱이 노트 속 글을 이어 보내 발췌·검색에 쓴다). clubId 를 주면 모임 독후감 — 공개 범위는 PUBLIC·CLUB 만.
      * 사진 상한은 TEXT 10 · NOTE 30 으로 서비스가 형식에 맞춰 다시 검사한다.
+     * quoteIds 는 밑줄 기능을 걷어내 쓰지 않는다 — 옛 앱이 보내도 받기만 하고 무시한다.
      */
     public record CreatePostRequest(Long bookId, Long readingRecordId,
             @NotBlank @Size(max = 300) String title, @NotNull @Size(max = 20000) String bodyMd,
             @NotNull PostVisibility visibility, List<@Size(max = 30) String> tags,
-            @Size(max = 30) List<Long> imageIds, @Size(max = 10) List<Long> quoteIds,
+            @Size(max = 30) List<Long> imageIds,
+            @Schema(requiredMode = NOT_REQUIRED, description = "더 쓰지 않는다 — 보내도 무시한다(옛 앱 호환)")
+            List<Long> quoteIds,
             @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 TEXT")
             PostFormat format,
             @Schema(requiredMode = NOT_REQUIRED, description = "NOTE 전용 캔버스 문서 — pages 배열 1~6장, 1MB 이하")
@@ -49,12 +51,15 @@ public final class PostDtos {
             PostVisibility visibility,
             @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지, 빈 목록이면 사진을 전부 뗌")
             @Size(max = 30) List<Long> imageIds,
-            @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지, 빈 목록이면 밑줄 연결을 전부 지움")
-            @Size(max = 10) List<Long> quoteIds,
+            @Schema(requiredMode = NOT_REQUIRED, description = "더 쓰지 않는다 — 보내도 무시한다(옛 앱 호환)")
+            List<Long> quoteIds,
             @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지 — NOTE 글만, 문서 전체를 덮어쓴다")
             Map<String, Object> document) {}
 
-    /** 기존 필드는 이름·순서 그대로, 새 필드는 뒤에. document 는 NOTE 만, clubId·clubName 은 모임 독후감만 채운다. */
+    /**
+     * 기존 필드는 이름·순서 그대로, 새 필드는 뒤에. document 는 NOTE 만, clubId·clubName 은 모임 독후감만 채운다.
+     * quotes 는 밑줄 기능을 걷어내 늘 빈 목록이다 — 옛 앱이 이 배열을 그대로 읽으므로 필드는 남긴다.
+     */
     public record PostView(@NotNull Long id, @NotNull String slug, @NotNull String title, @NotNull String bodyMd,
             @NotNull PostVisibility visibility, List<String> tags,
             Long bookId, String bookTitle, String bookCoverUrl,
@@ -70,7 +75,17 @@ public final class PostDtos {
     /** 업로드 응답과 PostView.images 항목이 같이 쓴다. */
     public record PostImageView(@NotNull Long id, @NotNull String url, Integer width, Integer height) {}
 
-    /** 좋아요 토글 결과 — BookLikeView·QuoteAgreeView 미러. */
+    /**
+     * 옛 밑줄 항목 — PostView.quotes 의 원소 스키마로만 남는다(늘 빈 목록). 밑줄 기능은 걷어냈다.
+     * 스키마 이름(BookQuoteView)과 모양은 옛 앱의 생성 타입과 맞추려고 그대로 둔다.
+     */
+    public record BookQuoteView(@NotNull Long id, @NotNull Long bookId, @NotNull String bookTitle,
+            String bookCoverUrl, Integer page, @NotNull String content,
+            @NotNull Long authorId, @NotNull String authorNickname, String authorAvatarUrl,
+            long agreeCount, boolean agreedByMe, boolean mine, long commentCount,
+            @NotNull Instant createdAt) {}
+
+    /** 좋아요 토글 결과 — BookLikeView 미러. */
     public record PostLikeView(boolean liked, long likeCount) {}
 
     /** 루트 댓글은 replies 에 답글(오래된 순), 답글 행은 replies = []. */
