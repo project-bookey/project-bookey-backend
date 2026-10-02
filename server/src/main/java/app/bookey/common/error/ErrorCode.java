@@ -95,13 +95,6 @@ public enum ErrorCode {
     EDITOR_PICK_NOT_FOUND(HttpStatus.NOT_FOUND, "에디터 픽을 찾을 수 없습니다."),
     EDITOR_PICK_DUPLICATE(HttpStatus.CONFLICT, "이미 추천 목록에 있는 책입니다."),
 
-    // 챌린지
-    CHALLENGE_NOT_FOUND(HttpStatus.NOT_FOUND, "챌린지를 찾을 수 없습니다."),
-    CHALLENGE_ALREADY_ACTIVE(HttpStatus.CONFLICT, "이 책에는 진행 중인 챌린지가 이미 있습니다."),
-    CHALLENGE_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "이미 종료된 챌린지입니다."),
-    CHALLENGE_REQUIRES_PAGES(HttpStatus.BAD_REQUEST, "총 쪽수가 있는 책에만 챌린지를 걸 수 있습니다."),
-    CHALLENGE_INVALID_RECORD(HttpStatus.BAD_REQUEST, "읽는 중인 책에만 챌린지를 걸 수 있습니다."),
-
     // 댓글
     COMMENT_REPLY_DEPTH(HttpStatus.BAD_REQUEST, "답글에는 답글을 달 수 없습니다."),
 
