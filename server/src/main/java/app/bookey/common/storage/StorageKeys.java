@@ -35,6 +35,11 @@ public final class StorageKeys {
                 + UUID.randomUUID() + "." + safeExtension(extension);
     }
 
+    /** clubs/{clubId}/background/{uuid}.{ext} — 클럽 머리 배경 사진. */
+    public static String forClubBackground(long clubId, String extension) {
+        return "clubs/" + clubId + "/background/" + UUID.randomUUID() + "." + safeExtension(extension);
+    }
+
     /** avatars/{userId}/{uuid}.{ext} — 프로필 사진. */
     public static String forAvatar(long userId, String extension) {
         return "avatars/" + userId + "/" + UUID.randomUUID() + "." + safeExtension(extension);

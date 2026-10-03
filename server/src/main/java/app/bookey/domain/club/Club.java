@@ -38,6 +38,14 @@ public class Club extends BaseTimeEntity {
     @Column(name = "cover_url")
     private String coverUrl;
 
+    /** 클럽 머리 배경 사진 — 호스트가 올린다. 없으면 종이 바탕. */
+    @Column(name = "background_url", columnDefinition = "text")
+    private String backgroundUrl;
+
+    /** 배경 사진의 저장소 키 — 바꾸거나 뺄 때 이전 파일을 지우려고 둔다. */
+    @Column(name = "background_key", length = 255)
+    private String backgroundKey;
+
     /** 6자 base32 초대 코드. 회전 가능(§8.5). */
     @Column(name = "join_code", nullable = false, unique = true, length = 6)
     private String joinCode;
@@ -88,6 +96,14 @@ public class Club extends BaseTimeEntity {
         this.startsAt = startsAt;
         this.allowNudge = allowNudge;
         this.status = ClubStatus.RECRUITING;
+    }
+
+    /** 배경 사진을 바꾸고(null 이면 뺀다) 이전 사진의 저장소 키를 돌려준다 — 호출자가 파일을 지운다. */
+    public String changeBackground(String url, String key) {
+        String previous = this.backgroundKey;
+        this.backgroundUrl = url;
+        this.backgroundKey = key;
+        return previous;
     }
 
     public void changeCurrentBook(Long clubBookId) {
