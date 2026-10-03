@@ -51,7 +51,7 @@ public class MeController {
         entity.updateDemographics(request.gender(), request.birthDate());
         entity.updatePreferredCategories(
                 request.preferredCategories() == null ? null : request.preferredCategories().toArray(String[]::new));
-        return AuthService.toMe(entity);
+        return authService.toMe(entity);
     }
 
     @Operation(summary = "프로필 사진 업로드 — 온보딩 필수 단계")

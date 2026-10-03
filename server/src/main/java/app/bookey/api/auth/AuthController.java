@@ -2,6 +2,7 @@ package app.bookey.api.auth;
 
 import app.bookey.api.auth.dto.AuthDtos.*;
 import app.bookey.common.security.AuthUser;
+import app.bookey.domain.user.AuthProvider;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -52,6 +53,12 @@ public class AuthController {
     @PostMapping("/social/link")
     public MeResponse linkSocial(@AuthenticationPrincipal AuthUser user, @Valid @RequestBody SocialLoginRequest request) {
         return authService.linkSocial(user.id(), request);
+    }
+
+    @Operation(summary = "소셜 계정 연동 해제 — 비밀번호 없는 계정의 마지막 연동은 해제할 수 없다")
+    @DeleteMapping("/social/link/{provider}")
+    public MeResponse unlinkSocial(@AuthenticationPrincipal AuthUser user, @PathVariable AuthProvider provider) {
+        return authService.unlinkSocial(user.id(), provider);
     }
 
     @Operation(summary = "액세스 토큰 재발급")

@@ -30,6 +30,8 @@ public enum ErrorCode {
     LEGAL_CONSENT_REQUIRED(HttpStatus.BAD_REQUEST, "이용약관과 개인정보 수집·이용에 동의해 주세요."),
     SOCIAL_SIGNUP_DISABLED(HttpStatus.FORBIDDEN, "소셜 계정으로는 가입할 수 없습니다. 이메일로 가입한 뒤 소셜 계정을 연동해 주세요."),
     SOCIAL_ACCOUNT_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 계정에 연결된 소셜 계정입니다."),
+    SOCIAL_ACCOUNT_NOT_LINKED(HttpStatus.NOT_FOUND, "연동되지 않은 소셜 계정입니다."),
+    LAST_LOGIN_METHOD(HttpStatus.CONFLICT, "마지막 로그인 수단이라 해제할 수 없습니다. 다른 소셜 계정을 먼저 연동해 주세요."),
     WRITE_BANNED(HttpStatus.FORBIDDEN, "글쓰기가 제한된 계정입니다."),
 
     // 소셜 — 팔로우 · 엽서 · 지갑 · 구독 (§14)

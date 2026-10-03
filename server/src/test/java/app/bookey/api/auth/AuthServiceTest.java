@@ -4,6 +4,7 @@ import app.bookey.api.auth.dto.AuthDtos.EmailCodeRequest;
 import app.bookey.api.auth.dto.AuthDtos.EmailCodeResponse;
 import app.bookey.api.auth.dto.AuthDtos.EmailLoginRequest;
 import app.bookey.api.auth.dto.AuthDtos.EmailSignupRequest;
+import app.bookey.api.auth.dto.AuthDtos.MeResponse;
 import app.bookey.api.auth.dto.AuthDtos.SocialLoginRequest;
 import app.bookey.api.auth.dto.AuthDtos.TokenResponse;
 import app.bookey.common.config.BookeyProperties;
@@ -597,5 +598,66 @@ class AuthServiceTest {
         verify(identityRepository).deleteAllByUserId(42L);
         verify(deviceRepository).deleteAllByUserId(42L);
         verify(refreshTokenRepository).revokeAllByUserId(org.mockito.ArgumentMatchers.eq(42L), any(Instant.class));
+    }
+
+    // ───────────── 소셜 연동 상태 · 해제 ─────────────
+
+    @Test
+    @DisplayName("내 정보 — 연동된 소셜 provider 를 중복 없이 enum 순서로, 비밀번호 유무와 함께 내려준다")
+    void meIncludesLinkedProvidersAndPasswordFlag() {
+        User user = user(5L, "me@dev.local", "password1234");
+        when(userRepository.findById(5L)).thenReturn(Optional.of(user));
+        when(identityRepository.findAllByUserId(5L)).thenReturn(List.of(
+                new UserIdentity(5L, AuthProvider.KAKAO, "kakao-5"),
+                new UserIdentity(5L, AuthProvider.APPLE, "apple-5"),
+                new UserIdentity(5L, AuthProvider.KAKAO, "kakao-5b")));
+
+        MeResponse me = service(List.of()).me(5L);
+
+        assertThat(me.linkedProviders()).containsExactly(AuthProvider.APPLE, AuthProvider.KAKAO);
+        assertThat(me.hasPassword()).isTrue();
+    }
+
+    @Test
+    @DisplayName("연동 해제 — 그 provider 의 연동만 지우고 남은 연동을 돌려준다")
+    void unlinkSocialRemovesOnlyThatProvider() {
+        User user = user(6L, "social@dev.local", null);
+        UserIdentity kakao = new UserIdentity(6L, AuthProvider.KAKAO, "kakao-6");
+        UserIdentity google = new UserIdentity(6L, AuthProvider.GOOGLE, "google-6");
+        when(userRepository.findById(6L)).thenReturn(Optional.of(user));
+        when(identityRepository.findAllByUserId(6L)).thenReturn(List.of(kakao, google));
+
+        MeResponse me = service(List.of()).unlinkSocial(6L, AuthProvider.KAKAO);
+
+        verify(identityRepository).deleteAll(List.of(kakao));
+        assertThat(me.linkedProviders()).containsExactly(AuthProvider.GOOGLE);
+        assertThat(me.hasPassword()).isFalse();
+    }
+
+    @Test
+    @DisplayName("연동 해제 — 연동되지 않은 provider 면 SOCIAL_ACCOUNT_NOT_LINKED, 아무것도 지우지 않는다")
+    void unlinkSocialNotLinked() {
+        when(userRepository.findById(7L)).thenReturn(Optional.of(user(7L, "u7@dev.local", "password1234")));
+        when(identityRepository.findAllByUserId(7L))
+                .thenReturn(List.of(new UserIdentity(7L, AuthProvider.GOOGLE, "google-7")));
+
+        assertApiError(() -> service(List.of()).unlinkSocial(7L, AuthProvider.APPLE), ErrorCode.SOCIAL_ACCOUNT_NOT_LINKED);
+        verify(identityRepository, never()).deleteAll(any());
+    }
+
+    @Test
+    @DisplayName("연동 해제 — 비밀번호 없는 계정의 마지막 연동은 LAST_LOGIN_METHOD, 비밀번호가 있으면 해제된다")
+    void unlinkSocialLastLoginMethod() {
+        UserIdentity onlyKakao = new UserIdentity(8L, AuthProvider.KAKAO, "kakao-8");
+        when(identityRepository.findAllByUserId(8L)).thenReturn(List.of(onlyKakao));
+
+        when(userRepository.findById(8L)).thenReturn(Optional.of(user(8L, null, null)));
+        assertApiError(() -> service(List.of()).unlinkSocial(8L, AuthProvider.KAKAO), ErrorCode.LAST_LOGIN_METHOD);
+        verify(identityRepository, never()).deleteAll(any());
+
+        when(userRepository.findById(8L)).thenReturn(Optional.of(user(8L, "u8@dev.local", "password1234")));
+        MeResponse me = service(List.of()).unlinkSocial(8L, AuthProvider.KAKAO);
+        verify(identityRepository).deleteAll(List.of(onlyKakao));
+        assertThat(me.linkedProviders()).isEmpty();
     }
 }

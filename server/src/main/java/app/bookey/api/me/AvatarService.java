@@ -36,6 +36,7 @@ public class AvatarService {
     private static final int SNIFF_BYTES = 64 * 1024;
 
     private final UserRepository userRepository;
+    private final AuthService authService;
     private final StorageService storage;
     private final RateLimiter rateLimiter;
     private final BookeyProperties properties;
@@ -70,7 +71,7 @@ public class AvatarService {
             throw ApiException.of(ErrorCode.STORAGE_ERROR);
         }
         user.updateProfile(null, url);
-        return AuthService.toMe(user);
+        return authService.toMe(user);
     }
 
     private static byte[] readHead(MultipartFile file) {
