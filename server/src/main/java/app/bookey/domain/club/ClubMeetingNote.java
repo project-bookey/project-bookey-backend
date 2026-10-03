@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -45,12 +46,30 @@ public class ClubMeetingNote extends BaseTimeEntity {
     @Column(name = "updated_by")
     private Long updatedBy;
 
+    /** 마무리한 시각 — 모임을 연 사람(또는 호스트)이 마무리하면 노트는 읽기만 된다. */
+    @Column(name = "closed_at")
+    private Instant closedAt;
+
+    @Column(name = "closed_by")
+    private Long closedBy;
+
     /** 문서를 갈아 끼우고 version 을 하나 올린다. 연산 적용·상한 검사는 호출 전에 끝났다. */
     public void replace(Map<String, Object> document, int elementCount, Long userId) {
         this.document = document;
         this.elementCount = elementCount;
         this.updatedBy = userId;
         this.version++;
+    }
+
+    public void close(Long userId, Instant at) {
+        if (this.closedAt == null) {
+            this.closedAt = at;
+            this.closedBy = userId;
+        }
+    }
+
+    public boolean isClosed() {
+        return closedAt != null;
     }
 
     public boolean belongsTo(Long clubId) {

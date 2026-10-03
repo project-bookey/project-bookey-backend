@@ -50,6 +50,14 @@ public class ClubMeetingNoteController {
         return noteService.applyOps(user.id(), clubId, meetingId, request.ops(), request.clientId());
     }
 
+    @Operation(summary = "모임 노트 마무리 — 모임을 연 사람(또는 호스트)만. 마무리하면 모두 읽기만 된다")
+    @PostMapping("/meetings/{meetingId}/note/close")
+    public MeetingNoteView closeMeetingNote(@AuthenticationPrincipal AuthUser user,
+                                            @PathVariable Long clubId,
+                                            @PathVariable Long meetingId) {
+        return noteService.close(user.id(), clubId, meetingId);
+    }
+
     @Operation(summary = "모임 노트 사진 올리기 — 응답 id 를 photo 요소의 imageId 로 넣어 보내야 24시간 뒤 정리되지 않는다")
     @PostMapping(value = "/meetings/{meetingId}/note/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public MeetingNoteImageView uploadMeetingNoteImage(@AuthenticationPrincipal AuthUser user,

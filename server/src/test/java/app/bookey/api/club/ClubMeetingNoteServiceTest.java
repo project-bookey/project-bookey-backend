@@ -270,4 +270,80 @@ class ClubMeetingNoteServiceTest {
         }
         return image;
     }
+
+    // ────────────────────────────── 마무리 ──────────────────────────────
+
+    /** 모임을 연 사람이 creatorId 인 열린 모임. */
+    private void givenMeetingCreatedBy(long creatorId) {
+        var meeting = meeting(CLUB_ID, true);
+        when(meeting.getCreatedBy()).thenReturn(creatorId);
+        when(meetingRepository.findById(MEETING_ID)).thenReturn(Optional.of(meeting));
+    }
+
+    @Test
+    @DisplayName("모임을 연 사람이 마무리하면 노트가 읽기만 되고, 커밋 뒤 방송할 마무리 이벤트를 낸다")
+    void creatorClosesNote() {
+        givenMeetingCreatedBy(ME);
+        ClubMeetingNote note = note(MeetingNoteOps.emptyDocument(), 3);
+        when(noteRepository.findByMeetingIdForUpdate(MEETING_ID)).thenReturn(Optional.of(note));
+
+        MeetingNoteView view = service.close(ME, CLUB_ID, MEETING_ID);
+
+        assertThat(note.isClosed()).isTrue();
+        assertThat(view.readOnly()).isTrue();
+        assertThat(view.closedAt()).isEqualTo(NOW);
+        assertThat(view.canClose()).isFalse();
+        verify(noteRepository).insertIfAbsent(CLUB_ID, MEETING_ID);
+        verify(events).publishEvent(new ClubMeetingNoteService.MeetingNoteClosed(CLUB_ID, MEETING_ID));
+    }
+
+    @Test
+    @DisplayName("모임을 연 사람이 아니어도 클럽 호스트는 마무리할 수 있다")
+    void hostClosesNote() {
+        givenMeetingCreatedBy(2L);
+        var hostClub = club(ClubStatus.ACTIVE);
+        when(hostClub.isHost(ME)).thenReturn(true);
+        when(clubService.getClub(CLUB_ID)).thenReturn(hostClub);
+        when(noteRepository.findByMeetingIdForUpdate(MEETING_ID)).thenReturn(Optional.of(note(MeetingNoteOps.emptyDocument(), 1)));
+
+        assertThat(service.close(ME, CLUB_ID, MEETING_ID).readOnly()).isTrue();
+    }
+
+    @Test
+    @DisplayName("모임을 연 사람도 호스트도 아니면 마무리할 수 없다 — FORBIDDEN")
+    void memberCannotClose() {
+        givenMeetingCreatedBy(2L);
+
+        assertCode(() -> service.close(ME, CLUB_ID, MEETING_ID), ErrorCode.FORBIDDEN);
+        verify(noteRepository, never()).insertIfAbsent(anyLong(), anyLong());
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("마무리한 노트는 읽기만 되고 마무리 버튼도 없다, 연산은 MEETING_NOTE_READ_ONLY 로 거절한다")
+    void closedNoteIsReadOnly() {
+        givenMeetingCreatedBy(ME);
+        ClubMeetingNote note = note(MeetingNoteOps.emptyDocument(), 2);
+        note.close(ME, NOW);
+        when(noteRepository.findByMeetingId(MEETING_ID)).thenReturn(Optional.of(note));
+        when(noteRepository.findByMeetingIdForUpdate(MEETING_ID)).thenReturn(Optional.of(note));
+
+        MeetingNoteView view = service.get(ME, CLUB_ID, MEETING_ID);
+        assertThat(view.readOnly()).isTrue();
+        assertThat(view.canClose()).isFalse();
+
+        assertCode(() -> service.applyOps(ME, CLUB_ID, MEETING_ID, ops("a"), null), ErrorCode.MEETING_NOTE_READ_ONLY);
+        verify(events, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("아직 쓸 수 있는 노트는 모임을 연 사람에게만 마무리 버튼을 연다")
+    void canCloseOnlyForCreator() {
+        when(noteRepository.findByMeetingId(MEETING_ID)).thenReturn(Optional.empty());
+        givenMeetingCreatedBy(ME);
+        assertThat(service.get(ME, CLUB_ID, MEETING_ID).canClose()).isTrue();
+
+        givenMeetingCreatedBy(2L);
+        assertThat(service.get(ME, CLUB_ID, MEETING_ID).canClose()).isFalse();
+    }
 }
