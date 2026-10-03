@@ -80,6 +80,12 @@ public class MeetingNoteRelay implements MessageListener {
         broadcast(event.meetingId(), null, message);
     }
 
+    /** 노트를 마무리했다 — 커밋된 뒤 보고 있는 모든 연결에 읽기 전용으로 바뀌었다고 알린다. */
+    @TransactionalEventListener(fallbackExecution = true)
+    public void onClosed(ClubMeetingNoteService.MeetingNoteClosed event) {
+        broadcast(event.meetingId(), null, Map.of("type", "closed"));
+    }
+
     /** Redis 에서 받은 방송 — 이 서버에 붙은 연결에 전달한다. */
     @Override
     @SuppressWarnings("unchecked")

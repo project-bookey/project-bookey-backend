@@ -39,7 +39,8 @@ import java.util.regex.Pattern;
  *   <li>{@code presence {x?, y?, tool?}} — 커서·도구. 저장하지 않고 다른 연결에만 전달한다. 앱은 몇 초마다 다시 보내 살아 있음을 알린다.</li>
  *   <li>{@code ping} — {@code pong} 으로 답한다(중간 프록시가 쉬는 연결을 끊지 않도록).</li>
  * </ul>
- * 보내는 메시지: {@code ready {version, readOnly, peer, me}}, {@code ops}, {@code ack}, {@code presence}, {@code leave}, {@code error {seq?, code, message}}.
+ * 보내는 메시지: {@code ready {version, readOnly, peer, me}}, {@code ops}, {@code ack}, {@code presence}, {@code leave},
+ * {@code closed}(노트를 마무리해 읽기만 된다), {@code error {seq?, code, message}}.
  */
 @Slf4j
 @Component

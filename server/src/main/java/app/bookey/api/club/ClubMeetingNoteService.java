@@ -63,6 +63,10 @@ public class ClubMeetingNoteService {
     private final ApplicationEventPublisher events;
     private final Clock clock;
 
+    /** 노트를 마무리했다 — 커밋된 뒤 같은 노트를 보는 연결에 읽기 전용으로 바뀌었다고 알린다. */
+    public record MeetingNoteClosed(Long clubId, Long meetingId) {
+    }
+
     /** 연산이 커밋된 뒤 방송할 내용. ops 는 검증·정규화한 연산({t, el} / {t, id}) 이다. */
     public record MeetingNoteChanged(Long clubId, Long meetingId, int version, List<Map<String, Object>> ops,
                                      MeetingAttendeeView by, String clientId) {
@@ -80,11 +84,16 @@ public class ClubMeetingNoteService {
         clubService.activeMember(clubId, userId);
         Club club = clubService.getClub(clubId);
         ClubMeeting meeting = findMeeting(clubId, meetingId);
-        boolean readOnly = isReadOnly(club, meeting);
+        boolean mayClose = canClose(club, meeting, userId);
         return noteRepository.findByMeetingId(meetingId)
-                .map(note -> toView(note, meeting, contributorsOf(List.of(note.getId())).getOrDefault(note.getId(), List.of()), readOnly))
-                .orElseGet(() -> new MeetingNoteView(null, clubId, meetingId, meeting.getTitle(), meeting.getStartsAt(),
-                        MeetingNoteOps.emptyDocument(), 0, 0, List.of(), null, readOnly));
+                .map(note -> toView(note, meeting,
+                        contributorsOf(List.of(note.getId())).getOrDefault(note.getId(), List.of()),
+                        isReadOnly(club, meeting, note), mayClose))
+                .orElseGet(() -> {
+                    boolean readOnly = isReadOnly(club, meeting, null);
+                    return new MeetingNoteView(null, clubId, meetingId, meeting.getTitle(), meeting.getStartsAt(),
+                            MeetingNoteOps.emptyDocument(), 0, 0, List.of(), null, readOnly, null, mayClose && !readOnly);
+                });
     }
 
     /** 클럽 피드 — 빈 노트는 빼고 최근에 고친 순. 썸네일을 그리도록 문서를 함께 준다. */
@@ -101,7 +110,8 @@ public class ClubMeetingNoteService {
         Map<Long, List<MeetingAttendeeView>> contributors = contributorsOf(noteIds);
         return PageResponse.of(notes, note -> {
             ClubMeeting meeting = meetings.get(note.getMeetingId());
-            return toView(note, meeting, contributors.getOrDefault(note.getId(), List.of()), isReadOnly(club, meeting));
+            return toView(note, meeting, contributors.getOrDefault(note.getId(), List.of()),
+                    isReadOnly(club, meeting, note), canClose(club, meeting, userId));
         });
     }
 
@@ -111,8 +121,8 @@ public class ClubMeetingNoteService {
         clubService.activeMember(clubId, userId);
         Club club = clubService.getClub(clubId);
         ClubMeeting meeting = findMeeting(clubId, meetingId);
-        int version = noteRepository.findVersionByMeetingId(meetingId).orElse(0);
-        return new MeetingNoteAccess(personOf(userId), isReadOnly(club, meeting), version);
+        ClubMeetingNote note = noteRepository.findByMeetingId(meetingId).orElse(null);
+        return new MeetingNoteAccess(personOf(userId), isReadOnly(club, meeting, note), note == null ? 0 : note.getVersion());
     }
 
     // ────────────────────────────── 쓰기 ──────────────────────────────
@@ -135,6 +145,10 @@ public class ClubMeetingNoteService {
         noteRepository.insertIfAbsent(clubId, meetingId);
         ClubMeetingNote note = noteRepository.findByMeetingIdForUpdate(meetingId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_MEETING_NOT_FOUND));
+        // 행을 잠근 뒤 다시 본다 — 마무리와 동시에 들어온 연산이 마무리 뒤에 끼어들지 않게.
+        if (note.isClosed()) {
+            throw ApiException.of(ErrorCode.MEETING_NOTE_READ_ONLY);
+        }
         Map<String, Object> next = MeetingNoteOps.apply(note.getDocument(), ops);
         requireDocumentSize(next);
         note.replace(next, MeetingNoteOps.elementCount(next), userId);
@@ -154,7 +168,7 @@ public class ClubMeetingNoteService {
     public MeetingNoteImageView uploadImage(Long userId, Long clubId, Long meetingId, MultipartFile file) {
         clubService.activeMember(clubId, userId);
         Club club = clubService.getClub(clubId);
-        if (isReadOnly(club, findMeeting(clubId, meetingId))) {
+        if (isReadOnly(club, findMeeting(clubId, meetingId), noteRepository.findByMeetingId(meetingId).orElse(null))) {
             throw ApiException.of(ErrorCode.MEETING_NOTE_READ_ONLY);
         }
         if (!storage.enabled()) {
@@ -200,6 +214,34 @@ public class ClubMeetingNoteService {
             throw e;
         }
         return new MeetingNoteImageView(image.getId(), image.getUrl(), image.getWidth(), image.getHeight());
+    }
+
+    /**
+     * 노트 마무리 — 모임을 연 사람(그 사람이 클럽을 떠났을 수 있어 호스트도)만. 마무리하면 모두 읽기만 되고,
+     * 커밋된 뒤 같은 노트를 보는 연결에 알린다. 이미 마무리한 노트면 그대로 돌려준다.
+     * 앱은 남은 편집을 다 보낸 뒤 부른다 — 마무리 뒤에 닿은 연산은 읽기 전용으로 거절된다.
+     */
+    @Transactional
+    public MeetingNoteView close(Long userId, Long clubId, Long meetingId) {
+        clubService.activeMember(clubId, userId);
+        Club club = clubService.getClub(clubId);
+        ClubMeeting meeting = findMeeting(clubId, meetingId);
+        if (!canClose(club, meeting, userId)) {
+            throw new ApiException(ErrorCode.FORBIDDEN, "노트는 모임을 연 사람만 마무리할 수 있어요.");
+        }
+        if (isReadOnly(club, meeting)) {
+            throw ApiException.of(ErrorCode.MEETING_NOTE_READ_ONLY);
+        }
+        noteRepository.insertIfAbsent(clubId, meetingId);
+        ClubMeetingNote note = noteRepository.findByMeetingIdForUpdate(meetingId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_MEETING_NOT_FOUND));
+        if (!note.isClosed()) {
+            note.close(userId, clock.instant());
+            noteRepository.saveAndFlush(note);
+            events.publishEvent(new MeetingNoteClosed(clubId, meetingId));
+        }
+        return toView(note, meeting, contributorsOf(List.of(note.getId())).getOrDefault(note.getId(), List.of()),
+                true, true);
     }
 
     // ────────────────────────────── 문서 ──────────────────────────────
@@ -260,11 +302,23 @@ public class ClubMeetingNoteService {
         return club.getStatus().isOver() || meeting == null || !meeting.isOpen();
     }
 
+    /** 위에 더해 마무리한 노트도 읽기만 된다. 아직 행이 없는 노트(note null)는 마무리 전이다. */
+    static boolean isReadOnly(Club club, ClubMeeting meeting, ClubMeetingNote note) {
+        return isReadOnly(club, meeting) || (note != null && note.isClosed());
+    }
+
+    /** 마무리할 수 있는 사람 — 모임을 연 사람, 그리고 그 사람이 떠났을 때를 위해 클럽 호스트. */
+    static boolean canClose(Club club, ClubMeeting meeting, Long userId) {
+        return meeting != null && (userId.equals(meeting.getCreatedBy()) || club.isHost(userId));
+    }
+
+    /** readOnly 와 '마무리할 수 있는 사람'을 받아 보기 값을 만든다 — 이미 읽기만 되는 노트는 마무리할 것이 없다. */
     private MeetingNoteView toView(ClubMeetingNote note, ClubMeeting meeting, List<MeetingAttendeeView> contributors,
-                                   boolean readOnly) {
+                                   boolean readOnly, boolean mayClose) {
         return new MeetingNoteView(note.getId(), note.getClubId(), note.getMeetingId(),
                 meeting == null ? null : meeting.getTitle(), meeting == null ? null : meeting.getStartsAt(),
-                note.getDocument(), note.getVersion(), note.getElementCount(), contributors, note.getUpdatedAt(), readOnly);
+                note.getDocument(), note.getVersion(), note.getElementCount(), contributors, note.getUpdatedAt(), readOnly,
+                note.getClosedAt(), mayClose && !readOnly);
     }
 
     private Map<Long, List<MeetingAttendeeView>> contributorsOf(Collection<Long> noteIds) {
