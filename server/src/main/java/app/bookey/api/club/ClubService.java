@@ -237,7 +237,7 @@ public class ClubService {
                 host == null ? null : host.getNickname(),
                 club.getMemberCount(), club.getMemberLimit(),
                 club.getStartsAt(), club.getEndsAt(), club.getStatus(),
-                alreadyMember, blockedReason == null && !alreadyMember, blockedReason);
+                alreadyMember, blockedReason == null && !alreadyMember, blockedReason, club.getBackgroundUrl());
     }
 
     @Transactional
@@ -375,6 +375,14 @@ public class ClubService {
         return home(userId, clubId);
     }
 
+    /** 배경 사진 바꾸기(url·key 가 null 이면 빼기) — 호스트만. 이전 사진의 저장소 키를 돌려준다(지우는 건 호출자). */
+    @Transactional
+    public String changeBackground(Long userId, Long clubId, String url, String key) {
+        Club club = getClub(clubId);
+        requireHost(club, userId);
+        return club.changeBackground(url, key);
+    }
+
     @Transactional
     public String rotateJoinCode(Long userId, Long clubId) {
         Club club = getClub(clubId);
@@ -478,7 +486,8 @@ public class ClubService {
                 club.getMemberCount(), club.getMemberLimit(),
                 me.getRole(), me.isShareProgress(), me.isAllowNudge(),
                 myRank, averageCompletion(members, records, book),
-                memberViews, List.of(), null, seatPolicy(), club.isAllowNudge(), nextMeetingAt(clubId));
+                memberViews, List.of(), null, seatPolicy(), club.isAllowNudge(), nextMeetingAt(clubId),
+                club.getBackgroundUrl());
     }
 
     private ClubSeatPolicy seatPolicy() {

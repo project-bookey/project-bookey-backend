@@ -12,6 +12,9 @@ public final class ClubDtos {
 
     private ClubDtos() {}
 
+    /** 클럽 한 줄 소개 — 머리에 두 줄 안으로 들어가게 짧게만 쓴다. */
+    public static final int DESCRIPTION_MAX = 50;
+
     // ── 생성 · 수정 ───────────────────────────────────────────
     /**
      * 모임은 기간 없이 이어지고 책은 만남마다 고른다. startsAt · endsAt · autoCheckpoints · checkpoints 는
@@ -19,7 +22,7 @@ public final class ClubDtos {
      */
     public record CreateClubRequest(
             @NotBlank @Size(max = 60) String name,
-            @Size(max = 1000) String description,
+            @Size(max = DESCRIPTION_MAX) String description,
             /** 처음 읽을 책(선택) — 주면 지금 읽는 책으로 바로 잡는다. 보통은 첫 만남을 열며 고른다. */
             Long bookId,
             @Deprecated LocalDate startsAt,
@@ -40,7 +43,7 @@ public final class ClubDtos {
 
     public record UpdateClubRequest(
             @Size(max = 60) String name,
-            @Size(max = 1000) String description,
+            @Size(max = DESCRIPTION_MAX) String description,
             ClubVisibility visibility,
             /** 모임에 기간이 없어 무시한다. */
             @Deprecated LocalDate endsAt,
@@ -94,7 +97,9 @@ public final class ClubDtos {
             @NotNull ClubStatus status,
             boolean alreadyMember,
             boolean joinable,
-            String joinBlockedReason
+            String joinBlockedReason,
+            /** 클럽 머리 배경 사진 — 없으면 null. */
+            String backgroundUrl
     ) {}
 
     public record ClubSummaryView(
@@ -190,7 +195,9 @@ public final class ClubDtos {
             /** 모임 전체의 찌르기 허용 여부 — 호스트가 모임 설정에서 바꾼다(myAllowNudge 는 내 개인 설정). */
             boolean allowNudge,
             /** 다음 만남 시각 — 잡힌 만남이 없으면 null. */
-            Instant nextMeetingAt
+            Instant nextMeetingAt,
+            /** 클럽 머리 배경 사진 — 호스트가 올린다. 없으면 null. */
+            String backgroundUrl
     ) {}
 
     public record ClubResultView(

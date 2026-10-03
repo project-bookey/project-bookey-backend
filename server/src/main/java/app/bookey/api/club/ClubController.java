@@ -27,6 +27,7 @@ public class ClubController {
     private final ClubCommunityService communityService;
     private final ClubActivityService activityService;
     private final ClubPlaceService placeService;
+    private final ClubBackgroundService backgroundService;
 
     @Operation(summary = "모임 만들기 — 초대 코드 자동 발급")
     @PostMapping
@@ -102,6 +103,20 @@ public class ClubController {
                                       @PathVariable Long clubId,
                                       @Valid @RequestBody ExpandSeatsRequest request) {
         return seatService.expand(user.id(), clubId, request);
+    }
+
+    @Operation(summary = "클럽 배경 사진 올리기 (호스트) — 클럽 머리에 깔린다. 이전 사진은 지운다")
+    @PostMapping(value = "/{clubId}/background", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ClubHomeView uploadBackground(@AuthenticationPrincipal AuthUser user,
+                                         @PathVariable Long clubId,
+                                         @RequestPart("file") org.springframework.web.multipart.MultipartFile file) {
+        return backgroundService.upload(user.id(), clubId, file);
+    }
+
+    @Operation(summary = "클럽 배경 사진 빼기 (호스트) — 종이 바탕으로 돌아간다")
+    @DeleteMapping("/{clubId}/background")
+    public ClubHomeView removeBackground(@AuthenticationPrincipal AuthUser user, @PathVariable Long clubId) {
+        return backgroundService.remove(user.id(), clubId);
     }
 
     @Operation(summary = "초대 코드 회전 (호스트) — 유출 시 즉시 무효화")
