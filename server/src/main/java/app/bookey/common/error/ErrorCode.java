@@ -79,6 +79,7 @@ public enum ErrorCode {
     CLUB_HOST_CANNOT_LEAVE(HttpStatus.CONFLICT, "호스트는 권한을 넘긴 뒤 나갈 수 있습니다."),
     CLUB_CHAT_LOCKED(HttpStatus.PAYMENT_REQUIRED, "책갈피 2개로 모임 채팅을 먼저 열어 주세요."),
     CLUB_MEETING_NOT_FOUND(HttpStatus.NOT_FOUND, "약속을 찾을 수 없습니다."),
+    MEETING_FULL(HttpStatus.CONFLICT, "모임 정원이 찼어요."),
     MEETING_NOTE_READ_ONLY(HttpStatus.CONFLICT, "마무리했거나 끝난 모임의 노트라 고칠 수 없습니다."),
     MEETING_NOTE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "모임 노트가 너무 커서 더 붙일 수 없습니다."),
     NUDGE_COOLDOWN(HttpStatus.TOO_MANY_REQUESTS, "이미 찔렀어요. 24시간 뒤에 다시 보낼 수 있습니다."),
