@@ -1,5 +1,6 @@
 package app.bookey.api.auth;
 
+import app.bookey.domain.user.EmailCodePurpose;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -20,7 +21,7 @@ import java.time.Duration;
 public class LoggingEmailCodeSender implements EmailCodeSender {
 
     @Override
-    public void send(String email, String code, Duration ttl) {
-        log.info("[이메일 인증] {} 에게 인증 코드 발송: {} (유효 {}분)", email, code, ttl.toMinutes());
+    public void send(String email, String code, Duration ttl, EmailCodePurpose purpose) {
+        log.info("[이메일 인증·{}] {} 에게 인증 코드 발송: {} (유효 {}분)", purpose, email, code, ttl.toMinutes());
     }
 }

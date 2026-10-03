@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
-/** 가입 이메일 인증 코드. 코드 원문은 저장하지 않고 SHA-256 해시만 보관한다. */
+/** 이메일 인증 코드(가입·비밀번호 재설정). 코드 원문은 저장하지 않고 SHA-256 해시만 보관한다. */
 @Getter
 @Entity
 @Table(name = "email_verifications")
@@ -22,6 +22,10 @@ public class EmailVerification extends BaseTimeEntity {
     @Column(nullable = false, length = 255)
     private String email;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private EmailCodePurpose purpose;
+
     @Column(name = "code_hash", nullable = false, length = 64)
     private String codeHash;
 
@@ -34,8 +38,9 @@ public class EmailVerification extends BaseTimeEntity {
     @Column(name = "attempt_count", nullable = false)
     private short attemptCount;
 
-    public EmailVerification(String email, String codeHash, Instant expiresAt) {
+    public EmailVerification(String email, EmailCodePurpose purpose, String codeHash, Instant expiresAt) {
         this.email = email;
+        this.purpose = purpose;
         this.codeHash = codeHash;
         this.expiresAt = expiresAt;
     }

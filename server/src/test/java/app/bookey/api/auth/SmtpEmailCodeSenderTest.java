@@ -1,6 +1,7 @@
 package app.bookey.api.auth;
 
 import app.bookey.common.config.BookeyProperties;
+import app.bookey.domain.user.EmailCodePurpose;
 import jakarta.mail.Message;
 import jakarta.mail.Multipart;
 import jakarta.mail.Part;
@@ -33,7 +34,7 @@ class SmtpEmailCodeSenderTest {
                 new BookeyProperties.Mail(true, "no-reply@bookey.app", "Bookey", "[Bookey]"));
 
         new SmtpEmailCodeSender(mailSender, properties)
-                .send("reader@example.com", "123456", Duration.ofMinutes(10));
+                .send("reader@example.com", "123456", Duration.ofMinutes(10), EmailCodePurpose.SIGNUP);
 
         ArgumentCaptor<MimeMessage> sent = ArgumentCaptor.forClass(MimeMessage.class);
         verify(mailSender).send(sent.capture());
@@ -48,6 +49,27 @@ class SmtpEmailCodeSenderTest {
                 .contains("#faf8f4")
                 .contains("#177a54")
                 .contains("#ddf2e7");
+    }
+
+    @Test
+    @DisplayName("SMTP 발송기 — 비밀번호 재설정 코드는 재설정 제목·안내로 보낸다")
+    void sendsPasswordResetCodeEmail() throws Exception {
+        MimeMessage message = new JavaMailSenderImpl().createMimeMessage();
+        when(mailSender.createMimeMessage()).thenReturn(message);
+        BookeyProperties properties = new BookeyProperties(
+                null, null, null, null, null, null, null, null, null,
+                new BookeyProperties.Mail(true, "no-reply@bookey.app", "Bookey", "[Bookey]"));
+
+        new SmtpEmailCodeSender(mailSender, properties)
+                .send("reader@example.com", "654321", Duration.ofMinutes(10), EmailCodePurpose.PASSWORD_RESET);
+
+        ArgumentCaptor<MimeMessage> sent = ArgumentCaptor.forClass(MimeMessage.class);
+        verify(mailSender).send(sent.capture());
+        assertThat(sent.getValue().getSubject()).isEqualTo("[Bookey] 비밀번호 재설정 코드");
+        assertThat(contentOf(sent.getValue()))
+                .contains("654321")
+                .contains("새 비밀번호")
+                .doesNotContain("가입을 완료");
     }
 
     private static String contentOf(Part part) throws IOException, jakarta.mail.MessagingException {
