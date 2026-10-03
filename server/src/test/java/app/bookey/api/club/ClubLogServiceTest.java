@@ -56,7 +56,8 @@ class ClubLogServiceTest {
             new BookeyProperties.Storage("local", null, null, null,
                     new BookeyProperties.Storage.Image(10_485_760, 10)), null);
     private final ClubLogService service = new ClubLogService(clubService, postService, postRepository,
-            memberRepository, clubBookRepository, bookRepository, sessionRepository, mock(UserRepository.class), storage,
+            memberRepository, clubBookRepository, bookRepository, sessionRepository,
+            mock(app.bookey.domain.reading.ReadingRecordRepository.class), mock(UserRepository.class), storage,
             mock(RateLimiter.class), properties, Clock.fixed(NOW, ZoneOffset.UTC));
 
     private final ClubMember me = member(ME, MY_RECORD, true);
@@ -68,13 +69,12 @@ class ClubLogServiceTest {
 
     private Club club() {
         return Club.builder().ownerId(ME).name("월요일의 데미안").joinCode("ABC234").memberLimit((short) 3)
-                .startsAt(LocalDate.of(2026, 9, 1)).endsAt(LocalDate.of(2026, 9, 30)).allowNudge(true).build();
+                .startsAt(LocalDate.of(2026, 9, 1)).allowNudge(true).build();
     }
 
     private void givenActiveClub(Club club) {
         when(clubService.activeMember(CLUB_ID, ME)).thenReturn(me);
         when(clubService.getClub(CLUB_ID)).thenReturn(club);
-        when(clubBookRepository.findFirstByClubIdOrderBySeqAsc(CLUB_ID)).thenReturn(Optional.empty());
         when(postRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(postService.viewsFor(eq(me), any())).thenReturn(List.of(mock(ClubPostView.class)));
     }
@@ -222,7 +222,6 @@ class ClubLogServiceTest {
     void weekPicksVisibleHighlights() {
         when(clubService.activeMember(CLUB_ID, ME)).thenReturn(me);
         when(clubService.getClub(CLUB_ID)).thenReturn(club());
-        when(clubBookRepository.findFirstByClubIdOrderBySeqAsc(CLUB_ID)).thenReturn(Optional.empty());
         List<ClubPostView> views = new java.util.ArrayList<>(List.of(
                 view(1, false, null, 9, "2026-09-08T01:00:00Z"),          // 글만 · 반응 많음
                 view(2, true, "https://cdn/2.jpg", 20, "2026-09-08T02:00:00Z"), // 가려짐 → 제외

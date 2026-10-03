@@ -11,6 +11,8 @@ import app.bookey.common.storage.StorageService;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.book.BookRepository;
 import app.bookey.domain.club.*;
+import app.bookey.domain.reading.ReadingRecord;
+import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingSession;
 import app.bookey.domain.reading.ReadingSessionRepository;
 import app.bookey.domain.reading.SessionTotals;
@@ -56,6 +58,7 @@ public class ClubLogService {
     private final ClubBookRepository clubBookRepository;
     private final BookRepository bookRepository;
     private final ReadingSessionRepository sessionRepository;
+    private final ReadingRecordRepository recordRepository;
     private final UserRepository userRepository;
     private final StorageService storage;
     private final RateLimiter rateLimiter;
@@ -98,9 +101,8 @@ public class ClubLogService {
         rateLimiter.require("club:log:" + userId, LOG_DAILY_LIMIT, Duration.ofDays(1));
 
         ClubPost.LogImage image = hasImage ? storeImage(clubId, userId, file) : null;
-        Long clubBookId = clubBookRepository.findFirstByClubIdOrderBySeqAsc(clubId)
-                .map(ClubBook::getId)
-                .orElse(null);
+        // 조각은 지금 읽는 책에 붙는다 — 책이 바뀐 뒤에도 그 책의 쪽으로 가린다.
+        Long clubBookId = club.getCurrentClubBookId();
 
         ClubPost saved;
         try {
@@ -207,7 +209,8 @@ public class ClubLogService {
                 .map(ClubPostView::body)
                 .findFirst()
                 .orElse(null);
-        BookSummary book = clubBookRepository.findFirstByClubIdOrderBySeqAsc(clubId)
+        BookSummary book = Optional.ofNullable(club.getCurrentClubBookId())
+                .flatMap(clubBookRepository::findById)
                 .flatMap(cb -> bookRepository.findById(cb.getBookId()))
                 .map(BookSummary::from)
                 .orElse(null);
@@ -216,13 +219,23 @@ public class ClubLogService {
                 summarize(clubId, from, to, logs.size()), highlights, topQuote);
     }
 
-    /** 기간 합산 — 진척 공개 멤버의 끝난 세션(쪽·시간·읽은 사람) + 조각 수. */
+    /**
+     * 기간 합산 — 진척 공개 멤버의 끝난 세션(쪽·시간·읽은 사람) + 조각 수.
+     * 모임이 지금까지 읽은 책 모두의 기록을 본다 — 책이 바뀌기 전 날의 합산이 0 으로 떨어지지 않게.
+     */
     private ClubLogSummary summarize(Long clubId, Instant from, Instant to, int logCount) {
-        List<Long> recordIds = memberRepository.findAllByClubIdAndStatus(clubId, ClubMemberStatus.ACTIVE).stream()
+        List<Long> userIds = memberRepository.findAllByClubIdAndStatus(clubId, ClubMemberStatus.ACTIVE).stream()
                 .filter(ClubMember::isShareProgress)
-                .map(ClubMember::getReadingRecordId)
-                .filter(Objects::nonNull)
+                .map(ClubMember::getUserId)
                 .toList();
+        List<Long> bookIds = clubBookRepository.findAllByClubIdOrderBySeqAsc(clubId).stream()
+                .map(ClubBook::getBookId)
+                .toList();
+        List<Long> recordIds = userIds.isEmpty() || bookIds.isEmpty()
+                ? List.of()
+                : recordRepository.findAllByUserIdInAndBookIdIn(userIds, bookIds).stream()
+                        .map(ReadingRecord::getId)
+                        .toList();
         SessionTotals totals = recordIds.isEmpty()
                 ? SessionTotals.empty()
                 : sessionRepository.sumTotalsEndedBetween(recordIds, from, to);

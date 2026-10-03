@@ -20,7 +20,6 @@ class ClubTest {
                 .joinCode("ABC234")
                 .memberLimit((short) memberLimit)
                 .startsAt(LocalDate.of(2026, 9, 1))
-                .endsAt(LocalDate.of(2026, 9, 30))
                 .allowNudge(true)
                 .build();
     }

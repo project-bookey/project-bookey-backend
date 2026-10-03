@@ -1,6 +1,6 @@
 package app.bookey.batch;
 
-import app.bookey.api.club.ClubCheckpointService;
+import app.bookey.api.club.ClubService;
 import app.bookey.api.notification.NotificationService;
 import app.bookey.domain.club.*;
 import app.bookey.domain.notification.NotificationType;
@@ -13,11 +13,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
-import java.util.List;
 import java.util.Map;
 
-/** 모임 배치 — 체크포인트 마감 평가 · 임박 알림 · 기간 종료 처리 (§F12). */
+/**
+ * 모임 배치 — 지금 읽는 책 맞추기 · 주간 카드 알림 (§F12).
+ * 모임은 기간 없이 이어지므로 기간 종료 처리와 체크포인트 평가는 걷어냈다.
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -25,30 +26,30 @@ public class ClubScheduleJob {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
-    private final ClubCheckpointService checkpointService;
+    private final ClubService clubService;
     private final ClubRepository clubRepository;
     private final ClubMemberRepository memberRepository;
-    private final ClubEventRepository eventRepository;
     private final NotificationService notificationService;
     private final ClubPostRepository postRepository;
 
-    /** 매시 정각 — 마감된 체크포인트를 평가한다. */
-    @Scheduled(cron = "0 0 * * * *", zone = "Asia/Seoul")
-    public void evaluateCheckpoints() {
-        int count = checkpointService.evaluateDue(Instant.now());
-        if (count > 0) {
-            log.info("ClubScheduleJob: {} checkpoints evaluated", count);
+    /**
+     * 매일 자정 직후 — 만남 날이 지나면 다음 만남의 책으로 넘어가도록 모임마다 지금 읽는 책을 맞춘다.
+     * 만남을 열고 · 고치고 · 취소할 때도 바로 맞추므로, 여기서는 날짜가 넘어가는 경우만 잡으면 된다.
+     * 한 모임이 실패해도 나머지는 계속한다.
+     */
+    @Scheduled(cron = "0 5 0 * * *", zone = "Asia/Seoul")
+    public void syncCurrentBooks() {
+        int failed = 0;
+        for (Long clubId : clubRepository.findOngoingIds()) {
+            try {
+                clubService.syncCurrentBook(clubId);
+            } catch (RuntimeException e) {
+                failed++;
+                log.warn("ClubScheduleJob: 지금 읽는 책을 맞추지 못했습니다 clubId={}", clubId, e);
+            }
         }
-    }
-
-    /** 매일 저녁 — 24시간 뒤 마감인 체크포인트 미달자에게 임박 알림. */
-    @Scheduled(cron = "0 0 20 * * *", zone = "Asia/Seoul")
-    public void notifyUpcomingCheckpoints() {
-        Instant from = Instant.now();
-        Instant to = from.plus(24, ChronoUnit.HOURS);
-        int notified = checkpointService.notifyUpcoming(from, to);
-        if (notified > 0) {
-            log.info("ClubScheduleJob: {} checkpoint reminders scheduled", notified);
+        if (failed > 0) {
+            log.warn("ClubScheduleJob: {} clubs failed to sync current book", failed);
         }
     }
 
@@ -81,28 +82,6 @@ public class ClubScheduleJob {
         }
         if (notified > 0) {
             log.info("ClubScheduleJob: {} weekly log cards scheduled", notified);
-        }
-    }
-
-    /** 매일 새벽 — 기간이 끝난 모임을 종료하고 결산 알림을 보낸다. */
-    @Scheduled(cron = "0 10 3 * * *", zone = "Asia/Seoul")
-    @Transactional
-    public void closeExpiredClubs() {
-        List<Club> expired = clubRepository.findExpired(LocalDate.now(KST));
-        for (Club club : expired) {
-            club.end();
-            eventRepository.save(new ClubEvent(club.getId(), null, ClubEventType.ENDED, Map.of()));
-            for (ClubMember member :
-                    memberRepository.findAllByClubIdAndStatus(club.getId(), ClubMemberStatus.ACTIVE)) {
-                notificationService.schedule(new NotificationService.NotificationRequest(
-                        member.getUserId(), NotificationType.CLUB_ENDED, null, null, club.getId(),
-                        club.getName() + " 모임이 끝났어요",
-                        "결산 카드를 확인하고 다음 책으로 이어가 보세요",
-                        Map.of("clubId", club.getId()), null));
-            }
-        }
-        if (!expired.isEmpty()) {
-            log.info("ClubScheduleJob: {} clubs closed", expired.size());
         }
     }
 }

@@ -24,7 +24,10 @@ public class ClubMember {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
-    /** 개인 독서 기록과 연결 — 모임 진척은 개인 진척을 그대로 재사용한다(§12.2). */
+    /**
+     * 지금 읽는 책의 개인 독서 기록 — 모임 진척은 개인 진척을 그대로 재사용한다(§12.2).
+     * 모임의 지금 읽는 책이 바뀌면 그 책의 기록으로 다시 잇는다. 책을 고른 만남이 아직 없으면 null.
+     */
     @Column(name = "reading_record_id")
     private Long readingRecordId;
 

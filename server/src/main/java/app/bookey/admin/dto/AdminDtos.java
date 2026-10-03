@@ -169,7 +169,8 @@ public final class AdminDtos {
             int memberCount,
             int memberLimit,
             @NotNull LocalDate startsAt,
-            @NotNull LocalDate endsAt,
+            /** 기간이 있던 예전 모임만 값이 있다 — 이제 모임은 기간 없이 이어진다. */
+            LocalDate endsAt,
             @NotNull Long ownerId,
             String ownerNickname,
             long postCount,

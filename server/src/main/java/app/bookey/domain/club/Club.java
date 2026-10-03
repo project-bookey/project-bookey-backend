@@ -12,7 +12,10 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/** 독서 모임 (§F12). */
+/**
+ * 독서 모임 (§F12). 기간 없이 이어지고 책 한 권에 묶이지 않는다 — 책은 만남마다 고르고,
+ * 다가오는 만남의 책이 '지금 읽는 책'({@link #currentClubBookId})이 된다({@link ClubCurrentBook}).
+ */
 @Getter
 @Entity
 @Table(name = "clubs")
@@ -53,11 +56,17 @@ public class Club extends BaseTimeEntity {
     @Column(name = "member_count", nullable = false)
     private short memberCount;
 
+    /** 모임을 연 날. */
     @Column(name = "starts_at", nullable = false)
     private LocalDate startsAt;
 
-    @Column(name = "ends_at", nullable = false)
+    /** 기간이 있던 예전 모임만 값이 있다 — 이제 모임은 기간 없이 이어지고 호스트가 끝낼 때 끝난다. */
+    @Column(name = "ends_at")
     private LocalDate endsAt;
+
+    /** 지금 읽는 책 — club_books 한 줄. 책을 고른 만남이 아직 없으면 null. */
+    @Column(name = "current_club_book_id")
+    private Long currentClubBookId;
 
     @Column(name = "ended_at")
     private Instant endedAt;
@@ -67,8 +76,7 @@ public class Club extends BaseTimeEntity {
 
     @Builder
     private Club(Long ownerId, String name, String description, String coverUrl, String joinCode,
-                 ClubVisibility visibility, short memberLimit, LocalDate startsAt, LocalDate endsAt,
-                 boolean allowNudge) {
+                 ClubVisibility visibility, short memberLimit, LocalDate startsAt, boolean allowNudge) {
         this.ownerId = ownerId;
         this.name = name;
         this.description = description;
@@ -78,9 +86,12 @@ public class Club extends BaseTimeEntity {
         this.memberLimit = memberLimit;
         this.memberCount = 0;
         this.startsAt = startsAt;
-        this.endsAt = endsAt;
         this.allowNudge = allowNudge;
         this.status = ClubStatus.RECRUITING;
+    }
+
+    public void changeCurrentBook(Long clubBookId) {
+        this.currentClubBookId = clubBookId;
     }
 
     public void rotateJoinCode(String newCode) {
@@ -88,8 +99,7 @@ public class Club extends BaseTimeEntity {
     }
 
     /** 정원은 여기서 바꾸지 않는다 — 올리기는 책갈피 결제({@link #expandMemberLimit}), 내리기는 산 자리를 버리는 경로라 막는다. */
-    public void update(String name, String description, ClubVisibility visibility,
-                       LocalDate endsAt, Boolean allowNudge) {
+    public void update(String name, String description, ClubVisibility visibility, Boolean allowNudge) {
         if (name != null && !name.isBlank()) {
             this.name = name;
         }
@@ -98,12 +108,6 @@ public class Club extends BaseTimeEntity {
         }
         if (visibility != null) {
             this.visibility = visibility;
-        }
-        if (endsAt != null) {
-            if (endsAt.isBefore(this.startsAt)) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST, "종료일이 시작일보다 빠릅니다.");
-            }
-            this.endsAt = endsAt;
         }
         if (allowNudge != null) {
             this.allowNudge = allowNudge;
@@ -170,7 +174,8 @@ public class Club extends BaseTimeEntity {
         return memberCount >= memberLimit;
     }
 
+    /** 기간이 있던 예전 모임의 남은 날 — 기간 없는 모임은 0. 예전 앱이 읽는 daysLeft 를 채우려고만 남겨 둔다. */
     public long daysLeft(LocalDate today) {
-        return java.time.temporal.ChronoUnit.DAYS.between(today, endsAt);
+        return endsAt == null ? 0 : java.time.temporal.ChronoUnit.DAYS.between(today, endsAt);
     }
 }

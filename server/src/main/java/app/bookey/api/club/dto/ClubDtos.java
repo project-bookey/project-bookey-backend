@@ -13,19 +13,23 @@ public final class ClubDtos {
     private ClubDtos() {}
 
     // ── 생성 · 수정 ───────────────────────────────────────────
+    /**
+     * 모임은 기간 없이 이어지고 책은 만남마다 고른다. startsAt · endsAt · autoCheckpoints · checkpoints 는
+     * 예전 앱이 보내도 무시한다(다음 계약 정리 때 지운다).
+     */
     public record CreateClubRequest(
             @NotBlank @Size(max = 60) String name,
             @Size(max = 1000) String description,
-            @NotNull Long bookId,
-            @NotNull LocalDate startsAt,
-            @NotNull LocalDate endsAt,
+            /** 처음 읽을 책(선택) — 주면 지금 읽는 책으로 바로 잡는다. 보통은 첫 만남을 열며 고른다. */
+            Long bookId,
+            @Deprecated LocalDate startsAt,
+            @Deprecated LocalDate endsAt,
             ClubVisibility visibility,
             /** 무료 정원(bookey.club.free-member-limit) 이하만. 더 필요하면 만든 뒤 책갈피로 자리를 늘린다. */
             @Min(2) Integer memberLimit,
             Boolean allowNudge,
-            /** 주차별 체크포인트 자동 생성 (총 페이지를 주차 수로 균등 분배). */
-            Boolean autoCheckpoints,
-            List<CheckpointRequest> checkpoints
+            @Deprecated Boolean autoCheckpoints,
+            @Deprecated List<CheckpointRequest> checkpoints
     ) {}
 
     public record CheckpointRequest(
@@ -38,20 +42,22 @@ public final class ClubDtos {
             @Size(max = 60) String name,
             @Size(max = 1000) String description,
             ClubVisibility visibility,
-            LocalDate endsAt,
+            /** 모임에 기간이 없어 무시한다. */
+            @Deprecated LocalDate endsAt,
             Boolean allowNudge
     ) {}
 
     public record JoinRequest(
             @NotBlank @Size(max = 12) String code,
-            /** 모임 목표일을 내 개인 완독 목표일로 삼을지 (§12.1 참가 플로우 ②). */
-            Boolean adoptTargetDate,
+            /** 모임에 기간이 없어 무시한다. */
+            @Deprecated Boolean adoptTargetDate,
             /** 진척 공개 동의 (§12.1 ③). false 면 비공개로 참가. */
             Boolean shareProgress
     ) {}
 
     public record JoinPublicRequest(
-            Boolean adoptTargetDate,
+            /** 모임에 기간이 없어 무시한다. */
+            @Deprecated Boolean adoptTargetDate,
             /** 진척 공개 동의 (§12.1 ③). false 면 비공개로 참가. */
             Boolean shareProgress
     ) {}
@@ -83,7 +89,8 @@ public final class ClubDtos {
             int memberCount,
             int memberLimit,
             @NotNull LocalDate startsAt,
-            @NotNull LocalDate endsAt,
+            /** 기간이 있던 예전 모임만 값이 있다. */
+            LocalDate endsAt,
             @NotNull ClubStatus status,
             boolean alreadyMember,
             boolean joinable,
@@ -97,14 +104,17 @@ public final class ClubDtos {
             BookSummary book,
             @NotNull ClubStatus status,
             int memberCount,
-            long daysLeft,
+            /** 기간이 없어져 늘 0 이다 — 예전 앱 호환용으로만 남겨 둔다. 다음 모임은 nextMeetingAt. */
+            @Deprecated long daysLeft,
             Double myCompletionRate,
             Double averageCompletionRate,
             int unreadPostCount,
             /** 내 역할 — 목록에서 호스트에게만 관리 버튼을 보여주기 위해 내린다. */
             @NotNull ClubRole myRole,
             /** 함께 읽는 사람들 — 진척 높은 순. 목록 카드의 아바타 줄과 '지금 읽는 중' 표시용. */
-            @NotNull List<ClubMemberBrief> members
+            @NotNull List<ClubMemberBrief> members,
+            /** 다음 만남 시각 — 잡힌 만남이 없으면 null. */
+            Instant nextMeetingAt
     ) {}
 
     /** 목록용 멤버 요약 — 홈의 MemberProgressView 에서 카드에 필요한 만큼만 뽑았다. */
@@ -158,10 +168,13 @@ public final class ClubDtos {
             @NotNull String joinCode,  // 호스트/멤버에게만 노출
             @NotNull ClubVisibility visibility,
             @NotNull ClubStatus status,
+            /** 지금 읽는 책 — 다가오는 만남의 책. 책을 고른 만남이 아직 없으면 null. */
             BookSummary book,
             @NotNull LocalDate startsAt,
-            @NotNull LocalDate endsAt,
-            long daysLeft,
+            /** 기간이 있던 예전 모임만 값이 있다. */
+            LocalDate endsAt,
+            /** 기간이 없어져 늘 0 이다 — 예전 앱 호환용. */
+            @Deprecated long daysLeft,
             int memberCount,
             int memberLimit,
             @NotNull ClubRole myRole,
@@ -170,11 +183,14 @@ public final class ClubDtos {
             int myRank,
             Double averageCompletionRate,
             List<MemberProgressView> members,
-            List<CheckpointView> checkpoints,
-            CheckpointView nextCheckpoint,
+            /** 체크포인트는 걷어냈다 — 늘 빈 목록 · null. 예전 앱 호환용. */
+            @Deprecated List<CheckpointView> checkpoints,
+            @Deprecated CheckpointView nextCheckpoint,
             @NotNull ClubSeatPolicy seatPolicy,
             /** 모임 전체의 찌르기 허용 여부 — 호스트가 모임 설정에서 바꾼다(myAllowNudge 는 내 개인 설정). */
-            boolean allowNudge
+            boolean allowNudge,
+            /** 다음 만남 시각 — 잡힌 만남이 없으면 null. */
+            Instant nextMeetingAt
     ) {}
 
     public record ClubResultView(

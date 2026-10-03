@@ -85,16 +85,17 @@ public class ClubPostService {
         Map<Long, User> authors = loadAuthors(all);
         Set<Long> revealed = loadRevealed(userId, all);
         Map<Long, List<String>> myReactions = loadMyReactions(userId, all);
+        Function<ClubPost, ViewerState> viewerOf = viewerStates(me, posts);
 
-        return PageResponse.of(page, post -> toView(post, viewer, userId, authors, revealed,
+        return PageResponse.of(page, post -> toView(post, viewerOf.apply(post), userId, authors, revealed,
                 myReactions, commentsByParent.getOrDefault(post.getId(), List.of())));
     }
 
     @Transactional(readOnly = true)
     public ClubPostView detail(Long userId, Long clubId, Long postId) {
         ClubMember me = clubService.activeMember(clubId, userId);
-        ViewerState viewer = viewerState(me);
         ClubPost post = getPost(clubId, postId);
+        ViewerState viewer = viewerStates(me, List.of(post)).apply(post);
 
         List<ClubPost> comments =
                 postRepository.findAllByParentIdAndStatusOrderByCreatedAtAsc(postId, "VISIBLE");
@@ -112,7 +113,7 @@ public class ClubPostService {
         ClubPost post = getPost(clubId, postId);
 
         if (!revealRepository.existsByClubPostIdAndUserId(postId, userId)) {
-            ViewerState viewer = viewerState(me);
+            ViewerState viewer = viewerStates(me, List.of(post)).apply(post);
             revealRepository.save(new ClubPostReveal(postId, userId, viewer.currentPage()));
         }
         return detail(userId, clubId, postId);
@@ -146,9 +147,8 @@ public class ClubPostService {
             }
         }
 
-        Long clubBookId = clubBookRepository.findFirstByClubIdOrderBySeqAsc(clubId)
-                .map(ClubBook::getId)
-                .orElse(null);
+        // 글은 지금 읽는 책에 붙는다 — 책이 바뀐 뒤에도 그 책의 쪽으로 가린다.
+        Long clubBookId = club.getCurrentClubBookId();
 
         ClubPost post = postRepository.save(ClubPost.builder()
                 .clubId(clubId)
@@ -320,12 +320,12 @@ public class ClubPostService {
             return List.of();
         }
         Long userId = viewer.getUserId();
-        ViewerState state = viewerState(viewer);
+        Function<ClubPost, ViewerState> viewerOf = viewerStates(viewer, posts);
         Map<Long, User> authors = loadAuthors(posts);
         Set<Long> revealed = loadRevealed(userId, posts);
         Map<Long, List<String>> myReactions = loadMyReactions(userId, posts);
         return posts.stream()
-                .map(post -> toView(post, state, userId, authors, revealed, myReactions, List.of()))
+                .map(post -> toView(post, viewerOf.apply(post), userId, authors, revealed, myReactions, List.of()))
                 .toList();
     }
 
@@ -338,6 +338,41 @@ public class ClubPostService {
             throw ApiException.of(ErrorCode.NOT_FOUND);
         }
         return post;
+    }
+
+    /**
+     * 글마다 뷰어의 진도 — 글이 붙은 책(club_book)의 내 기록으로 가린다. 모임의 지금 읽는 책이 바뀌어도
+     * 지난 책의 조각은 그 책에서 내가 읽은 쪽으로 판정한다. 지금 책의 글과 책 없이 남긴 글은 멤버에 이어진 기록을 본다.
+     */
+    private Function<ClubPost, ViewerState> viewerStates(ClubMember me, Collection<ClubPost> posts) {
+        ViewerState current = viewerState(me);
+        Long currentClubBookId = clubService.getClub(me.getClubId()).getCurrentClubBookId();
+        Set<Long> otherClubBookIds = posts.stream()
+                .map(ClubPost::getClubBookId)
+                .filter(id -> id != null && !id.equals(currentClubBookId))
+                .collect(Collectors.toSet());
+        if (otherClubBookIds.isEmpty()) {
+            return post -> current;
+        }
+        Map<Long, ViewerState> byClubBook = new HashMap<>();
+        for (ClubBook clubBook : clubBookRepository.findAllById(otherClubBookIds)) {
+            ReadingRecord record = latestRecord(me.getUserId(), clubBook.getBookId());
+            byClubBook.put(clubBook.getId(), record == null
+                    ? new ViewerState(0, false)
+                    : new ViewerState(record.getCurrentPage(), record.getStatus() == ReadingStatus.FINISHED));
+        }
+        return post -> post.getClubBookId() == null
+                ? current
+                : byClubBook.getOrDefault(post.getClubBookId(), current);
+    }
+
+    /** 그 책의 내 기록 — 열린 회독이 있으면 그것, 없으면 가장 최근 회독. */
+    private ReadingRecord latestRecord(Long userId, Long bookId) {
+        List<ReadingRecord> records = recordRepository.findAllByUserIdAndBookIdOrderByRoundDesc(userId, bookId);
+        return records.stream()
+                .filter(r -> !r.getStatus().isClosed())
+                .findFirst()
+                .orElse(records.isEmpty() ? null : records.get(0));
     }
 
     private ViewerState viewerState(ClubMember member) {
