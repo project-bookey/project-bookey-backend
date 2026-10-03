@@ -5,6 +5,7 @@ import app.bookey.api.auth.dto.AuthDtos.EmailCodeResponse;
 import app.bookey.api.auth.dto.AuthDtos.EmailLoginRequest;
 import app.bookey.api.auth.dto.AuthDtos.EmailSignupRequest;
 import app.bookey.api.auth.dto.AuthDtos.MeResponse;
+import app.bookey.api.auth.dto.AuthDtos.PasswordResetRequest;
 import app.bookey.api.auth.dto.AuthDtos.SocialLoginRequest;
 import app.bookey.api.auth.dto.AuthDtos.TokenResponse;
 import app.bookey.common.config.BookeyProperties;
@@ -13,6 +14,7 @@ import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
 import app.bookey.domain.user.AuthProvider;
+import app.bookey.domain.user.EmailCodePurpose;
 import app.bookey.domain.user.EmailVerification;
 import app.bookey.domain.user.EmailVerificationRepository;
 import app.bookey.domain.user.RefreshToken;
@@ -148,7 +150,11 @@ class AuthServiceTest {
     }
 
     private EmailVerification verification(String email, String code, Instant expiresAt) {
-        return new EmailVerification(email, sha256(code), expiresAt);
+        return verification(email, EmailCodePurpose.SIGNUP, code, expiresAt);
+    }
+
+    private EmailVerification verification(String email, EmailCodePurpose purpose, String code, Instant expiresAt) {
+        return new EmailVerification(email, purpose, sha256(code), expiresAt);
     }
 
     private static void assertApiError(Runnable call, ErrorCode expected) {
@@ -272,7 +278,7 @@ class AuthServiceTest {
     @DisplayName("코드 발급 — 6자리 코드를 해시로 저장하고 발송한다. expose=true 면 응답에 devCode 가 동봉된다")
     void requestEmailCodeIssuesAndSends() {
         when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
-        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
                 .thenReturn(Optional.empty());
 
         EmailCodeResponse res = service(List.of())
@@ -285,7 +291,7 @@ class AuthServiceTest {
         verify(emailVerificationRepository).save(saved.capture());
         assertThat(saved.getValue().getEmail()).isEqualTo("new@dev.local");
         assertThat(saved.getValue().getCodeHash()).isEqualTo(sha256(res.devCode()));
-        verify(emailCodeSender).send("new@dev.local", res.devCode(), Duration.ofMinutes(10));
+        verify(emailCodeSender).send("new@dev.local", res.devCode(), Duration.ofMinutes(10), EmailCodePurpose.SIGNUP);
     }
 
     @Test
@@ -304,7 +310,7 @@ class AuthServiceTest {
         when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
         EmailVerification latest = verification("new@dev.local", "123456", Instant.now().plus(Duration.ofMinutes(10)));
         set(latest, "createdAt", Instant.now());
-        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
                 .thenReturn(Optional.of(latest));
 
         assertApiError(() -> service(List.of())
@@ -332,7 +338,7 @@ class AuthServiceTest {
         stubUserSave();
         EmailVerification verification = verification("new@dev.local", "123456",
                 Instant.now().plus(Duration.ofMinutes(10)));
-        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
                 .thenReturn(Optional.of(verification));
 
         TokenResponse res = service(List.of()).emailSignup(signupRequest("123456"));
@@ -354,7 +360,7 @@ class AuthServiceTest {
         when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
         EmailVerification verification = verification("new@dev.local", "123456",
                 Instant.now().plus(Duration.ofMinutes(10)));
-        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
                 .thenReturn(Optional.of(verification));
 
         assertApiError(() -> service(List.of()).emailSignup(signupRequest("999999")), ErrorCode.EMAIL_CODE_INVALID);
@@ -367,7 +373,7 @@ class AuthServiceTest {
     @DisplayName("가입 — 코드를 발급받은 적이 없으면 EMAIL_CODE_INVALID")
     void emailSignupWithoutIssuedCode() {
         when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
-        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
                 .thenReturn(Optional.empty());
 
         assertApiError(() -> service(List.of()).emailSignup(signupRequest("123456")), ErrorCode.EMAIL_CODE_INVALID);
@@ -382,7 +388,7 @@ class AuthServiceTest {
 
         // 만료
         EmailVerification expired = verification("new@dev.local", "123456", Instant.now().minusSeconds(1));
-        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
                 .thenReturn(Optional.of(expired));
         assertApiError(() -> service.emailSignup(signupRequest("123456")), ErrorCode.EMAIL_CODE_EXPIRED);
 
@@ -390,7 +396,7 @@ class AuthServiceTest {
         EmailVerification consumed = verification("new@dev.local", "123456",
                 Instant.now().plus(Duration.ofMinutes(10)));
         consumed.consume(Instant.now());
-        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
                 .thenReturn(Optional.of(consumed));
         assertApiError(() -> service.emailSignup(signupRequest("123456")), ErrorCode.EMAIL_CODE_EXPIRED);
 
@@ -400,7 +406,7 @@ class AuthServiceTest {
         for (int i = 0; i < 5; i++) {
             tried.recordFailedAttempt();
         }
-        when(emailVerificationRepository.findTopByEmailOrderByIdDesc("new@dev.local"))
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
                 .thenReturn(Optional.of(tried));
         assertApiError(() -> service.emailSignup(signupRequest("123456")), ErrorCode.EMAIL_CODE_EXPIRED);
 
@@ -413,7 +419,7 @@ class AuthServiceTest {
         when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(true);
 
         assertApiError(() -> service(List.of()).emailSignup(signupRequest("123456")), ErrorCode.EMAIL_ALREADY_EXISTS);
-        verify(emailVerificationRepository, never()).findTopByEmailOrderByIdDesc(any());
+        verify(emailVerificationRepository, never()).findTopByEmailAndPurposeOrderByIdDesc(any(), any());
     }
 
     // ───────────── 휴대폰 본인인증 가입 (IDENTITY 모드) ─────────────
@@ -439,7 +445,7 @@ class AuthServiceTest {
         assertThat(saved.getValue().getEmailVerifiedAt()).isNull();
         assertThat(saved.getValue().getTermsVersion()).isEqualTo(AuthService.TERMS_VERSION);
         assertThat(saved.getValue().getPrivacyVersion()).isEqualTo(AuthService.PRIVACY_VERSION);
-        verify(emailVerificationRepository, never()).findTopByEmailOrderByIdDesc(any());
+        verify(emailVerificationRepository, never()).findTopByEmailAndPurposeOrderByIdDesc(any(), any());
     }
 
     @Test
@@ -481,6 +487,136 @@ class AuthServiceTest {
                 true, "2025-01-01", true, AuthService.PRIVACY_VERSION);
         assertApiError(() -> service(List.of()).emailSignup(stale), ErrorCode.LEGAL_CONSENT_REQUIRED);
         verify(userRepository, never()).save(any());
+    }
+
+    // ───────────── 비밀번호 재설정 ─────────────
+
+    @Test
+    @DisplayName("재설정 코드 발급 — 가입된 이메일이면 PASSWORD_RESET 용도로 해시를 저장하고 그 용도로 발송한다")
+    void requestPasswordResetCodeIssuesAndSends() {
+        when(userRepository.findByEmailIgnoreCase("tester1@dev.local"))
+                .thenReturn(Optional.of(user(7L, "tester1@dev.local", "password1234")));
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(
+                "tester1@dev.local", EmailCodePurpose.PASSWORD_RESET)).thenReturn(Optional.empty());
+
+        EmailCodeResponse res = service(List.of())
+                .requestPasswordResetCode(new EmailCodeRequest("  Tester1@Dev.Local "));
+
+        assertThat(res.expiresInSec()).isEqualTo(600L);
+        assertThat(res.devCode()).hasSize(6).containsOnlyDigits();
+        ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
+        verify(emailVerificationRepository).save(saved.capture());
+        assertThat(saved.getValue().getEmail()).isEqualTo("tester1@dev.local");
+        assertThat(saved.getValue().getPurpose()).isEqualTo(EmailCodePurpose.PASSWORD_RESET);
+        assertThat(saved.getValue().getCodeHash()).isEqualTo(sha256(res.devCode()));
+        verify(emailCodeSender).send("tester1@dev.local", res.devCode(), Duration.ofMinutes(10),
+                EmailCodePurpose.PASSWORD_RESET);
+    }
+
+    @Test
+    @DisplayName("재설정 코드 발급 — 가입되지 않은 이메일은 EMAIL_NOT_REGISTERED, 정지 계정은 USER_SUSPENDED. 둘 다 발송하지 않는다")
+    void requestPasswordResetCodeGuards() {
+        when(userRepository.findByEmailIgnoreCase("nobody@dev.local")).thenReturn(Optional.empty());
+        User suspended = user(3L, "suspended@dev.local", "password1234");
+        suspended.changeStatus(UserStatus.SUSPENDED);
+        when(userRepository.findByEmailIgnoreCase("suspended@dev.local")).thenReturn(Optional.of(suspended));
+        AuthService service = service(List.of());
+
+        assertApiError(() -> service.requestPasswordResetCode(new EmailCodeRequest("nobody@dev.local")),
+                ErrorCode.EMAIL_NOT_REGISTERED);
+        assertApiError(() -> service.requestPasswordResetCode(new EmailCodeRequest("suspended@dev.local")),
+                ErrorCode.USER_SUSPENDED);
+        verify(emailVerificationRepository, never()).save(any());
+        verify(emailCodeSender, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("재설정 코드 발급 — 쿨다운(1분) 안의 재요청은 RATE_LIMITED")
+    void requestPasswordResetCodeWithinCooldown() {
+        when(userRepository.findByEmailIgnoreCase("tester1@dev.local"))
+                .thenReturn(Optional.of(user(7L, "tester1@dev.local", "password1234")));
+        EmailVerification latest = verification("tester1@dev.local", EmailCodePurpose.PASSWORD_RESET, "123456",
+                Instant.now().plus(Duration.ofMinutes(10)));
+        set(latest, "createdAt", Instant.now());
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(
+                "tester1@dev.local", EmailCodePurpose.PASSWORD_RESET)).thenReturn(Optional.of(latest));
+
+        assertApiError(() -> service(List.of())
+                .requestPasswordResetCode(new EmailCodeRequest("tester1@dev.local")), ErrorCode.RATE_LIMITED);
+        verify(emailVerificationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("재설정 — 올바른 코드면 코드를 소진하고 비밀번호를 바꾼 뒤, 기존 리프레시 토큰을 모두 폐기하고 로그인시킨다")
+    void resetPasswordWithValidCode() {
+        User user = user(7L, "tester1@dev.local", "old-password");
+        when(userRepository.findByEmailIgnoreCase("tester1@dev.local")).thenReturn(Optional.of(user));
+        EmailVerification code = verification("tester1@dev.local", EmailCodePurpose.PASSWORD_RESET, "123456",
+                Instant.now().plus(Duration.ofMinutes(10)));
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(
+                "tester1@dev.local", EmailCodePurpose.PASSWORD_RESET)).thenReturn(Optional.of(code));
+
+        TokenResponse res = service(List.of())
+                .resetPassword(new PasswordResetRequest(" Tester1@Dev.Local", "123456", "new-password"));
+
+        assertThat(code.isConsumed()).isTrue();
+        assertThat(PLAIN.matches("new-password", user.getPasswordHash())).isTrue();
+        assertThat(user.getEmailVerifiedAt()).isNotNull();
+        verify(refreshTokenRepository).revokeAllByUserId(any(), any());
+        verify(refreshTokenRepository).save(any(RefreshToken.class));
+        assertThat(res.newUser()).isFalse();
+        assertThat(res.user().id()).isEqualTo(7L);
+        assertThat(res.user().hasPassword()).isTrue();
+    }
+
+    @Test
+    @DisplayName("재설정 — 코드가 틀리면 EMAIL_CODE_INVALID, 실패 횟수만 쌓이고 비밀번호·토큰은 그대로다")
+    void resetPasswordWithWrongCode() {
+        User user = user(7L, "tester1@dev.local", "old-password");
+        when(userRepository.findByEmailIgnoreCase("tester1@dev.local")).thenReturn(Optional.of(user));
+        EmailVerification code = verification("tester1@dev.local", EmailCodePurpose.PASSWORD_RESET, "123456",
+                Instant.now().plus(Duration.ofMinutes(10)));
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(
+                "tester1@dev.local", EmailCodePurpose.PASSWORD_RESET)).thenReturn(Optional.of(code));
+
+        assertApiError(() -> service(List.of())
+                .resetPassword(new PasswordResetRequest("tester1@dev.local", "999999", "new-password")),
+                ErrorCode.EMAIL_CODE_INVALID);
+        assertThat(code.getAttemptCount()).isEqualTo((short) 1);
+        assertThat(PLAIN.matches("old-password", user.getPasswordHash())).isTrue();
+        verify(refreshTokenRepository, never()).revokeAllByUserId(any(), any());
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("재설정 — 재설정 코드를 받은 적이 없으면(가입 코드만 있어도) EMAIL_CODE_INVALID")
+    void resetPasswordLooksOnlyAtResetCodes() {
+        when(userRepository.findByEmailIgnoreCase("tester1@dev.local"))
+                .thenReturn(Optional.of(user(7L, "tester1@dev.local", "old-password")));
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(
+                "tester1@dev.local", EmailCodePurpose.PASSWORD_RESET)).thenReturn(Optional.empty());
+
+        assertApiError(() -> service(List.of())
+                .resetPassword(new PasswordResetRequest("tester1@dev.local", "123456", "new-password")),
+                ErrorCode.EMAIL_CODE_INVALID);
+        verify(emailVerificationRepository, never())
+                .findTopByEmailAndPurposeOrderByIdDesc(any(), org.mockito.ArgumentMatchers.eq(EmailCodePurpose.SIGNUP));
+    }
+
+    @Test
+    @DisplayName("재설정 — 소셜 전용 계정도 이메일 코드로 비밀번호를 만들 수 있다(hasPassword=true)")
+    void resetPasswordGivesSocialOnlyAccountAPassword() {
+        User social = user(2L, "social@dev.local", null);
+        when(userRepository.findByEmailIgnoreCase("social@dev.local")).thenReturn(Optional.of(social));
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(
+                "social@dev.local", EmailCodePurpose.PASSWORD_RESET))
+                .thenReturn(Optional.of(verification("social@dev.local", EmailCodePurpose.PASSWORD_RESET, "123456",
+                        Instant.now().plus(Duration.ofMinutes(10)))));
+
+        TokenResponse res = service(List.of())
+                .resetPassword(new PasswordResetRequest("social@dev.local", "123456", "new-password"));
+
+        assertThat(res.user().hasPassword()).isTrue();
     }
 
     // ───────────── 이메일 로그인 ─────────────

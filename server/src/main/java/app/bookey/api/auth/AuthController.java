@@ -43,6 +43,18 @@ public class AuthController {
         return authService.emailSignup(request);
     }
 
+    @Operation(summary = "비밀번호 재설정 코드 발급 — 가입된 이메일로 6자리 코드를 보낸다")
+    @PostMapping("/password/code")
+    public EmailCodeResponse requestPasswordResetCode(@Valid @RequestBody EmailCodeRequest request) {
+        return authService.requestPasswordResetCode(request);
+    }
+
+    @Operation(summary = "비밀번호 재설정 — 코드가 맞으면 새 비밀번호로 바꾸고 다른 기기는 로그아웃한 뒤 로그인시킨다")
+    @PostMapping("/password/reset")
+    public TokenResponse resetPassword(@Valid @RequestBody PasswordResetRequest request) {
+        return authService.resetPassword(request);
+    }
+
     @Operation(summary = "이메일 로그인")
     @PostMapping("/login")
     public TokenResponse login(@Valid @RequestBody EmailLoginRequest request) {

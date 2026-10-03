@@ -19,7 +19,7 @@ public final class AuthDtos {
 
     public record RefreshRequest(@NotBlank String refreshToken) {}
 
-    /** 가입 인증 코드 발급 요청. */
+    /** 인증 코드 발급 요청 — 가입 코드와 비밀번호 재설정 코드가 같은 모양을 쓴다. */
     public record EmailCodeRequest(
             @NotBlank @Email @Size(max = 255) String email
     ) {}
@@ -50,6 +50,13 @@ public final class AuthDtos {
             String portoneStoreId,
             String portoneChannelKey,
             boolean identityDevStub
+    ) {}
+
+    /** 비밀번호 재설정 — 이메일로 받은 6자리 코드와 새 비밀번호. 성공하면 바로 로그인된다. */
+    public record PasswordResetRequest(
+            @NotBlank @Email @Size(max = 255) String email,
+            @NotBlank @Size(min = 6, max = 6) String code,
+            @NotBlank @Size(min = 8, max = 72) String newPassword
     ) {}
 
     public record EmailLoginRequest(

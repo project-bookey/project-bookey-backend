@@ -122,17 +122,60 @@ public class AuthService {
         if (userRepository.existsByEmailIgnoreCase(email)) {
             throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
         }
+        return issueEmailCode(email, EmailCodePurpose.SIGNUP);
+    }
+
+    /**
+     * 비밀번호 재설정 코드 발급 — 가입된 이메일에만 보낸다.
+     * 가입 여부는 가입 코드 발급(EMAIL_ALREADY_EXISTS)에서도 이미 드러나므로 여기서 숨겨도 얻는 게 없다 —
+     * 오타 낸 사람이 오지 않을 메일을 기다리지 않게 바로 알린다.
+     * 소셜로만 가입한 계정도 이메일이 있으면 받을 수 있다 — 재설정하면 그 계정에 비밀번호가 생긴다.
+     */
+    @Transactional
+    public EmailCodeResponse requestPasswordResetCode(EmailCodeRequest request) {
+        String email = normalizeEmail(request.email());
+        User user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> ApiException.of(ErrorCode.EMAIL_NOT_REGISTERED));
+        if (!user.getStatus().canLogin()) {
+            throw ApiException.of(ErrorCode.USER_SUSPENDED);
+        }
+        return issueEmailCode(email, EmailCodePurpose.PASSWORD_RESET);
+    }
+
+    /** 코드 발급 공통 — 같은 용도의 마지막 코드 기준 쿨다운을 지키고, 해시만 저장한 뒤 발송한다. */
+    private EmailCodeResponse issueEmailCode(String email, EmailCodePurpose purpose) {
         BookeyProperties.Auth.EmailCode policy = properties.auth().emailCode();
         Instant now = Instant.now();
-        emailVerificationRepository.findTopByEmailOrderByIdDesc(email).ifPresent(latest -> {
+        emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(email, purpose).ifPresent(latest -> {
             if (latest.getCreatedAt() != null && now.isBefore(latest.getCreatedAt().plus(policy.cooldown()))) {
                 throw new ApiException(ErrorCode.RATE_LIMITED, "인증 코드는 잠시 후 다시 요청할 수 있습니다.");
             }
         });
         String code = "%06d".formatted(secureRandom.nextInt(1_000_000));
-        emailVerificationRepository.save(new EmailVerification(email, sha256(code), now.plus(policy.ttl())));
-        emailCodeSender.send(email, code, policy.ttl());
+        emailVerificationRepository.save(new EmailVerification(email, purpose, sha256(code), now.plus(policy.ttl())));
+        emailCodeSender.send(email, code, policy.ttl(), purpose);
         return new EmailCodeResponse(policy.ttl().toSeconds(), policy.expose() ? code : null);
+    }
+
+    /**
+     * 비밀번호 재설정 — 코드가 맞으면 새 비밀번호로 바꾸고, 다른 기기의 리프레시 토큰을 모두 폐기한 뒤 로그인시킨다.
+     * 코드를 받았다는 건 이메일을 가졌다는 뜻이라 이메일 인증 시각도 채운다.
+     * noRollbackFor: 코드 불일치 실패 횟수가 롤백으로 사라지지 않게 한다 — 그 밖의 ApiException 은 쓰기 이전에 던져진다.
+     */
+    @Transactional(noRollbackFor = ApiException.class)
+    public TokenResponse resetPassword(PasswordResetRequest request) {
+        String email = normalizeEmail(request.email());
+        User user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> ApiException.of(ErrorCode.EMAIL_CODE_INVALID));
+        if (!user.getStatus().canLogin()) {
+            throw ApiException.of(ErrorCode.USER_SUSPENDED);
+        }
+        consumeEmailCode(email, request.code(), EmailCodePurpose.PASSWORD_RESET);
+        Instant now = Instant.now();
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        user.markEmailVerified(now);
+        refreshTokenRepository.revokeAllByUserId(user.getId(), now);
+        return issueTokens(user, false);
     }
 
     /** 가입 화면 구성 — 어떤 인증을 요구하는지와 포트원 SDK 키. */
@@ -171,7 +214,7 @@ public class AuthService {
                 if (request.code() == null || request.code().isBlank()) {
                     throw ApiException.of(ErrorCode.EMAIL_CODE_INVALID);
                 }
-                consumeEmailCode(email, request.code());
+                consumeEmailCode(email, request.code(), EmailCodePurpose.SIGNUP);
             }
             case IDENTITY -> identity = requireVerifiedIdentity(request.identityVerificationId());
             case NONE -> {
@@ -217,9 +260,9 @@ public class AuthService {
     }
 
     /** 최신 발급 코드와 대조한다 — 소진·만료·시도 초과면 재발급을 유도하고, 불일치는 실패 횟수를 누적한다. */
-    private void consumeEmailCode(String email, String code) {
+    private void consumeEmailCode(String email, String code, EmailCodePurpose purpose) {
         BookeyProperties.Auth.EmailCode policy = properties.auth().emailCode();
-        EmailVerification verification = emailVerificationRepository.findTopByEmailOrderByIdDesc(email)
+        EmailVerification verification = emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(email, purpose)
                 .orElseThrow(() -> ApiException.of(ErrorCode.EMAIL_CODE_INVALID));
         Instant now = Instant.now();
         if (verification.isConsumed() || verification.isExpired(now)
