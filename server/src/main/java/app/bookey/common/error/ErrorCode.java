@@ -99,6 +99,14 @@ public enum ErrorCode {
     EDITOR_PICK_NOT_FOUND(HttpStatus.NOT_FOUND, "에디터 픽을 찾을 수 없습니다."),
     EDITOR_PICK_DUPLICATE(HttpStatus.CONFLICT, "이미 추천 목록에 있는 책입니다."),
 
+    // 고객문의 · FAQ
+    INQUIRY_NOT_FOUND(HttpStatus.NOT_FOUND, "문의를 찾을 수 없습니다."),
+    INQUIRY_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "첨부 사진을 찾을 수 없습니다."),
+    INQUIRY_PENDING_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "답변을 기다리는 문의가 많아요. 답변을 받은 뒤 다시 남겨 주세요."),
+    INQUIRY_ALREADY_ANSWERED(HttpStatus.CONFLICT, "이미 답변한 문의입니다."),
+    INQUIRY_NOT_ANSWERED(HttpStatus.CONFLICT, "아직 답변하지 않은 문의입니다."),
+    FAQ_NOT_FOUND(HttpStatus.NOT_FOUND, "FAQ를 찾을 수 없습니다."),
+
     // 댓글
     COMMENT_REPLY_DEPTH(HttpStatus.BAD_REQUEST, "답글에는 답글을 달 수 없습니다."),
 

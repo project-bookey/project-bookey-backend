@@ -8,6 +8,7 @@ import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
 import app.bookey.domain.admin.OpsFlag;
 import app.bookey.domain.admin.OpsFlagRepository;
+import app.bookey.domain.inquiry.InquiryRepository;
 import app.bookey.domain.user.*;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
@@ -46,6 +47,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final EmailCodeSender emailCodeSender;
     private final IdentityVerifier identityVerifier;
+    private final InquiryRepository inquiryRepository;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -59,6 +61,8 @@ public class AuthService {
         identityRepository.deleteAllByUserId(userId);
         deviceRepository.deleteAllByUserId(userId);
         refreshTokenRepository.revokeAllByUserId(userId, Instant.now());
+        // 사용자 행은 익명화만 하므로 FK CASCADE 가 일어나지 않는다 — 문의(본문·사진)는 직접 지운다.
+        inquiryRepository.deleteAllByUserId(userId);
         user.anonymizeForDeletion();
     }
 

@@ -19,6 +19,11 @@ public enum AdminRole {
         return this == SUPER_ADMIN || this == OPERATOR || this == SUPPORT;
     }
 
+    /** 고객문의 답변과 FAQ 편집 — 보기 전용(VIEWER)만 막는다. CS 담당(SUPPORT)이 직접 다룬다. */
+    public boolean canHandleSupport() {
+        return this != VIEWER;
+    }
+
     public boolean canEditBook() {
         return this == SUPER_ADMIN || this == OPERATOR;
     }

@@ -1,7 +1,11 @@
 package app.bookey.admin.dto;
 
+import app.bookey.api.inquiry.dto.InquiryDtos.InquiryImageView;
 import app.bookey.domain.admin.*;
 import app.bookey.domain.club.ClubStatus;
+import app.bookey.domain.inquiry.InquiryCategory;
+import app.bookey.domain.inquiry.InquiryRules;
+import app.bookey.domain.inquiry.InquiryStatus;
 import app.bookey.domain.review.VerificationLevel;
 import app.bookey.domain.user.UserStatus;
 import jakarta.validation.constraints.*;
@@ -50,7 +54,8 @@ public final class AdminDtos {
             long pendingModeration,
             long overdueModeration,
             long activeClubs,
-            double notificationConversionRate7d
+            double notificationConversionRate7d,
+            long waitingInquiries
     ) {}
 
     // ── 회원 ────────────────────────────────────────────────
@@ -138,6 +143,47 @@ public final class AdminDtos {
             /** SANCTION 선택 시 함께 적용할 제재. */
             SanctionRequest sanction
     ) {}
+
+    // ── 고객문의 ───────────────────────────────────────────
+    /** 목록 한 줄. 회원 닉네임은 회원 목록(UserRow)과 같이 가리지 않는다. */
+    public record InquiryRow(
+            @NotNull Long id,
+            @NotNull InquiryCategory category,
+            @NotNull InquiryStatus status,
+            @NotNull String preview,
+            int imageCount,
+            @NotNull Long userId,
+            @NotNull String userNickname,
+            @NotNull String userHandle,
+            @NotNull Instant createdAt,
+            Instant answeredAt
+    ) {}
+
+    /** 문의 상세 — 기기 정보와 회원 상태(정지된 회원은 앱 알림을 못 받는다)를 함께 본다. 이메일은 가린다. */
+    public record InquiryAdminView(
+            @NotNull Long id,
+            @NotNull InquiryCategory category,
+            @NotNull InquiryStatus status,
+            @NotNull String body,
+            List<InquiryImageView> images,
+            String appVersion,
+            String platform,
+            String osVersion,
+            String deviceModel,
+            @NotNull Long userId,
+            @NotNull String userNickname,
+            @NotNull String userHandle,
+            String maskedEmail,
+            UserStatus userStatus,
+            String answer,
+            String answeredByName,
+            Instant answeredAt,
+            Instant answerUpdatedAt,
+            @NotNull Instant createdAt
+    ) {}
+
+    /** 답변 등록·수정 — 줄바꿈만 있는 일반 텍스트. */
+    public record InquiryAnswerRequest(@NotBlank @Size(max = InquiryRules.MAX_ANSWER) String answer) {}
 
     // ── 검증 심사 ───────────────────────────────────────────
     public record ReviewRow(

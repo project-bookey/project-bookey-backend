@@ -10,6 +10,8 @@ import app.bookey.domain.admin.*;
 import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookRepository;
 import app.bookey.domain.club.*;
+import app.bookey.domain.inquiry.InquiryRepository;
+import app.bookey.domain.inquiry.InquiryStatus;
 import app.bookey.domain.notification.NotificationRepository;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingSessionRepository;
@@ -59,6 +61,7 @@ public class AdminController {
     private final NotificationRepository notificationRepository;
     private final AdminAuditLogRepository auditLogRepository;
     private final OpsFlagRepository opsFlagRepository;
+    private final InquiryRepository inquiryRepository;
 
     // ── 대시보드 ─────────────────────────────────────────────
     @Operation(summary = "대시보드 KPI")
@@ -84,7 +87,8 @@ public class AdminController {
                 moderationService.overdueCount(),
                 clubRepository.searchForAdminByStatus(null, ClubStatus.ACTIVE,
                         PageRequest.of(0, 1)).getTotalElements(),
-                sent == 0 ? 0 : (double) converted / sent);
+                sent == 0 ? 0 : (double) converted / sent,
+                inquiryRepository.countByStatus(InquiryStatus.WAITING));
     }
 
     // ── 회원 ────────────────────────────────────────────────

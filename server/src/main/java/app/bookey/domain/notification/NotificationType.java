@@ -24,6 +24,8 @@ public enum NotificationType {
     CHAT_MESSAGE(false),
     POST_LIKED(false),
     POST_COMMENTED(false),
+    /** 고객문의에 관리자가 답변했다 */
+    INQUIRY_ANSWERED(false),
 
     // 모임 (모임당 일 1건 / 전체 일 3건 — 개인 한도와 별도)
     CLUB_CHECKPOINT_DUE(true),
