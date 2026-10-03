@@ -1,5 +1,6 @@
 package app.bookey.api.club;
 
+import app.bookey.api.club.dto.ClubDtos.ClubHomeView;
 import app.bookey.api.club.dto.ClubDtos.CreateClubRequest;
 import app.bookey.api.club.dto.ClubDtos.JoinPublicRequest;
 import app.bookey.api.club.dto.ClubDtos.JoinRequest;
@@ -19,8 +20,10 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -28,20 +31,20 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 모임 생성 정원 제한과, 정원을 건드리는 참가 경로의 행 잠금. */
+/** 모임 생성 정원 제한, 정원을 건드리는 참가 경로의 행 잠금, 읽을 책이 아직 없는 모임의 홈. */
 class ClubServiceTest {
 
     private static final BookeyProperties.Club CLUB_POLICY =
             new BookeyProperties.Club(3, 6, 3, 4, Duration.ofHours(24), 3, 10);
 
     private final ClubRepository clubRepository = mock(ClubRepository.class);
+    private final ClubMemberRepository memberRepository = mock(ClubMemberRepository.class);
     private final BookRepository bookRepository = mock(BookRepository.class);
     private final ClubService service = new ClubService(
             clubRepository,
             mock(ClubBookRepository.class),
-            mock(ClubMemberRepository.class),
-            mock(ClubCheckpointRepository.class),
-            mock(ClubCheckpointProgressRepository.class),
+            memberRepository,
+            mock(ClubMeetingRepository.class),
             mock(ClubPostRepository.class),
             mock(ClubEventRepository.class),
             bookRepository,
@@ -105,5 +108,25 @@ class ClubServiceTest {
                 .isEqualTo(ErrorCode.CLUB_NOT_FOUND);
         verify(clubRepository).findByIdForUpdate(10L);
         verify(clubRepository, never()).findById(any());
+    }
+
+    @Test
+    @DisplayName("읽을 책을 고른 모임이 아직 없으면 홈은 책 없이, 기록 없는 멤버도 진척 null 로 그린다")
+    void homeWithoutCurrentBook() {
+        Club club = Club.builder().ownerId(1L).name("월요일의 데미안").joinCode("ABC234")
+                .memberLimit((short) 3).startsAt(LocalDate.of(2026, 10, 3)).allowNudge(true).build();
+        ClubMember host = ClubMember.builder().clubId(10L).userId(1L)
+                .role(ClubRole.HOST).shareProgress(true).allowNudge(true).build();
+        when(clubRepository.findById(10L)).thenReturn(Optional.of(club));
+        when(memberRepository.findByClubIdAndUserId(10L, 1L)).thenReturn(Optional.of(host));
+        when(memberRepository.findAllByClubIdAndStatus(10L, ClubMemberStatus.ACTIVE)).thenReturn(List.of(host));
+
+        ClubHomeView home = service.home(1L, 10L);
+
+        assertThat(home.book()).isNull();
+        assertThat(home.endsAt()).isNull();
+        assertThat(home.checkpoints()).isEmpty();
+        assertThat(home.members()).singleElement()
+                .satisfies(m -> assertThat(m.completionRate()).isNull());
     }
 }

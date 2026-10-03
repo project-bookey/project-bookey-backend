@@ -75,6 +75,10 @@ common/             보안 · 에러 · 설정 · 공용 유틸
 
 내부 캐시(books 테이블) → 카카오 검색 → 국내 0건이면 Google Books 폴백 → isbn13 기준 upsert → 페이지 수 없는 책은 알라딘으로 **비동기** 보강. 외부 API 키(`KAKAO_REST_KEY` 등)가 없으면 해당 프로바이더를 건너뛰고 내부 캐시로만 검색한다(graceful degradation). API 키는 서버에만 둔다.
 
+### 모임(클럽) 모델 (2026-10-03, V40)
+
+모임은 기간이 없고(`clubs.ends_at` 은 예전 모임만, 호스트가 끝낼 때 끝난다) 책 한 권에 묶이지 않는다. 만남(`club_meetings.book_id`, 선택)마다 책을 고르고, 다가오는 만남의 책이 `clubs.current_club_book_id`(지금 읽는 책)가 된다 — 판정은 순수 규칙 `ClubCurrentBook`, 반영은 `ClubService.syncCurrentBook`(만남 생성·수정·취소 때 + 매일 00:05 배치). 지금 책이 바뀌면 멤버마다 그 책의 읽기 기록을 `ClubMember.readingRecordId` 로 다시 잇는다(없으면 서재에 WANT_TO_READ 로 추가) — 진척·지금 읽는 중·스포일러 가림이 이 기록을 본다. 아직 책이 없는 모임의 멤버는 `readingRecordId` 가 null 이니 조회 시 null 키를 다룰 것. 조각·글은 쓸 때의 `club_book_id` 에 붙고, 지난 책의 글은 그 책의 뷰어 진도로 가린다(`ClubPostService.viewerStates`). 체크포인트·결산·기간 종료 배치는 걷어냈고(테이블은 남김), `daysLeft`·`checkpoints`·`nextCheckpoint` 는 예전 앱 호환용으로만 응답에 남아 있다.
+
 ### 도메인 규칙은 순수 클래스로
 
 진척 계산(`ProgressCalculator`), 지연 레벨(`LagLevel`), 배너 활성 판정(`Banner.isActiveAt`) 같은 규칙은 Spring에 의존하지 않는 순수 로직으로 두고 단위 테스트한다. 배치 잡은 이 규칙을 재사용해 재촉 알림 후보를 만들며, 알림 총량 제한(`bookey.notification.*-cap`)이 걸려 있다.

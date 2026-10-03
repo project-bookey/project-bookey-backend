@@ -26,7 +26,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.*;
-import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -49,8 +48,7 @@ public class ClubService {
     private final ClubRepository clubRepository;
     private final ClubBookRepository clubBookRepository;
     private final ClubMemberRepository memberRepository;
-    private final ClubCheckpointRepository checkpointRepository;
-    private final ClubCheckpointProgressRepository checkpointProgressRepository;
+    private final ClubMeetingRepository meetingRepository;
     private final ClubPostRepository postRepository;
     private final ClubEventRepository eventRepository;
     private final BookRepository bookRepository;
@@ -64,14 +62,15 @@ public class ClubService {
 
     // ────────────────────────────── 생성 ──────────────────────────────
 
+    /**
+     * 모임은 기간 없이 이어지고 책은 만남마다 고른다 — 이름 · 정원 · 공개 범위만으로 연다.
+     * 처음 읽을 책을 함께 주면 그 책을 지금 읽는 책으로 바로 잡는다.
+     */
     @Transactional
     public ClubHomeView create(Long userId, CreateClubRequest request) {
         requireOpsEnabled(OpsFlag.CLUB_CREATION_OPEN, "현재 모임 생성이 중단되었습니다.");
         rateLimiter.require("club:create:" + userId, CLUB_CREATE_DAILY_LIMIT, Duration.ofDays(1));
 
-        if (request.endsAt().isBefore(request.startsAt())) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "종료일이 시작일보다 빠릅니다.");
-        }
         short memberLimit = request.memberLimit() == null
                 ? (short) properties.club().defaultMemberLimit()
                 : request.memberLimit().shortValue();
@@ -80,87 +79,103 @@ public class ClubService {
                     "정원은 " + properties.club().freeMemberLimit() + "명까지 고를 수 있습니다. 더 필요하면 모임을 만든 뒤 자리를 늘려 주세요.");
         }
 
-        Book book = bookRepository.findById(request.bookId())
-                .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
+        Book book = request.bookId() == null
+                ? null
+                : bookRepository.findById(request.bookId())
+                        .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
 
         Club club = clubRepository.save(Club.builder()
                 .ownerId(userId)
                 .name(request.name())
                 .description(request.description())
-                .coverUrl(book.getCoverUrl())
+                .coverUrl(book == null ? null : book.getCoverUrl())
                 .joinCode(generateUniqueCode())
                 .visibility(request.visibility())
                 .memberLimit(memberLimit)
-                .startsAt(request.startsAt())
-                .endsAt(request.endsAt())
+                .startsAt(LocalDate.now(KST))
                 .allowNudge(request.allowNudge() == null || request.allowNudge())
                 .build());
 
-        ClubBook clubBook = clubBookRepository.save(ClubBook.builder()
-                .clubId(club.getId())
-                .bookId(book.getId())
-                .seq((short) 1)
-                .targetFinishDate(request.endsAt())
-                .totalPagesSnapshot(book.getTotalPages())
-                .build());
-
-        createCheckpoints(clubBook, book, request);
-
-        // 호스트도 멤버로 참가한다.
-        ReadingRecord record = ensureReadingRecord(userId, book, request.endsAt(), true);
-        Club saved = club;
+        // 호스트도 멤버로 참가한다. 읽기 기록은 지금 읽는 책이 잡힐 때 잇는다.
         memberRepository.save(ClubMember.builder()
-                .clubId(saved.getId())
+                .clubId(club.getId())
                 .userId(userId)
-                .readingRecordId(record.getId())
                 .role(ClubRole.HOST)
                 .shareProgress(true)
                 .allowNudge(true)
                 .build());
         club.joinMember();
+        if (book != null) {
+            assignCurrentBook(club, book);
+        }
 
         eventRepository.save(new ClubEvent(club.getId(), userId, ClubEventType.CREATED,
-                Map.of("bookId", book.getId(), "name", club.getName())));
+                book == null
+                        ? Map.of("name", club.getName())
+                        : Map.of("bookId", book.getId(), "name", club.getName())));
 
         return home(userId, club.getId());
     }
 
-    private void createCheckpoints(ClubBook clubBook, Book book, CreateClubRequest request) {
-        if (request.checkpoints() != null && !request.checkpoints().isEmpty()) {
-            short seq = 1;
-            for (CheckpointRequest cp : request.checkpoints()) {
-                checkpointRepository.save(ClubCheckpoint.builder()
-                        .clubBookId(clubBook.getId())
-                        .seq(seq)
-                        .title(cp.title() == null || cp.title().isBlank() ? seq + "주차" : cp.title())
-                        .targetPage(cp.targetPage())
-                        .dueAt(cp.dueAt())
-                        .build());
-                seq++;
-            }
+    // ────────────────────────────── 지금 읽는 책 ──────────────────────────────
+
+    /**
+     * 만남 일정에 맞춰 지금 읽는 책을 맞춘다 — 만남을 열고 · 고치고 · 취소할 때와 매일 새벽 배치가 부른다.
+     * 책을 고른 만남이 없으면 지금 책을 그대로 둔다({@link ClubCurrentBook}).
+     */
+    @Transactional
+    public void syncCurrentBook(Long clubId) {
+        Club club = getClub(clubId);
+        if (club.getStatus().isOver()) {
             return;
         }
-        if (!Boolean.TRUE.equals(request.autoCheckpoints()) || book.getTotalPages() == null) {
+        List<ClubCurrentBook.Slot> slots = meetingRepository.findAllByClubIdOrderByStartsAtAsc(clubId).stream()
+                .map(ClubCurrentBook.Slot::of)
+                .toList();
+        Long bookId = ClubCurrentBook.pick(slots, LocalDate.now(KST), KST);
+        if (bookId == null || bookId.equals(currentBookId(club))) {
             return;
         }
-        // 총 페이지를 주차 수로 균등 분배 (§12.2 자동 생성 옵션)
-        long totalDays = ChronoUnit.DAYS.between(request.startsAt(), request.endsAt());
-        int weeks = (int) Math.max(1, Math.ceil(totalDays / 7.0));
-        int totalPages = book.getTotalPages();
-        for (int i = 1; i <= weeks; i++) {
-            int targetPage = (int) Math.round((double) totalPages * i / weeks);
-            LocalDate due = request.startsAt().plusWeeks(i);
-            if (due.isAfter(request.endsAt())) {
-                due = request.endsAt();
-            }
-            checkpointRepository.save(ClubCheckpoint.builder()
-                    .clubBookId(clubBook.getId())
-                    .seq((short) i)
-                    .title(i + "주차")
-                    .targetPage(Math.max(1, targetPage))
-                    .dueAt(due.atTime(23, 59).atZone(KST).toInstant())
-                    .build());
+        bookRepository.findById(bookId).ifPresent(book -> assignCurrentBook(club, book));
+    }
+
+    /**
+     * 지금 읽는 책을 바꾸고 멤버마다 그 책의 읽기 기록을 잇는다 — 기록이 없으면 서재에 '읽고 싶은'으로 넣는다
+     * (참가 때 모임 책을 서재에 넣던 §12.1 ① 과 같은 규칙). 진척 · 스포일러 가림 · 지금 읽는 중이 이 기록을 본다.
+     */
+    private void assignCurrentBook(Club club, Book book) {
+        ClubBook clubBook = clubBookRepository.findFirstByClubIdAndBookId(club.getId(), book.getId())
+                .orElseGet(() -> clubBookRepository.save(ClubBook.builder()
+                        .clubId(club.getId())
+                        .bookId(book.getId())
+                        .seq((short) (clubBookRepository.findFirstByClubIdOrderBySeqDesc(club.getId())
+                                .map(ClubBook::getSeq).orElse((short) 0) + 1))
+                        .totalPagesSnapshot(book.getTotalPages())
+                        .build()));
+        club.changeCurrentBook(clubBook.getId());
+        for (ClubMember member : memberRepository.findAllByClubIdAndStatus(club.getId(), ClubMemberStatus.ACTIVE)) {
+            member.linkReadingRecord(ensureReadingRecord(member.getUserId(), book, null, false).getId());
         }
+    }
+
+    private Long currentBookId(Club club) {
+        return club.getCurrentClubBookId() == null
+                ? null
+                : clubBookRepository.findById(club.getCurrentClubBookId()).map(ClubBook::getBookId).orElse(null);
+    }
+
+    /** 지금 읽는 책 — 책을 고른 만남이 아직 없으면 null. */
+    private Book currentBook(Club club) {
+        Long bookId = currentBookId(club);
+        return bookId == null ? null : bookRepository.findById(bookId).orElse(null);
+    }
+
+    /** 다음 만남 시각 — 취소되지 않은, 아직 시작하지 않은 만남. */
+    private Instant nextMeetingAt(Long clubId) {
+        return meetingRepository
+                .findFirstByClubIdAndStatusAndStartsAtAfterOrderByStartsAtAsc(clubId, "OPEN", Instant.now())
+                .map(ClubMeeting::getStartsAt)
+                .orElse(null);
     }
 
     private String generateUniqueCode() {
@@ -201,9 +216,7 @@ public class ClubService {
     }
 
     private ClubPreview toPreview(Club club, Long userId) {
-        ClubBook clubBook = clubBookRepository.findFirstByClubIdOrderBySeqAsc(club.getId())
-                .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_FOUND));
-        Book book = bookRepository.findById(clubBook.getBookId()).orElse(null);
+        Book book = currentBook(club);
         User host = userRepository.findById(club.getOwnerId()).orElse(null);
 
         Optional<ClubMember> membership = memberRepository.findByClubIdAndUserId(club.getId(), userId);
@@ -261,25 +274,21 @@ public class ClubService {
             }
         }
 
-        ClubBook clubBook = clubBookRepository.findFirstByClubIdOrderBySeqAsc(club.getId())
-                .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_FOUND));
-        Book book = bookRepository.findById(clubBook.getBookId())
-                .orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
-
-        boolean adoptTarget = adoptTargetDate == null || adoptTargetDate;
-        ReadingRecord record = ensureReadingRecord(userId, book, club.getEndsAt(), adoptTarget);
+        // 지금 읽는 책이 있으면 서재에 넣고 그 기록을 잇는다. 모임에 기간이 없어 목표일은 건드리지 않는다.
+        Book book = currentBook(club);
+        Long recordId = book == null ? null : ensureReadingRecord(userId, book, null, false).getId();
         boolean shareProgress = shareProgressRequest == null || shareProgressRequest;
 
         club.joinMember();   // 정원·종료 검사 포함
         existing.ifPresentOrElse(
                 member -> {
-                    member.rejoin(record.getId());
+                    member.rejoin(recordId);
                     member.updateSharing(shareProgress, true);
                 },
                 () -> memberRepository.save(ClubMember.builder()
                         .clubId(club.getId())
                         .userId(userId)
-                        .readingRecordId(record.getId())
+                        .readingRecordId(recordId)
                         .role(ClubRole.MEMBER)
                         .shareProgress(shareProgress)
                         .allowNudge(true)
@@ -362,8 +371,7 @@ public class ClubService {
     public ClubHomeView update(Long userId, Long clubId, UpdateClubRequest request) {
         Club club = getClub(clubId);
         requireHost(club, userId);
-        club.update(request.name(), request.description(), request.visibility(),
-                request.endsAt(), request.allowNudge());
+        club.update(request.name(), request.description(), request.visibility(), request.allowNudge());
         return home(userId, clubId);
     }
 
@@ -401,8 +409,10 @@ public class ClubService {
         }
         Map<Long, Club> clubs = clubRepository.findAllById(clubIds).stream()
                 .collect(Collectors.toMap(Club::getId, Function.identity()));
-        Map<Long, ClubBook> clubBooks = clubBookRepository.findAllByClubIdIn(clubIds).stream()
-                .collect(Collectors.toMap(ClubBook::getClubId, Function.identity(), (a, b) -> a));
+        // 지금 읽는 책 — 모임마다 club_books 한 줄을 가리킨다.
+        Map<Long, ClubBook> clubBooks = clubBookRepository.findAllById(clubs.values().stream()
+                        .map(Club::getCurrentClubBookId).filter(Objects::nonNull).toList()).stream()
+                .collect(Collectors.toMap(ClubBook::getId, Function.identity()));
         Map<Long, Book> books = bookRepository
                 .findAllById(clubBooks.values().stream().map(ClubBook::getBookId).toList()).stream()
                 .collect(Collectors.toMap(Book::getId, Function.identity()));
@@ -410,7 +420,7 @@ public class ClubService {
         LocalDate today = LocalDate.now(KST);
         return PageResponse.of(memberships, membership -> {
             Club club = clubs.get(membership.getClubId());
-            ClubBook clubBook = clubBooks.get(club.getId());
+            ClubBook clubBook = club.getCurrentClubBookId() == null ? null : clubBooks.get(club.getCurrentClubBookId());
             Book book = clubBook == null ? null : books.get(clubBook.getBookId());
             List<ClubMember> peers = memberRepository
                     .findAllByClubIdAndStatus(club.getId(), ClubMemberStatus.ACTIVE);
@@ -424,7 +434,7 @@ public class ClubService {
                     club.getId(), club.getName(), club.getCoverUrl(),
                     book == null ? null : BookSummary.from(book),
                     club.getStatus(), club.getMemberCount(), club.daysLeft(today),
-                    mine, average, 0, membership.getRole(), briefs);
+                    mine, average, 0, membership.getRole(), briefs, nextMeetingAt(club.getId()));
         });
     }
 
@@ -437,10 +447,7 @@ public class ClubService {
     public ClubHomeView home(Long userId, Long clubId) {
         Club club = getClub(clubId);
         ClubMember me = activeMember(clubId, userId);
-
-        ClubBook clubBook = clubBookRepository.findFirstByClubIdOrderBySeqAsc(clubId)
-                .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_FOUND));
-        Book book = bookRepository.findById(clubBook.getBookId()).orElse(null);
+        Book book = currentBook(club);
 
         List<ClubMember> members =
                 memberRepository.findAllByClubIdAndStatus(clubId, ClubMemberStatus.ACTIVE);
@@ -463,12 +470,6 @@ public class ClubService {
                     .count() + 1;
         }
 
-        List<CheckpointView> checkpoints = checkpointViews(clubBook.getId(), me, members.size());
-        CheckpointView next = checkpoints.stream()
-                .filter(c -> !c.evaluated())
-                .findFirst()
-                .orElse(null);
-
         return new ClubHomeView(
                 club.getId(), club.getName(), club.getDescription(), club.getCoverUrl(),
                 club.getJoinCode(), club.getVisibility(), club.getStatus(),
@@ -477,37 +478,12 @@ public class ClubService {
                 club.getMemberCount(), club.getMemberLimit(),
                 me.getRole(), me.isShareProgress(), me.isAllowNudge(),
                 myRank, averageCompletion(members, records, book),
-                memberViews, checkpoints, next, seatPolicy(), club.isAllowNudge());
+                memberViews, List.of(), null, seatPolicy(), club.isAllowNudge(), nextMeetingAt(clubId));
     }
 
     private ClubSeatPolicy seatPolicy() {
         BookeyProperties.Club policy = properties.club();
         return new ClubSeatPolicy(policy.freeMemberLimit(), policy.maxMemberLimit(), policy.seatCostBookmarks());
-    }
-
-    private List<CheckpointView> checkpointViews(Long clubBookId, ClubMember me, int memberCount) {
-        List<ClubCheckpoint> checkpoints =
-                checkpointRepository.findAllByClubBookIdOrderBySeqAsc(clubBookId);
-        if (checkpoints.isEmpty()) {
-            return List.of();
-        }
-        List<Long> ids = checkpoints.stream().map(ClubCheckpoint::getId).toList();
-        Map<Long, List<ClubCheckpointProgress>> progressByCheckpoint =
-                checkpointProgressRepository.findAllByCheckpointIdIn(ids).stream()
-                        .collect(Collectors.groupingBy(ClubCheckpointProgress::getCheckpointId));
-
-        return checkpoints.stream().map(cp -> {
-            List<ClubCheckpointProgress> progresses =
-                    progressByCheckpoint.getOrDefault(cp.getId(), List.of());
-            long achieved = progresses.stream().filter(ClubCheckpointProgress::isAchieved).count();
-            Boolean myAchieved = progresses.stream()
-                    .filter(p -> p.getClubMemberId().equals(me.getId()))
-                    .map(ClubCheckpointProgress::isAchieved)
-                    .findFirst()
-                    .orElse(null);
-            return new CheckpointView(cp.getId(), cp.getSeq(), cp.getTitle(), cp.getTargetPage(),
-                    cp.getDueAt(), cp.getEvaluatedAt() != null, achieved, memberCount, myAchieved);
-        }).toList();
     }
 
     private MemberProgressView toMemberView(ClubMember member, User user, ReadingRecord record,
@@ -573,13 +549,17 @@ public class ClubService {
         return rates.stream().mapToDouble(Double::doubleValue).average().orElse(0);
     }
 
+    /**
+     * 멤버의 지금 책 기록 — 읽을 책이 아직 없는 모임은 기록이 null 인 멤버가 있다.
+     * 호출자가 null 키로도 조회하므로 null 조회를 허용하는 HashMap 으로 돌려준다(Map.of() 는 NPE).
+     */
     private Map<Long, ReadingRecord> loadRecords(List<ClubMember> members) {
         List<Long> ids = members.stream()
                 .map(ClubMember::getReadingRecordId)
                 .filter(Objects::nonNull)
                 .toList();
         if (ids.isEmpty()) {
-            return Map.of();
+            return new HashMap<>();
         }
         return recordRepository.findAllByIdIn(ids).stream()
                 .collect(Collectors.toMap(ReadingRecord::getId, Function.identity()));
@@ -638,10 +618,7 @@ public class ClubService {
     public ClubResultView result(Long userId, Long clubId) {
         Club club = getClub(clubId);
         memberOrThrow(clubId, userId);
-
-        ClubBook clubBook = clubBookRepository.findFirstByClubIdOrderBySeqAsc(clubId)
-                .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_FOUND));
-        Book book = bookRepository.findById(clubBook.getBookId()).orElse(null);
+        Book book = currentBook(club);
 
         List<ClubMember> members =
                 memberRepository.findAllByClubIdAndStatus(clubId, ClubMemberStatus.ACTIVE);

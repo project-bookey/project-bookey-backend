@@ -8,7 +8,6 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -34,9 +33,9 @@ public interface ClubRepository extends JpaRepository<Club, Long> {
             """)
     Page<Club> findPublicClubs(Pageable pageable);
 
-    /** 기간이 끝났는데 아직 종료 처리되지 않은 모임 — 배치 대상. */
-    @Query("SELECT c FROM Club c WHERE c.status IN ('RECRUITING','ACTIVE') AND c.endsAt < :today")
-    List<Club> findExpired(@Param("today") LocalDate today);
+    /** 아직 이어지는 모임 — 지금 읽는 책을 맞추는 배치 대상. */
+    @Query("SELECT c.id FROM Club c WHERE c.status IN ('RECRUITING','ACTIVE')")
+    List<Long> findOngoingIds();
 
     @Query("""
             SELECT c FROM Club c

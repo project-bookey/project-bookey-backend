@@ -64,7 +64,6 @@ class ClubSeatServiceTest {
                 .joinCode("ABC234")
                 .memberLimit((short) memberLimit)
                 .startsAt(LocalDate.of(2026, 9, 1))
-                .endsAt(LocalDate.of(2026, 9, 30))
                 .allowNudge(true)
                 .build();
         when(clubRepository.findByIdForUpdate(CLUB_ID)).thenReturn(Optional.of(club));

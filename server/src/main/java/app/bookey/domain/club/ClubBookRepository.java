@@ -12,4 +12,9 @@ public interface ClubBookRepository extends JpaRepository<ClubBook, Long> {
     Optional<ClubBook> findFirstByClubIdOrderBySeqAsc(Long clubId);
 
     List<ClubBook> findAllByClubIdIn(List<Long> clubIds);
+
+    Optional<ClubBook> findFirstByClubIdAndBookId(Long clubId, Long bookId);
+
+    /** 다음 seq 를 매기려고 — 가장 나중에 붙은 책. */
+    Optional<ClubBook> findFirstByClubIdOrderBySeqDesc(Long clubId);
 }

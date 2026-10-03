@@ -49,6 +49,9 @@ public interface ReadingRecordRepository extends JpaRepository<ReadingRecord, Lo
     List<ReadingRecord> findAllByUserIdInAndBookIdInAndStatus(Collection<Long> userIds, Collection<Long> bookIds,
                                                                 ReadingStatus status);
 
+    /** 모임 합산용 — 멤버들×모임이 읽은 책들의 기록(회독 모두). */
+    List<ReadingRecord> findAllByUserIdInAndBookIdIn(Collection<Long> userIds, Collection<Long> bookIds);
+
     long countByUserIdAndStatus(Long userId, ReadingStatus status);
 
     /** 재촉 후보 조회 — 매일 새벽 배치(§F5). */
