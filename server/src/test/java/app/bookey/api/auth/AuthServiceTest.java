@@ -13,6 +13,7 @@ import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
+import app.bookey.domain.inquiry.InquiryRepository;
 import app.bookey.domain.user.AuthProvider;
 import app.bookey.domain.user.EmailCodePurpose;
 import app.bookey.domain.user.EmailVerification;
@@ -87,6 +88,7 @@ class AuthServiceTest {
     private final EmailVerificationRepository emailVerificationRepository = mock(EmailVerificationRepository.class);
     private final EmailCodeSender emailCodeSender = mock(EmailCodeSender.class);
     private final IdentityVerifier identityVerifier = mock(IdentityVerifier.class);
+    private final InquiryRepository inquiryRepository = mock(InquiryRepository.class);
     private final HandleGenerator handleGenerator = mock(HandleGenerator.class);
     private final app.bookey.domain.admin.OpsFlagRepository opsFlagRepository =
             mock(app.bookey.domain.admin.OpsFlagRepository.class);
@@ -99,7 +101,7 @@ class AuthServiceTest {
     private AuthService service(List<SocialTokenVerifier> verifiers) {
         return new AuthService(userRepository, identityRepository, deviceRepository, refreshTokenRepository,
                 opsFlagRepository, emailVerificationRepository, tokenProvider, handleGenerator,
-                properties, verifiers, PLAIN, emailCodeSender, identityVerifier);
+                properties, verifiers, PLAIN, emailCodeSender, identityVerifier, inquiryRepository);
     }
 
     /** IDENTITY 모드 서비스 — 가입이 휴대폰 본인인증을 요구한다. */
@@ -111,7 +113,7 @@ class AuthServiceTest {
         return new AuthService(userRepository, identityRepository, deviceRepository, refreshTokenRepository,
                 opsFlagRepository, emailVerificationRepository,
                 new JwtTokenProvider(identityProps), handleGenerator,
-                identityProps, List.of(), PLAIN, emailCodeSender, identityVerifier);
+                identityProps, List.of(), PLAIN, emailCodeSender, identityVerifier, inquiryRepository);
     }
 
     private User user(long id, String email, String password) {
@@ -717,7 +719,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("계정 삭제 — 개인정보를 익명화하고 소셜 연동·푸시 토큰·리프레시 토큰을 제거한다")
+    @DisplayName("계정 삭제 — 개인정보를 익명화하고 소셜 연동·푸시 토큰·리프레시 토큰·고객문의를 제거한다")
     void deleteAccountAnonymizesAndRevokesCredentials() {
         User user = user(42L, "delete-me@dev.local", "password1234");
         when(userRepository.findById(42L)).thenReturn(Optional.of(user));
@@ -734,6 +736,7 @@ class AuthServiceTest {
         verify(identityRepository).deleteAllByUserId(42L);
         verify(deviceRepository).deleteAllByUserId(42L);
         verify(refreshTokenRepository).revokeAllByUserId(org.mockito.ArgumentMatchers.eq(42L), any(Instant.class));
+        verify(inquiryRepository).deleteAllByUserId(42L);
     }
 
     // ───────────── 소셜 연동 상태 · 해제 ─────────────
