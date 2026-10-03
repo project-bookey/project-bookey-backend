@@ -119,7 +119,13 @@ public final class ClubDtos {
             /** 함께 읽는 사람들 — 진척 높은 순. 목록 카드의 아바타 줄과 '지금 읽는 중' 표시용. */
             @NotNull List<ClubMemberBrief> members,
             /** 다음 만남 시각 — 잡힌 만남이 없으면 null. */
-            Instant nextMeetingAt
+            Instant nextMeetingAt,
+            /** 다음 만남 제목 — 잡힌 만남이 없으면 null. */
+            String nextMeetingTitle,
+            /** 한 줄 소개. */
+            String description,
+            /** 클럽 머리 배경 사진 — 없으면 null. */
+            String backgroundUrl
     ) {}
 
     /** 목록용 멤버 요약 — 홈의 MemberProgressView 에서 카드에 필요한 만큼만 뽑았다. */

@@ -170,12 +170,14 @@ public class ClubService {
         return bookId == null ? null : bookRepository.findById(bookId).orElse(null);
     }
 
-    /** 다음 만남 시각 — 취소되지 않은, 아직 시작하지 않은 만남. */
-    private Instant nextMeetingAt(Long clubId) {
+    /** 다음 만남 — 취소되지 않은, 아직 시작하지 않은 만남. */
+    private Optional<ClubMeeting> nextMeeting(Long clubId) {
         return meetingRepository
-                .findFirstByClubIdAndStatusAndStartsAtAfterOrderByStartsAtAsc(clubId, "OPEN", Instant.now())
-                .map(ClubMeeting::getStartsAt)
-                .orElse(null);
+                .findFirstByClubIdAndStatusAndStartsAtAfterOrderByStartsAtAsc(clubId, "OPEN", Instant.now());
+    }
+
+    private Instant nextMeetingAt(Long clubId) {
+        return nextMeeting(clubId).map(ClubMeeting::getStartsAt).orElse(null);
     }
 
     private String generateUniqueCode() {
@@ -437,12 +439,15 @@ public class ClubService {
             Double mine = completionRate(records.get(membership.getReadingRecordId()), book);
             Double average = averageCompletion(peers, records, book);
             List<ClubMemberBrief> briefs = memberBriefs(peers, records, book, userId);
+            Optional<ClubMeeting> next = nextMeeting(club.getId());
 
             return new ClubSummaryView(
                     club.getId(), club.getName(), club.getCoverUrl(),
                     book == null ? null : BookSummary.from(book),
                     club.getStatus(), club.getMemberCount(), club.daysLeft(today),
-                    mine, average, 0, membership.getRole(), briefs, nextMeetingAt(club.getId()));
+                    mine, average, 0, membership.getRole(), briefs,
+                    next.map(ClubMeeting::getStartsAt).orElse(null), next.map(ClubMeeting::getTitle).orElse(null),
+                    club.getDescription(), club.getBackgroundUrl());
         });
     }
 
