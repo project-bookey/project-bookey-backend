@@ -294,6 +294,26 @@ public class AuthService {
         return toMe(userRepository.findById(userId).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)));
     }
 
+    /**
+     * 소셜 연동 해제 — 그 provider 의 연동을 지운다. 비밀번호가 없는(소셜로 가입한) 계정의 마지막 연동은
+     * 지우면 다시 로그인할 길이 없어 막는다.
+     */
+    @Transactional
+    public MeResponse unlinkSocial(Long userId, AuthProvider provider) {
+        User user = userRepository.findById(userId).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        List<UserIdentity> identities = identityRepository.findAllByUserId(userId);
+        List<UserIdentity> target = identities.stream().filter(i -> i.getProvider() == provider).toList();
+        if (target.isEmpty()) {
+            throw ApiException.of(ErrorCode.SOCIAL_ACCOUNT_NOT_LINKED);
+        }
+        if (user.getPasswordHash() == null && target.size() == identities.size()) {
+            throw ApiException.of(ErrorCode.LAST_LOGIN_METHOD);
+        }
+        identityRepository.deleteAll(target);
+        List<UserIdentity> remaining = identities.stream().filter(i -> i.getProvider() != provider).toList();
+        return toMe(user, providersOf(remaining));
+    }
+
     private void requireSignupOpen() {
         opsFlagRepository.findById(OpsFlag.SIGNUP_OPEN).ifPresent(flag -> {
             if (!flag.isEnabled()) {
@@ -356,7 +376,12 @@ public class AuthService {
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)));
     }
 
-    public static MeResponse toMe(User user) {
+    /** 내 정보 응답 — 연동된 소셜은 저장소에서 읽어 함께 내려준다. */
+    public MeResponse toMe(User user) {
+        return toMe(user, providersOf(identityRepository.findAllByUserId(user.getId())));
+    }
+
+    public static MeResponse toMe(User user, List<AuthProvider> linkedProviders) {
         return new MeResponse(
                 user.getId(), user.getHandle(), user.getNickname(), user.getEmail(),
                 user.getAvatarUrl(), user.getGender(), user.getBirthDate(),
@@ -364,7 +389,14 @@ public class AuthService {
                 user.getQuietHoursStart(), user.getQuietHoursEnd(),
                 user.getDailyNotifyCap(), user.getClubNotifyCap(),
                 user.isAllowNudge(), user.getStatus().name(),
-                List.of(user.getPreferredCategories()));
+                List.of(user.getPreferredCategories()),
+                linkedProviders,
+                user.getPasswordHash() != null);
+    }
+
+    /** 연동 목록 → provider 만, 중복 없이 enum 순서로. */
+    private static List<AuthProvider> providersOf(List<UserIdentity> identities) {
+        return identities.stream().map(UserIdentity::getProvider).distinct().sorted().toList();
     }
 
     private static String sha256(String value) {

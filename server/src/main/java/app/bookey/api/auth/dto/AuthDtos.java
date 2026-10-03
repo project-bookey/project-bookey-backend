@@ -82,7 +82,11 @@ public final class AuthDtos {
             boolean allowNudge,
             @NotNull String status,
             /** 온보딩에서 고른 선호 카테고리. */
-            java.util.List<String> preferredCategories
+            java.util.List<String> preferredCategories,
+            /** 이 계정에 연동된 소셜 로그인(enum 순서) — 앱 설정의 연동 카드가 상태를 그린다. */
+            java.util.List<AuthProvider> linkedProviders,
+            /** 비밀번호가 있는지 — 없으면(소셜 전용 계정) 마지막 소셜 연동은 해제할 수 없다. */
+            boolean hasPassword
     ) {}
 
     public record DeviceRegisterRequest(
