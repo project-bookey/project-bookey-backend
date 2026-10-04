@@ -195,10 +195,10 @@ public class ChatService {
         String nickname = sender == null ? "상대" : sender.getNickname();
         notificationService.inApp(new NotificationService.NotificationRequest(
                 recipientId, NotificationType.CHAT_MESSAGE, null, null, null,
-                "새 채팅이 도착했어요",
+                "새 메시지가 왔어요",
                 nickname + (message.getType() == ChatMessageType.STICKER
-                        ? "님이 이모티콘을 보냈습니다."
-                        : "님이 메시지를 보냈습니다."),
+                        ? "님이 이모티콘을 보냈어요."
+                        : "님이 메시지를 보냈어요."),
                 Map.of("chatId", chatId, "messageId", message.getId(), "fromUserId", senderId), null));
     }
 

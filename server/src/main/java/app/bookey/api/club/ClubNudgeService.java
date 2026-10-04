@@ -74,7 +74,7 @@ public class ClubNudgeService {
                 request.messageKey()));
 
         User sender = userRepository.findById(fromUserId).orElse(null);
-        String senderName = sender == null ? "모임원" : sender.getNickname();
+        String senderName = sender == null ? "멤버" : sender.getNickname();
 
         notificationService.schedule(new NotificationService.NotificationRequest(
                 request.toUserId(),

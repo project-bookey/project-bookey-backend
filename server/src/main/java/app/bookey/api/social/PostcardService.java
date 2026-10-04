@@ -145,7 +145,7 @@ public class PostcardService {
         notificationService.inApp(new NotificationService.NotificationRequest(
                 toUserId, NotificationType.POSTCARD_RECEIVED, null, null, null,
                 "새 엽서가 도착했어요",
-                nickname + "님이 엽서를 보냈습니다.",
+                nickname + "님이 엽서를 보냈어요.",
                 Map.of("postcardId", postcard.getId(), "fromUserId", fromUserId), null));
     }
 
@@ -156,7 +156,7 @@ public class PostcardService {
         notificationService.inApp(new NotificationService.NotificationRequest(
                 recipient, NotificationType.POSTCARD_REPLIED, null, null, null,
                 "엽서에 답장이 왔어요",
-                nickname + "님이 답장을 보냈습니다.",
+                nickname + "님이 답장을 보냈어요.",
                 Map.of("postcardId", postcard.getId(), "fromUserId", replierId), null));
     }
 

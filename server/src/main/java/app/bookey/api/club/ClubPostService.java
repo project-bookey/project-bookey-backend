@@ -189,7 +189,7 @@ public class ClubPostService {
             }
             notificationService.schedule(new NotificationService.NotificationRequest(
                     member.getUserId(), NotificationType.CLUB_NEW_POST, null, null, club.getId(),
-                    club.getName(), "새 토론이 올라왔어요",
+                    club.getName(), "새 글이 올라왔어요",
                     Map.of("clubId", club.getId(), "postId", post.getId()), null));
         }
     }
@@ -200,7 +200,7 @@ public class ClubPostService {
         }
         notificationService.schedule(new NotificationService.NotificationRequest(
                 parent.getUserId(), NotificationType.CLUB_NEW_POST, null, null, clubId,
-                "내 글에 댓글이 달렸어요", "모임 토론을 확인해 보세요",
+                "내 글에 댓글이 달렸어요", "클럽에서 확인해 보세요",
                 Map.of("clubId", clubId, "postId", parent.getId(), "commentId", comment.getId()),
                 null));
     }

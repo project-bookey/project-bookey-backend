@@ -114,14 +114,14 @@ public class FollowService {
         });
     }
 
-    /** 상대에게 알린다 — 맞팔로우가 되면 '연결됐어요', 아니면 '팔로우했어요'. */
+    /** 상대에게 알린다 — 맞팔로우가 되면 '맞팔로우가 됐어요', 아니면 '팔로우했어요'. */
     private void notifyFollowed(Long userId, Long followerId, boolean mutual) {
         User follower = userRepository.findById(followerId).orElse(null);
         String nickname = follower == null ? "누군가" : follower.getNickname();
         notificationService.inApp(new NotificationService.NotificationRequest(
                 userId, mutual ? NotificationType.FOLLOW_CONNECTED : NotificationType.FOLLOWED, null, null, null,
-                mutual ? "서로 연결됐어요" : "새 팔로워",
-                mutual ? nickname + "님과 맞팔로우가 되었습니다." : nickname + "님이 나를 팔로우했어요.",
+                mutual ? "맞팔로우가 됐어요" : "새 팔로워가 생겼어요",
+                mutual ? nickname + "님과 서로 팔로우하게 됐어요." : nickname + "님이 나를 팔로우했어요.",
                 Map.of("userId", followerId), null));
     }
 }

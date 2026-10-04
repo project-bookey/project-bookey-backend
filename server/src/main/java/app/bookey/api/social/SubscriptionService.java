@@ -68,7 +68,7 @@ public class SubscriptionService {
             String successUrl = appendQuery(toss.successUrl(), "provider=TOSS", "productId=" + productId);
             String failUrl = appendQuery(toss.failUrl(), "provider=TOSS", "productId=" + productId);
             String checkoutUrl = tossPaymentClient.createCheckoutUrl(toss.secretKey(), new TossCreatePaymentRequest(
-                    orderId, "BOOKEY PLUS 월 구독", properties.social().subscriptionPriceKrw(), customerKey,
+                    orderId, "Bookey 월 구독", properties.social().subscriptionPriceKrw(), customerKey,
                     successUrl, failUrl, toss.appScheme()));
             return new SubscriptionCheckoutView(
                     provider, productId, orderId, properties.social().subscriptionPriceKrw(), customerKey,

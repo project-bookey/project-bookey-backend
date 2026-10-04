@@ -74,7 +74,7 @@ public class ClubScheduleJob {
                     memberRepository.findAllByClubIdAndStatus(club.getId(), ClubMemberStatus.ACTIVE)) {
                 notificationService.schedule(new NotificationService.NotificationRequest(
                         member.getUserId(), NotificationType.CLUB_WEEKLY_LOG, null, null, club.getId(),
-                        club.getName() + " — 이번 주 읽기로그",
+                        club.getName() + " · 이번 주 카드",
                         "함께 읽은 일주일이 카드 한 장으로 모였어요",
                         Map.of("clubId", club.getId(), "weekOf", monday.toString()), null));
                 notified++;
