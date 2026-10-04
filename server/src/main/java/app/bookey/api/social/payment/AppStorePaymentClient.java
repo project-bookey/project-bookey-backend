@@ -52,7 +52,7 @@ public class AppStorePaymentClient {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "App Store 거래를 검증하지 못했습니다.");
+            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "App Store 결제를 확인하지 못했어요.");
         }
     }
 

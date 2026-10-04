@@ -82,7 +82,7 @@ public class AuthService {
         }
         SocialTokenVerifier verifier = verifierMap.get(provider);
         if (verifier == null) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "지원하지 않는 로그인 방식입니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "지원하지 않는 로그인 방식이에요.");
         }
         return verifier;
     }
@@ -171,7 +171,7 @@ public class AuthService {
         Instant now = Instant.now();
         emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(email, purpose).ifPresent(latest -> {
             if (latest.getCreatedAt() != null && now.isBefore(latest.getCreatedAt().plus(policy.cooldown()))) {
-                throw new ApiException(ErrorCode.RATE_LIMITED, "인증 코드는 잠시 후 다시 요청할 수 있습니다.");
+                throw new ApiException(ErrorCode.RATE_LIMITED, "인증 코드는 잠시 뒤에 다시 받을 수 있어요.");
             }
         });
         String code = "%06d".formatted(secureRandom.nextInt(1_000_000));
@@ -400,7 +400,7 @@ public class AuthService {
     private void requireSignupOpen() {
         opsFlagRepository.findById(OpsFlag.SIGNUP_OPEN).ifPresent(flag -> {
             if (!flag.isEnabled()) {
-                throw new ApiException(ErrorCode.FORBIDDEN, "현재 신규 가입이 중단되었습니다.");
+                throw new ApiException(ErrorCode.FORBIDDEN, "지금은 새로 가입할 수 없어요.");
             }
         });
     }

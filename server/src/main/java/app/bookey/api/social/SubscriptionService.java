@@ -68,7 +68,7 @@ public class SubscriptionService {
             String successUrl = appendQuery(toss.successUrl(), "provider=TOSS", "productId=" + productId);
             String failUrl = appendQuery(toss.failUrl(), "provider=TOSS", "productId=" + productId);
             String checkoutUrl = tossPaymentClient.createCheckoutUrl(toss.secretKey(), new TossCreatePaymentRequest(
-                    orderId, "BOOKEY PLUS 월 구독", properties.social().subscriptionPriceKrw(), customerKey,
+                    orderId, "Bookey 월 구독", properties.social().subscriptionPriceKrw(), customerKey,
                     successUrl, failUrl, toss.appScheme()));
             return new SubscriptionCheckoutView(
                     provider, productId, orderId, properties.social().subscriptionPriceKrw(), customerKey,
@@ -204,28 +204,64 @@ public class SubscriptionService {
         GooglePlayPaymentClient.GoogleSubscription subscription =
                 googlePlayPaymentClient.getSubscription(properties.payment().google(), purchaseToken);
         if (!request.productId().equals(subscription.productId())
-                || !"SUBSCRIPTION_STATE_ACTIVE".equals(subscription.state())
+                || !grantsEntitlement(subscription.state())
                 || !subscription.expiresAt().isAfter(clock.instant())) {
             throw ApiException.of(ErrorCode.INVALID_REQUEST);
         }
         activateFromPayment(userId, SubscriptionStore.GOOGLE, request.productId(), purchaseToken,
-                subscription.expiresAt());
+                subscription.startsAt(), subscription.expiresAt());
     }
 
     private void activateFromPayment(Long userId, SubscriptionStore store, String productId,
                                      String originalTransactionId, Instant periodEnd) {
+        activateFromPayment(userId, store, productId, originalTransactionId, clock.instant(), periodEnd);
+    }
+
+    private void activateFromPayment(Long userId, SubscriptionStore store, String productId,
+                                     String originalTransactionId, Instant periodStart, Instant periodEnd) {
+        var existing = subscriptionRepository.findByStoreAndOriginalTransactionId(store, originalTransactionId);
+        if (existing.isPresent()) {
+            if (!existing.get().getUserId().equals(userId)) throw ApiException.of(ErrorCode.CONFLICT);
+            existing.get().syncActivePeriod(periodStart, periodEnd);
+            return;
+        }
         if (subscriptionRepository.existsByStoreAndOriginalTransactionId(store, originalTransactionId)) {
             return;
         }
-        Instant now = clock.instant();
         subscriptionRepository.save(Subscription.builder()
                 .userId(userId)
                 .store(store)
                 .productId(productId)
-                .currentPeriodStart(now)
+                .currentPeriodStart(periodStart)
                 .currentPeriodEnd(periodEnd)
                 .originalTransactionId(originalTransactionId)
                 .build());
+    }
+
+    @Transactional
+    public void syncGoogleSubscription(String purchaseToken) {
+        Subscription local = subscriptionRepository
+                .findByStoreAndOriginalTransactionId(SubscriptionStore.GOOGLE, purchaseToken)
+                .orElse(null);
+        // 최초 구매는 인증된 앱 요청에서 사용자와 연결한다. RTDN만으로 새 사용자를 추측하지 않는다.
+        if (local == null) return;
+        GooglePlayPaymentClient.GoogleSubscription remote =
+                googlePlayPaymentClient.getSubscription(properties.payment().google(), purchaseToken);
+        if (!local.getProductId().equals(remote.productId())) throw ApiException.of(ErrorCode.INVALID_REQUEST);
+        if (grantsEntitlement(remote.state()) && remote.expiresAt().isAfter(clock.instant())) {
+            local.syncActivePeriod(remote.startsAt(), remote.expiresAt());
+        } else if ("SUBSCRIPTION_STATE_CANCELED".equals(remote.state())
+                && remote.expiresAt().isAfter(clock.instant())) {
+            // 자동 갱신 취소여도 이미 결제한 만료일까지는 권한을 유지한다.
+            local.syncActivePeriod(remote.startsAt(), remote.expiresAt());
+        } else {
+            local.expire(clock.instant());
+        }
+    }
+
+    private static boolean grantsEntitlement(String state) {
+        return "SUBSCRIPTION_STATE_ACTIVE".equals(state)
+                || "SUBSCRIPTION_STATE_IN_GRACE_PERIOD".equals(state);
     }
 
     private void requireTossCheckoutConfigured(BookeyProperties.Payment.Toss toss) {

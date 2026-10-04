@@ -36,7 +36,7 @@ public class MeController {
     public record UpdateProfileRequest(@Size(max = 50) String nickname, String avatarUrl,
                                        @Pattern(regexp = "MALE|FEMALE|OTHER|PREFER_NOT_TO_SAY") String gender,
                                        java.time.LocalDate birthDate,
-                                       @Size(max = 10) java.util.List<@Size(max = 30) String> preferredCategories) {}
+                                       @Size(max = 10, message = "{max}개까지 고를 수 있어요.") java.util.List<@Size(max = 30) String> preferredCategories) {}
 
     public record ConsentUpdateRequest(@NotNull Boolean agreed) {}
 

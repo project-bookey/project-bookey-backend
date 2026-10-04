@@ -39,7 +39,7 @@ public final class ClubMeetingNoteDtos {
 
     @Schema(description = "노트 연산 — 요소 id 기준 upsert({t:'upsert', el}) · delete({t:'delete', id}). 같은 연산을 다시 보내도 결과가 같다")
     public record ApplyMeetingNoteOpsRequest(
-            @NotNull @Size(min = 1, max = 200) List<Map<String, Object>> ops,
+            @NotNull @Size(min = 1, max = 200, message = "노트 변경 내용을 저장하지 못했어요. 다시 시도해 주세요.") List<Map<String, Object>> ops,
             @Schema(description = "보낸 기기 식별자 — 실시간 방송에서 자기 연산을 알아보는 데 쓴다")
             @Size(max = 64) String clientId) {
     }

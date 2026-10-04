@@ -27,11 +27,11 @@ public class SmtpEmailCodeSender implements EmailCodeSender {
     private static Copy copyFor(EmailCodePurpose purpose) {
         return switch (purpose) {
             case SIGNUP -> new Copy("이메일 인증 코드",
-                    "아래 인증 코드를 입력해 Bookey 가입을 완료하세요.",
-                    "본인이 요청하지 않았다면 이 메일을 무시하세요.");
+                    "아래 코드를 앱에 입력하면 가입을 마칠 수 있어요.",
+                    "직접 요청하지 않았다면 이 메일은 무시해 주세요.");
             case PASSWORD_RESET -> new Copy("비밀번호 재설정 코드",
-                    "아래 코드를 입력하고 새 비밀번호를 정하세요.",
-                    "본인이 요청하지 않았다면 이 메일을 무시하세요. 비밀번호는 바뀌지 않습니다.");
+                    "아래 코드를 앱에 입력하고 새 비밀번호를 정해 주세요.",
+                    "직접 요청하지 않았다면 무시해 주세요. 비밀번호는 바뀌지 않아요.");
         };
     }
 
@@ -54,11 +54,11 @@ public class SmtpEmailCodeSender implements EmailCodeSender {
 
     private static String textBody(Copy copy, String code, Duration ttl) {
         return """
-                Bookey %s입니다.
+                Bookey · %s
                 %s
 
                 코드: %s
-                유효 시간: %d분
+                쓸 수 있는 시간: %d분
 
                 %s
                 """.formatted(copy.title(), copy.lead(), code, ttl.toMinutes(), copy.ignore());
@@ -89,7 +89,7 @@ public class SmtpEmailCodeSender implements EmailCodeSender {
                                     </td>
                                   </tr>
                                 </table>
-                                <p style="margin:0 0 20px;font-size:14px;line-height:22px;color:#57554f">이 코드는 <strong style="color:#1a1c18">%d분</strong> 동안 유효합니다.</p>
+                                <p style="margin:0 0 20px;font-size:14px;line-height:22px;color:#57554f">이 코드는 <strong style="color:#1a1c18">%d분</strong> 동안 쓸 수 있어요.</p>
                                 <div style="height:1px;background:#e5e1d7;margin:0 0 18px"></div>
                                 <p style="margin:0;font-size:12px;line-height:20px;color:#8b887f">%s</p>
                               </td>

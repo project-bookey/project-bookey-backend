@@ -134,8 +134,9 @@ public class PostCommentService {
         String nickname = commenter == null ? "누군가" : commenter.getNickname();
         notificationService.inApp(new NotificationService.NotificationRequest(
                 post.getUserId(), NotificationType.POST_COMMENTED, null, post.getReadingRecordId(), null,
-                parentId == null ? "독후감에 댓글이 달렸어요" : "독후감에 답글이 달렸어요",
-                nickname + "님이 \"" + post.getTitle() + "\"에 댓글을 남겼습니다.",
+                parentId == null ? "내 독후감에 댓글이 달렸어요" : "내 독후감에 답글이 달렸어요",
+                nickname + "님이 \"" + post.getTitle() + "\"에 "
+                        + (parentId == null ? "댓글을" : "답글을") + " 남겼어요.",
                 Map.of("postId", post.getId(), "commenterId", commenterId), null));
     }
 

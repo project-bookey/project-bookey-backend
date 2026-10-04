@@ -69,7 +69,7 @@ public class ClubService {
      */
     @Transactional
     public ClubHomeView create(Long userId, CreateClubRequest request) {
-        requireOpsEnabled(OpsFlag.CLUB_CREATION_OPEN, "현재 모임 생성이 중단되었습니다.");
+        requireOpsEnabled(OpsFlag.CLUB_CREATION_OPEN, "지금은 클럽을 만들 수 없어요.");
         rateLimiter.require("club:create:" + userId, CLUB_CREATE_DAILY_LIMIT, Duration.ofDays(1));
 
         // 옛 앱이 보내는 더 작은 정원(2·3명)은 쓰지 않는다 — 무료 정원보다 작게 열면 늘릴 때 그만큼 책갈피를 더 쓰게 된다.
@@ -226,11 +226,11 @@ public class ClubService {
 
         String blockedReason = null;
         if (membership.map(m -> m.getStatus() == ClubMemberStatus.KICKED).orElse(false)) {
-            blockedReason = "다시 참가할 수 없는 모임입니다.";
+            blockedReason = "다시 참가할 수 없는 클럽이에요.";
         } else if (club.getStatus().isOver()) {
-            blockedReason = "이미 종료된 모임입니다.";
+            blockedReason = "이미 끝난 클럽이에요.";
         } else if (club.isFull()) {
-            blockedReason = "정원이 가득 찼습니다.";
+            blockedReason = "정원이 다 찼어요.";
         }
 
         return new ClubPreview(
@@ -349,7 +349,7 @@ public class ClubService {
         Club club = getClub(clubId);
         requireHost(club, userId);
         if (request.userId().equals(userId)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "자신을 강퇴할 수 없습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "나 자신은 내보낼 수 없어요.");
         }
         ClubMember target = activeMember(clubId, request.userId());
         target.kick(request.reason());

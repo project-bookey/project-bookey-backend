@@ -109,7 +109,7 @@ public class ReadingSession {
         Instant actualEnd = endedAt == null ? Instant.now() : endedAt;
         Duration elapsed = Duration.between(startedAt, actualEnd);
         if (elapsed.isNegative()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "종료 시각이 시작 시각보다 빠릅니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "끝난 시간이 시작 시간보다 빨라요.");
         }
         if (elapsed.compareTo(MAX_SESSION) > 0) {
             // 4시간 초과 세션은 자동 종료 취급 + 의심 플래그 (§F3)

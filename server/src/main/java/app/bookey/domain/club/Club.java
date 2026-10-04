@@ -156,7 +156,7 @@ public class Club extends BaseTimeEntity {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "지금 정원보다 많은 인원을 골라 주세요.");
         }
         if (targetLimit > maxLimit) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "정원은 최대 " + maxLimit + "명까지 늘릴 수 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "정원은 " + maxLimit + "명까지 늘릴 수 있어요.");
         }
         if (targetLimit % step != 0) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "정원은 " + step + "명 단위로 늘릴 수 있어요.");

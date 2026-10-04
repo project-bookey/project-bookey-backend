@@ -5,6 +5,7 @@ import app.bookey.domain.user.NotifyTone;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 /**
  * 재촉 문구 생성 (§F5 재촉 톤).
@@ -17,6 +18,9 @@ import java.time.LocalDate;
 public class NudgeCopyWriter {
 
     public record Copy(String title, String body) {}
+
+    /** 알림 본문의 날짜는 짧게 — 9/12. */
+    private static final DateTimeFormatter SHORT_DATE = DateTimeFormatter.ofPattern("M/d");
 
     public Copy write(NotifyTone tone, LagLevel level, String bookTitle, int remainingPages,
                       long daysSinceRead, LocalDate estimatedFinish, LocalDate targetDate,
@@ -32,31 +36,31 @@ public class NudgeCopyWriter {
         };
     }
 
-    /** L4 — 하차/일시정지/목표 연장 중 하나를 고르게 만든다. */
+    /** L4 — 이어 읽기/잠시 쉬기/하차 중 하나를 고르게 만든다. */
     private Copy cleanupCopy(String bookTitle, long days) {
         return new Copy("이 책, 어떻게 할까요?",
-                "『" + bookTitle + "』 " + days + "일째 멈춰 있어요. 잠시 멈춤 · 목표 연장 · 하차 중에서 골라 주세요. 하차도 기록입니다.");
+                "『" + bookTitle + "』, " + days + "일째 그대로예요. 이어 읽을지, 잠시 쉴지, 하차할지 골라 주세요. 하차도 기록이에요.");
     }
 
     private Copy gentle(LagLevel level, String title, int remaining, long days, int variant) {
         String[] bodies = {
                 "『" + title + "』 " + remaining + "쪽 남았어요. 오늘 10분이면 한 걸음 나아가요 :)",
                 "『" + title + "』, 지난 " + days + "일 동안 기다리고 있었어요. 딱 한 챕터만 어때요?",
-                "잠깐 쉬어가도 괜찮아요. 그래도 『" + title + "』 " + remaining + "쪽이 남아 있어요."
+                "잠깐 쉬어 가도 괜찮아요. 그래도 『" + title + "』 " + remaining + "쪽이 남아 있어요."
         };
-        return new Copy("오늘 조금만 읽어볼까요", bodies[Math.floorMod(variant, bodies.length)]);
+        return new Copy("오늘 조금만 읽어 볼까요", bodies[Math.floorMod(variant, bodies.length)]);
     }
 
     private Copy fact(LagLevel level, String title, long days,
                       LocalDate estimated, LocalDate target) {
-        StringBuilder body = new StringBuilder(days + "일 미독.");
+        StringBuilder body = new StringBuilder(days + "일째 읽지 않음.");
         if (estimated != null && target != null) {
-            body.append(" 이 페이스면 완독 예상일이 ").append(target).append(" → ").append(estimated)
-                    .append("로 밀립니다.");
+            body.append(" 이 속도면 완독 예상일 ").append(SHORT_DATE.format(target)).append(" → ")
+                    .append(SHORT_DATE.format(estimated)).append(".");
         } else if (estimated != null) {
-            body.append(" 현재 페이스 기준 완독 예상일은 ").append(estimated).append("입니다.");
+            body.append(" 지금 속도로는 완독 예상일 ").append(SHORT_DATE.format(estimated)).append(".");
         }
-        return new Copy("『" + title + "』 진척 리포트", body.toString());
+        return new Copy("『" + title + "』 진도 리포트", body.toString());
     }
 
     private Copy sparta(LagLevel level, String title, long days, int variant) {
@@ -79,7 +83,7 @@ public class NudgeCopyWriter {
 
     /** L3 마이크로 미션 — "딱 5분만" (§F5). */
     public Copy microMission(String bookTitle) {
-        return new Copy("딱 5분만", "『" + bookTitle + "』 5분 타이머. 시작 버튼만 누르면 끝나요.");
+        return new Copy("딱 5분만", "『" + bookTitle + "』, 5분만 읽어 볼까요? 시작 버튼만 누르면 돼요.");
     }
 
     /** 완독 임박 — 잔여 10% 이하 */

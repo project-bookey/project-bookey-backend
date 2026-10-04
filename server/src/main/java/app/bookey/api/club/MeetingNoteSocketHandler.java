@@ -104,7 +104,7 @@ public class MeetingNoteSocketHandler extends TextWebSocketHandler {
         try {
             msg = objectMapper.readValue(message.getPayload(), Map.class);
         } catch (RuntimeException e) {
-            reply(session, state, error(null, ErrorCode.INVALID_REQUEST, "메시지를 읽을 수 없습니다."));
+            reply(session, state, error(null, ErrorCode.INVALID_REQUEST, "노트 변경 내용을 저장하지 못했어요. 다시 시도해 주세요."));
             return;
         }
         String type = msg.get("type") instanceof String t ? t : "";
@@ -120,7 +120,7 @@ public class MeetingNoteSocketHandler extends TextWebSocketHandler {
             case "ops" -> applyOps(session, state, msg);
             case "presence" -> presence(state, msg);
             case "ping" -> reply(session, state, Map.of("type", "pong"));
-            default -> reply(session, state, error(msg.get("seq"), ErrorCode.INVALID_REQUEST, "모르는 메시지입니다."));
+            default -> reply(session, state, error(msg.get("seq"), ErrorCode.INVALID_REQUEST, "노트 변경 내용을 저장하지 못했어요. 다시 시도해 주세요."));
         }
     }
 
@@ -193,7 +193,7 @@ public class MeetingNoteSocketHandler extends TextWebSocketHandler {
     private void applyOps(WebSocketSession session, State state, Map<String, Object> msg) throws IOException {
         Object seq = msg.get("seq");
         if (!(msg.get("ops") instanceof List<?> ops)) {
-            reply(session, state, error(seq, ErrorCode.INVALID_REQUEST, "연산이 비어 있습니다."));
+            reply(session, state, error(seq, ErrorCode.INVALID_REQUEST, "노트 변경 내용을 저장하지 못했어요. 다시 시도해 주세요."));
             return;
         }
         try {

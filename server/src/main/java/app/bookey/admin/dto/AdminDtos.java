@@ -39,7 +39,7 @@ public final class AdminDtos {
 
     public record CreateAdminRequest(
             @NotBlank @Email String email,
-            @NotBlank @Size(min = 12, max = 100) String password,
+            @NotBlank @Size(min = 12, max = 100, message = "{min}~{max}자로 적어 주세요.") String password,
             @NotBlank @Size(max = 50) String name,
             @NotNull AdminRole role
     ) {}

@@ -88,13 +88,13 @@ public class ClubLogService {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "사진이나 한 줄 중 하나는 남겨 주세요.");
         }
         if (body.length() > BODY_MAX_LENGTH) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "한 줄은 " + BODY_MAX_LENGTH + "자까지 쓸 수 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "한 줄은 " + BODY_MAX_LENGTH + "자까지 쓸 수 있어요.");
         }
         if (command.anchorPage() != null && command.anchorPage() < 0) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "쪽 번호가 올바르지 않습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "쪽 번호를 다시 확인해 주세요.");
         }
         if (command.spoilerLevel() == SpoilerLevel.PAGE && command.anchorPage() == null) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "쪽에 붙이려면 쪽 번호가 필요합니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "쪽 번호를 적어야 그 쪽에 붙일 수 있어요.");
         }
         requireOwnSession(me, command.readingSessionId());
         // 사진을 받기 전에 레이트리밋을 먼저 건다 — 10MB 를 받아 놓고 거절하지 않도록.
@@ -126,7 +126,7 @@ public class ClubLogService {
         if (session == null
                 || !session.getUserId().equals(me.getUserId())
                 || !session.getReadingRecordId().equals(me.getReadingRecordId())) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "이 모임 책의 내 독서 세션만 붙일 수 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "이 클럽 책을 읽은 내 기록만 붙일 수 있어요.");
         }
     }
 
@@ -246,7 +246,7 @@ public class ClubLogService {
     public List<ClubLogDayCount> days(Long userId, Long clubId, LocalDate from, LocalDate to) {
         clubService.activeMember(clubId, userId);
         if (to.isBefore(from) || from.plusDays(MAX_DAY_RANGE - 1).isBefore(to)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "기간은 " + MAX_DAY_RANGE + "일까지 조회할 수 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "한 번에 " + MAX_DAY_RANGE + "일까지 볼 수 있어요.");
         }
         Map<LocalDate, Long> counts = postRepository.findLogTimes(clubId,
                         from.atStartOfDay(KST).toInstant(), to.plusDays(1).atStartOfDay(KST).toInstant())

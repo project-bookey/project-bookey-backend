@@ -24,7 +24,7 @@ public final class InquiryDtos {
             @NotNull InquiryCategory category,
             @NotBlank @Size(max = InquiryRules.MAX_BODY) String body,
             @Schema(requiredMode = Schema.RequiredMode.NOT_REQUIRED)
-            @Size(max = InquiryRules.MAX_IMAGES) List<Long> imageIds,
+            @Size(max = InquiryRules.MAX_IMAGES, message = "사진은 {max}장까지 붙일 수 있어요.") List<Long> imageIds,
             String appVersion,
             String platform,
             String osVersion,
