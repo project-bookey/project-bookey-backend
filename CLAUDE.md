@@ -79,6 +79,7 @@ common/             보안 · 에러 · 설정 · 공용 유틸
 
 - **V36 은 SQL 이 아니라 자바 마이그레이션이다** — `server/src/main/java/app/bookey/common/migration/V36__Remove_book_quotes.java`(밑줄 기능 삭제: 엮인 밑줄을 독후감 본문으로 옮기고 밑줄 테이블을 지운다). `db/migration` 폴더에는 V35 다음이 안 보이지만 **새 SQL 마이그레이션은 V37 부터** 매긴다 — V36 을 또 만들면 버전이 겹쳐 서버가 뜨지 않는다.
 - 이 클래스와 그 규칙(`domain/post/LegacyQuoteInliner`)은 쓰이지 않는 코드처럼 보여도 **지우면 안 된다** — 이미 적용된 V36 을 Flyway 가 찾지 못하면 기동이 실패한다.
+- **V52 도 자바 마이그레이션이다** — `common/migration/V52__Release_flagged_reviews.java`(어뷰징 감지 제거 뒤 '의심(FLAGGED)' 리뷰를 감지 없는 규칙으로 다시 매기고 예전 스냅숏은 `previous` 에 남긴다). `db/migration` 에 V51 다음이 안 보여도 **새 SQL 마이그레이션은 V53 부터** 매기고, 이 클래스도 지우지 않는다.
 
 ### 도서 검색 파이프라인 (`BookSearchService`)
 
@@ -90,7 +91,7 @@ common/             보안 · 에러 · 설정 · 공용 유틸
 
 ### 어뷰징 감지 없음 (2026-10-05, 사용자 결정)
 
-한 번에 많이 읽거나 빨리 완독해도 의심하지 않는다. 세션의 비정상 속도(분당 5쪽 초과)·타이머 방치·4시간 초과 플래그와 리뷰의 순간 완독·하루 대량 완독(`FLAGGED`) 판정을 걷어냈다 — 관리자에게 완독을 증명하게 만들던 장치다. 4시간 초과 세션을 4시간으로 잘라 닫는 것은 그대로다. `reading_sessions.abuse_flags`·`counted_for_verification` 컬럼은 예전 값과 함께 남겨 두되 읽지 않고, 응답의 `SessionView.abuseFlags`(빈 목록)·`countedForVerification`(true)·`VerificationPreview.flags`(빈 목록)는 예전 앱 호환용이다. 감지를 다시 넣지 않는다.
+한 번에 많이 읽거나 빨리 완독해도 의심하지 않는다. 세션의 비정상 속도(분당 5쪽 초과)·타이머 방치·4시간 초과 플래그와 리뷰의 순간 완독·하루 대량 완독(`FLAGGED`) 판정을 걷어냈다 — 관리자에게 완독을 증명하게 만들던 장치다. 4시간 초과 세션을 4시간으로 잘라 닫는 것은 그대로다. 예전에 '의심'으로 묶인 리뷰는 V52 가 풀었다. `reading_sessions.abuse_flags`·`counted_for_verification` 컬럼은 예전 값과 함께 남겨 두되 읽지 않고, 응답의 `SessionView.abuseFlags`(빈 목록)·`countedForVerification`(true)·`VerificationPreview.flags`(빈 목록)는 예전 앱 호환용이다. 감지를 다시 넣지 않는다.
 
 ### 도메인 규칙은 순수 클래스로
 
