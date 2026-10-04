@@ -27,40 +27,38 @@ class ReadingSessionTest {
 
         assertThat(session.getDurationSec()).isEqualTo(1800);
         assertThat(session.readPages()).isEqualTo(30);
-        assertThat(session.isCountedForVerification()).isTrue();
-        assertThat(session.getAbuseFlags()).isEmpty();
+        assertThat(session.verifiedDurationSec()).isEqualTo(1800);
     }
 
     @Test
-    @DisplayName("포그라운드 비율이 낮고 상호작용이 없으면 타이머 방치로 판정한다")
-    void idleTimerIsNotCounted() {
-        ReadingSession session = session(100);
-        session.close(START.plus(Duration.ofMinutes(60)), 105, 0.1, 0, null);
-
-        assertThat(session.getAbuseFlags()).contains("idle_timer");
-        assertThat(session.isCountedForVerification()).isFalse();
-    }
-
-    @Test
-    @DisplayName("분당 5쪽을 초과하면 비정상 속도로 검증에서 제외한다")
-    void abnormalSpeedIsExcluded() {
+    @DisplayName("한 번에 많이 읽어도(분당 5쪽 초과) 시간을 그대로 인정한다 — 어뷰징 감지 없음")
+    void fastReadingIsCounted() {
         ReadingSession session = session(0);
         // 10분에 200쪽 = 분당 20쪽
         session.close(START.plus(Duration.ofMinutes(10)), 200, 0.9, 30, null);
 
-        assertThat(session.getAbuseFlags()).contains("abnormal_speed");
-        assertThat(session.isCountedForVerification()).isFalse();
+        assertThat(session.readPages()).isEqualTo(200);
+        assertThat(session.verifiedDurationSec()).isEqualTo(600);
     }
 
     @Test
-    @DisplayName("4시간을 넘긴 세션은 자동 종료되고 의심 플래그가 붙는다")
+    @DisplayName("앱을 거의 안 봤어도 타이머 시간을 그대로 인정한다")
+    void backgroundTimerIsCounted() {
+        ReadingSession session = session(100);
+        session.close(START.plus(Duration.ofMinutes(60)), 105, 0.1, 0, null);
+
+        assertThat(session.verifiedDurationSec()).isEqualTo(3600);
+    }
+
+    @Test
+    @DisplayName("4시간을 넘긴 세션은 4시간으로 잘라 닫고, 그 4시간은 인정한다")
     void autoClosesLongSession() {
         ReadingSession session = session(0);
         session.close(START.plus(Duration.ofHours(9)), 50, 0.9, 5, null);
 
-        assertThat(session.getDurationSec()).isEqualTo((int) Duration.ofHours(4).toSeconds());
-        assertThat(session.getAbuseFlags()).contains("suspect_idle");
-        assertThat(session.isCountedForVerification()).isFalse();
+        int fourHours = (int) Duration.ofHours(4).toSeconds();
+        assertThat(session.getDurationSec()).isEqualTo(fourHours);
+        assertThat(session.verifiedDurationSec()).isEqualTo(fourHours);
     }
 
     @Test

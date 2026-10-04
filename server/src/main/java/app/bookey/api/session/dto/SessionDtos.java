@@ -48,7 +48,9 @@ public final class SessionDtos {
             Integer readPages,
             @NotNull SessionSource source,
             String memo,
+            /** 옛 앱 빌드용 — 어뷰징 감지를 없애 늘 빈 목록이다. */
             List<String> abuseFlags,
+            /** 옛 앱 빌드용 — 늘 true. */
             boolean countedForVerification
     ) {}
 

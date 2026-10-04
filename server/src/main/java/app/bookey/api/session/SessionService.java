@@ -259,7 +259,8 @@ public class SessionService {
                 session.readPages(),
                 session.getSource(),
                 session.getMemo(),
-                session.getAbuseFlags(),
-                session.isCountedForVerification());
+                // 어뷰징 감지를 없앴다(2026-10-05) — 옛 앱 빌드가 읽는 자리라 '문제없음' 값으로 채운다.
+                List.of(),
+                true);
     }
 }
