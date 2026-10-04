@@ -5,6 +5,9 @@ import app.bookey.common.support.PageResponse;
 import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookSource;
 import app.bookey.domain.reading.ReadingRecord;
+import app.bookey.domain.remark.BookRemark;
+import app.bookey.domain.remark.RemarkKind;
+import app.bookey.domain.review.Review;
 import app.bookey.domain.user.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +42,19 @@ class PlazaServiceTest {
         return user;
     }
 
+    private BookRemark remark(long recordId, RemarkKind kind, String body) {
+        return BookRemark.builder().userId(10L).bookId(100L).readingRecordId(recordId)
+                .kind(kind).body(body).writtenAt(Instant.now()).build();
+    }
+
+    // Review.builder()도 id 를 받지 않는다 — 리플렉션으로 채운다.
+    private Review review(long id, long recordId, String body) {
+        Review review = Review.builder().userId(10L).bookId(100L).readingRecordId(recordId)
+                .rating((short) 4).body(body).hasSpoiler(false).build();
+        set(review, "id", id);
+        return review;
+    }
+
     private void set(Object target, String field, Object value) {
         try {
             Field f = target.getClass().getDeclaredField(field);
@@ -55,7 +71,7 @@ class PlazaServiceTest {
     @DisplayName("feed: 밑줄(QUOTE)은 걷어냈다 — 옛 앱이 불러도 저장소를 건드리지 않고 빈 페이지를 준다")
     void quoteFeedIsAlwaysEmpty() {
         // 저장소 없이 만든다 — QUOTE 경로가 저장소를 부르면 NullPointerException 으로 드러난다.
-        PlazaService service = new PlazaService(null, null, null);
+        PlazaService service = new PlazaService(null, null, null, null, null);
 
         PageResponse<PlazaItemView> page = service.feed(PlazaItemType.QUOTE, PageRequest.of(2, 10));
 
@@ -76,7 +92,7 @@ class PlazaServiceTest {
         Map<Long, Book> books = Map.of(100L, book(100L, "책"));
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
-        List<PlazaItemView> items = PlazaService.assembleFinishItems(List.of(record), books, authors);
+        List<PlazaItemView> items = PlazaService.assembleFinishItems(List.of(record), books, authors, Map.of(), Map.of());
 
         PlazaItemView item = items.get(0);
         assertThat(item.type()).isEqualTo(PlazaItemType.FINISH);
@@ -93,7 +109,7 @@ class PlazaServiceTest {
         ReadingRecord record = finishedRecord(1L, 99L, 100L, Instant.now());
         Map<Long, Book> books = Map.of(100L, book(100L, "책"));
 
-        List<PlazaItemView> items = PlazaService.assembleFinishItems(List.of(record), books, Map.of());
+        List<PlazaItemView> items = PlazaService.assembleFinishItems(List.of(record), books, Map.of(), Map.of(), Map.of());
 
         assertThat(items.get(0).authorNickname()).isEqualTo("알 수 없음");
         assertThat(items.get(0).authorAvatarUrl()).isNull();
@@ -108,7 +124,7 @@ class PlazaServiceTest {
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
         List<PlazaItemView> items = PlazaService.assembleFinishItems(
-                List.of(withBook, withoutBook), books, authors);
+                List.of(withBook, withoutBook), books, authors, Map.of(), Map.of());
 
         assertThat(items).hasSize(1);
     }
@@ -123,8 +139,50 @@ class PlazaServiceTest {
         Map<Long, Book> books = Map.of(100L, book(100L, "책"));
         Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
 
-        List<PlazaItemView> items = PlazaService.assembleFinishItems(List.of(first, second), books, authors);
+        List<PlazaItemView> items = PlazaService.assembleFinishItems(List.of(first, second), books, authors, Map.of(), Map.of());
 
         assertThat(items).extracting(PlazaItemView::occurredAt).containsExactly(firstAt, secondAt);
+    }
+
+    @Test
+    @DisplayName("assembleFinishItems: 그 회차의 한 마디·리뷰를 붙이고, 남기지 않은 회차는 비워 둔다")
+    void assembleFinishItemsAttachesRemarkAndReviewByRecord() {
+        ReadingRecord withNotes = finishedRecord(1L, 10L, 100L, Instant.now());
+        ReadingRecord bare = finishedRecord(2L, 10L, 100L, Instant.now());
+        Map<Long, Book> books = Map.of(100L, book(100L, "책"));
+        Map<Long, User> authors = Map.of(10L, user(10L, "작가"));
+        Map<Long, String> remarks = Map.of(1L, "끝까지 읽길 잘했다");
+        Map<Long, Review> reviews = Map.of(1L, review(7L, 1L, "좋았다"));
+
+        List<PlazaItemView> items = PlazaService.assembleFinishItems(
+                List.of(withNotes, bare), books, authors, remarks, reviews);
+
+        assertThat(items.get(0).remark()).isEqualTo("끝까지 읽길 잘했다");
+        assertThat(items.get(0).review().id()).isEqualTo(7L);
+        assertThat(items.get(0).review().rating()).isEqualTo((short) 4);
+        assertThat(items.get(0).review().body()).isEqualTo("좋았다");
+        assertThat(items.get(1).remark()).isNull();
+        assertThat(items.get(1).review()).isNull();
+    }
+
+    @Test
+    @DisplayName("finishRemarks: 하차하며 남긴 한 마디는 완독 자랑에 붙이지 않는다")
+    void finishRemarksDropsAbandoned() {
+        Map<Long, String> remarks = PlazaService.finishRemarks(List.of(
+                remark(1L, RemarkKind.FINISHED, "다 읽었다"),
+                remark(2L, RemarkKind.ABANDONED, "여기까지")));
+
+        assertThat(remarks).containsOnlyKeys(1L).containsEntry(1L, "다 읽었다");
+    }
+
+    @Test
+    @DisplayName("latestReviews: 한 회차에 리뷰가 여럿이면 가장 최근(id 가 큰) 것 하나만 남긴다")
+    void latestReviewsKeepsNewestPerRecord() {
+        Map<Long, Review> reviews = PlazaService.latestReviews(List.of(
+                review(3L, 1L, "처음"), review(9L, 1L, "나중"), review(5L, 2L, "다른 회차")));
+
+        assertThat(reviews).containsOnlyKeys(1L, 2L);
+        assertThat(reviews.get(1L).getBody()).isEqualTo("나중");
+        assertThat(reviews.get(2L).getBody()).isEqualTo("다른 회차");
     }
 }
