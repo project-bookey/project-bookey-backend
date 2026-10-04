@@ -77,7 +77,7 @@ bookey:
       allow-dev-stub: ${IDENTITY_DEV_STUB:true}      # secret 없이 "dev-" id 통과(로컬 전용). 운영은 prod 프로필이 끈다
     email-code:
       ttl: PT3M            # 코드를 입력·확인할 수 있는 시간 — 앱이 발급 응답의 expiresInSec 으로 남은 시간을 센다
-      cooldown: PT1M       # 같은 이메일·용도로 다시 받기까지 기다리는 시간 — 앱이 resendAfterSec 으로 센다
+      hourly-limit: 10     # 같은 이메일·용도로 1시간에 받을 수 있는 코드 수 — 다시 받기는 기다림 없이 열어 두고 남용(메일 폭탄·코드 바꿔 가며 대입)만 막는다
       verified-ttl: PT30M  # 가입 폼에서 확인을 마친 코드는 이만큼 더 쓸 수 있다 — 약관을 읽는 사이 3분이 지나도 가입이 막히지 않게
       max-attempts: 5
       expose: ${AUTH_EMAIL_CODE_EXPOSE:true}   # 코드 발급 응답에 코드 동봉(로컬 개발·스모크 편의). 운영은 application-prod.yml 이 끈다

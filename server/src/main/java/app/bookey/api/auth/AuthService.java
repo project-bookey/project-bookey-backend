@@ -7,6 +7,7 @@ import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
+import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.admin.OpsFlag;
 import app.bookey.domain.admin.OpsFlagRepository;
 import app.bookey.domain.inquiry.InquiryRepository;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.HexFormat;
@@ -49,6 +51,7 @@ public class AuthService {
     private final DeletedEmailHashRepository deletedEmailHashRepository;
     private final ConsentService consentService;
     private final AccountEraser accountEraser;
+    private final RateLimiter rateLimiter;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -168,19 +171,20 @@ public class AuthService {
         return issueEmailCode(email, EmailCodePurpose.PASSWORD_RESET);
     }
 
-    /** 코드 발급 공통 — 같은 용도의 마지막 코드 기준 쿨다운을 지키고, 해시만 저장한 뒤 발송한다. */
+    /**
+     * 코드 발급 공통 — 해시만 저장한 뒤 발송한다. 다시 받기는 기다림 없이 바로 되고(새 코드가 앞 코드를 대신한다),
+     * 같은 이메일·용도로 1시간에 hourlyLimit 번을 넘기면 막는다 — 메일 폭탄과 코드를 바꿔 가며 맞혀 보는 대입을 막는 유일한 장치다.
+     */
     private EmailCodeResponse issueEmailCode(String email, EmailCodePurpose purpose) {
         BookeyProperties.Auth.EmailCode policy = properties.auth().emailCode();
+        if (!rateLimiter.tryAcquire("email-code:" + purpose + ":" + email, policy.hourlyLimit(), Duration.ofHours(1))) {
+            throw new ApiException(ErrorCode.RATE_LIMITED, "인증 코드를 너무 여러 번 받았어요. 잠시 후 다시 받아 주세요.");
+        }
         Instant now = Instant.now();
-        emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(email, purpose).ifPresent(latest -> {
-            if (latest.getCreatedAt() != null && now.isBefore(latest.getCreatedAt().plus(policy.cooldown()))) {
-                throw new ApiException(ErrorCode.RATE_LIMITED, "인증 코드는 잠시 뒤에 다시 받을 수 있어요.");
-            }
-        });
         String code = "%06d".formatted(secureRandom.nextInt(1_000_000));
         emailVerificationRepository.save(new EmailVerification(email, purpose, sha256(code), now.plus(policy.ttl())));
         emailCodeSender.send(email, code, policy.ttl(), purpose);
-        return new EmailCodeResponse(policy.ttl().toSeconds(), policy.cooldown().toSeconds(), policy.expose() ? code : null);
+        return new EmailCodeResponse(policy.ttl().toSeconds(), policy.expose() ? code : null);
     }
 
     /**

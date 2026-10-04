@@ -50,13 +50,9 @@ public final class AuthDtos {
             @NotBlank @Size(min = 6, max = 6, message = "6자리 코드를 적어 주세요.") String code
     ) {}
 
-    /**
-     * expiresInSec 은 코드를 쓸 수 있는 시간, resendAfterSec 은 같은 이메일로 다시 받기까지 기다리는 시간(초) — 앱이 두 타이머를 센다.
-     * devCode 는 bookey.auth.email-code.expose=true(로컬)일 때만 담긴다.
-     */
+    /** expiresInSec 은 코드를 쓸 수 있는 시간(초) — 앱이 남은 시간을 센다. devCode 는 bookey.auth.email-code.expose=true(로컬)일 때만 담긴다. */
     public record EmailCodeResponse(
             long expiresInSec,
-            long resendAfterSec,
             String devCode
     ) {}
 
