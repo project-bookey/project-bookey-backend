@@ -34,14 +34,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 모임 자리 늘리기 — 호스트만, 자리당 책갈피 4개, 최대 6명, 원장 기록. */
+/** 모임 자리 늘리기 — 호스트만, 10자리 단위, 자리당 책갈피 2개, 최대 50명, 원장 기록. */
 class ClubSeatServiceTest {
 
     private static final long HOST_ID = 1L;
     private static final long CLUB_ID = 10L;
     private static final Instant NOW = Instant.parse("2026-09-14T03:00:00Z");
     private static final BookeyProperties.Club CLUB_POLICY =
-            new BookeyProperties.Club(3, 6, 3, 4, Duration.ofHours(24), 3, 10);
+            new BookeyProperties.Club(50, 10, 10, 2, Duration.ofHours(24), 3, 10);
     private static final BookeyProperties.Social SOCIAL =
             new BookeyProperties.Social(5, 16, 1, 2, 200, 50, 30, 5900);
 
@@ -83,43 +83,55 @@ class ClubSeatServiceTest {
     }
 
     @Test
-    @DisplayName("3명 → 6명은 책갈피 12개를 쓰고, 원장에 모임 참조를 남긴다")
-    void expandThreeSeats() {
-        Club club = club(3);
-        wallet(15);
+    @DisplayName("10명 → 30명은 책갈피 40개를 쓰고, 원장에 모임 참조를 남긴다")
+    void expandTwoSteps() {
+        Club club = club(10);
+        wallet(45);
 
-        ClubSeatResult result = service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(6));
+        ClubSeatResult result = service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(30));
 
-        assertThat(result.memberLimit()).isEqualTo(6);
-        assertThat(result.bookmarkBalance()).isEqualTo(3);
-        assertThat(club.getMemberLimit()).isEqualTo((short) 6);
+        assertThat(result.memberLimit()).isEqualTo(30);
+        assertThat(result.bookmarkBalance()).isEqualTo(5);
+        assertThat(club.getMemberLimit()).isEqualTo((short) 30);
 
         ArgumentCaptor<WalletTransaction> tx = ArgumentCaptor.forClass(WalletTransaction.class);
         verify(transactionRepository).save(tx.capture());
         assertThat(tx.getValue().getKind()).isEqualTo(WalletTransactionKind.CLUB_SEAT);
-        assertThat(tx.getValue().getBookmarkDelta()).isEqualTo(-12);
+        assertThat(tx.getValue().getBookmarkDelta()).isEqualTo(-40);
         assertThat(tx.getValue().getRefType()).isEqualTo("CLUB");
         assertThat(tx.getValue().getRefId()).isEqualTo(CLUB_ID);
     }
 
     @Test
-    @DisplayName("이미 늘린 모임은 차이만큼만 낸다 — 4명 → 5명은 책갈피 4개")
+    @DisplayName("이미 늘린 모임은 차이만큼만 낸다 — 20명 → 30명은 책갈피 20개")
     void expandChargesOnlyDifference() {
-        club(4);
-        wallet(4);
+        club(20);
+        wallet(20);
 
-        ClubSeatResult result = service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(5));
+        ClubSeatResult result = service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(30));
 
-        assertThat(result.memberLimit()).isEqualTo(5);
+        assertThat(result.memberLimit()).isEqualTo(30);
         assertThat(result.bookmarkBalance()).isZero();
+    }
+
+    @Test
+    @DisplayName("10명 단위가 아닌 정원은 결제 전에 거절한다")
+    void rejectsOffStepBeforePaying() {
+        Club club = club(10);
+
+        assertThatThrownBy(() -> service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(15)))
+                .extracting(ClubSeatServiceTest::codeOf)
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+        assertThat(club.getMemberLimit()).isEqualTo((short) 10);
+        verify(walletRepository, never()).findByUserIdForUpdate(any());
     }
 
     @Test
     @DisplayName("호스트가 아니면 자리를 늘릴 수 없고 책갈피도 건드리지 않는다")
     void rejectsNonHost() {
-        club(3);
+        club(10);
 
-        assertThatThrownBy(() -> service.expand(2L, CLUB_ID, new ExpandSeatsRequest(4)))
+        assertThatThrownBy(() -> service.expand(2L, CLUB_ID, new ExpandSeatsRequest(20)))
                 .isInstanceOf(ApiException.class)
                 .extracting(ClubSeatServiceTest::codeOf)
                 .isEqualTo(ErrorCode.CLUB_NOT_HOST);
@@ -129,22 +141,22 @@ class ClubSeatServiceTest {
     @Test
     @DisplayName("책갈피가 모자라면 INSUFFICIENT_BOOKMARK 이고 원장에 남지 않는다")
     void rejectsInsufficientBookmarks() {
-        club(3);
-        Wallet wallet = wallet(5);
+        club(10);
+        Wallet wallet = wallet(19);
 
-        assertThatThrownBy(() -> service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(6)))
+        assertThatThrownBy(() -> service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(20)))
                 .extracting(ClubSeatServiceTest::codeOf)
                 .isEqualTo(ErrorCode.INSUFFICIENT_BOOKMARK);
-        assertThat(wallet.getBookmarkBalance()).isEqualTo(5);
+        assertThat(wallet.getBookmarkBalance()).isEqualTo(19);
         verify(transactionRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("최대 정원을 넘기면 결제 전에 거절한다")
     void rejectsOverMaxBeforePaying() {
-        club(3);
+        club(10);
 
-        assertThatThrownBy(() -> service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(7)))
+        assertThatThrownBy(() -> service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(60)))
                 .extracting(ClubSeatServiceTest::codeOf)
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
         verify(walletRepository, never()).findByUserIdForUpdate(any());
@@ -155,7 +167,7 @@ class ClubSeatServiceTest {
     void rejectsMissingClub() {
         when(clubRepository.findByIdForUpdate(CLUB_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(4)))
+        assertThatThrownBy(() -> service.expand(HOST_ID, CLUB_ID, new ExpandSeatsRequest(20)))
                 .extracting(ClubSeatServiceTest::codeOf)
                 .isEqualTo(ErrorCode.CLUB_NOT_FOUND);
     }

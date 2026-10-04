@@ -28,8 +28,8 @@ public final class ClubDtos {
             @Deprecated LocalDate startsAt,
             @Deprecated LocalDate endsAt,
             ClubVisibility visibility,
-            /** 무료 정원(bookey.club.free-member-limit) 이하만. 더 필요하면 만든 뒤 책갈피로 자리를 늘린다. */
-            @Min(2) Integer memberLimit,
+            /** 쓰지 않는다 — 새 클럽은 늘 무료 정원(bookey.club.free-member-limit)으로 연다. 옛 앱 호환으로 받되 무료 정원을 넘으면 거절한다. */
+            @Deprecated @Min(2) Integer memberLimit,
             Boolean allowNudge,
             @Deprecated Boolean autoCheckpoints,
             @Deprecated List<CheckpointRequest> checkpoints
@@ -72,13 +72,16 @@ public final class ClubDtos {
     public record TransferHostRequest(@NotNull Long userId) {}
 
     // ── 자리 늘리기 ───────────────────────────────────────────
-    /** 목표 정원 — 현재 정원보다 크고 최대 정원 이하. 차이만큼 책갈피를 쓴다. */
+    /** 목표 정원 — 현재 정원보다 크고 최대 정원 이하이며 늘리는 단위(ClubSeatPolicy.step)의 배수. 차이만큼 책갈피를 쓴다. */
     public record ExpandSeatsRequest(@NotNull @Min(3) Integer targetLimit) {}
 
     public record ClubSeatResult(int memberLimit, int bookmarkBalance) {}
 
-    /** 앱이 가격·상한을 하드코딩하지 않도록 모임 홈에 함께 내린다. */
-    public record ClubSeatPolicy(int freeLimit, int maxLimit, int costPerSeat) {}
+    /**
+     * 앱이 가격·상한을 하드코딩하지 않도록 모임 홈에 함께 내린다.
+     * 자리는 step 단위로만 늘고(정원이 step 의 배수), 값은 자리마다 costPerSeat — 옛 앱도 같은 식으로 값을 셈한다.
+     */
+    public record ClubSeatPolicy(int freeLimit, int maxLimit, int costPerSeat, int step) {}
 
     // ── 조회 ─────────────────────────────────────────────────
 

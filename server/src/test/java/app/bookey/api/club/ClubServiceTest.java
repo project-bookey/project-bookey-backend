@@ -12,13 +12,16 @@ import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.admin.OpsFlagRepository;
+import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookRepository;
+import app.bookey.domain.book.BookSource;
 import app.bookey.domain.club.*;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingSessionRepository;
 import app.bookey.domain.user.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -43,7 +46,7 @@ import static org.mockito.Mockito.when;
 class ClubServiceTest {
 
     private static final BookeyProperties.Club CLUB_POLICY =
-            new BookeyProperties.Club(3, 6, 3, 4, Duration.ofHours(24), 3, 10);
+            new BookeyProperties.Club(50, 10, 10, 2, Duration.ofHours(24), 3, 10);
 
     private final ClubRepository clubRepository = mock(ClubRepository.class);
     private final ClubMemberRepository memberRepository = mock(ClubMemberRepository.class);
@@ -76,9 +79,9 @@ class ClubServiceTest {
     }
 
     @Test
-    @DisplayName("무료 정원(3명)을 넘겨 모임을 만들 수 없다 — 책 조회 전에 거절한다")
+    @DisplayName("무료 정원(10명)을 넘겨 모임을 만들 수 없다 — 책 조회 전에 거절한다")
     void createRejectsOverFreeLimit() {
-        assertThatThrownBy(() -> service.create(1L, create(4)))
+        assertThatThrownBy(() -> service.create(1L, create(11)))
                 .isInstanceOf(ApiException.class)
                 .extracting(ClubServiceTest::codeOf)
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
@@ -86,13 +89,26 @@ class ClubServiceTest {
     }
 
     @Test
-    @DisplayName("정원을 비우면 기본값(3명)으로 통과해 다음 단계로 간다")
+    @DisplayName("정원을 비우면 무료 정원으로 통과해 다음 단계로 간다")
     void createDefaultsWithinFreeLimit() {
         when(bookRepository.findById(7L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(1L, create(null)))
                 .extracting(ClubServiceTest::codeOf)
                 .isEqualTo(ErrorCode.BOOK_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("옛 앱이 작은 정원(3명)을 보내도 무료 정원(10명)으로 연다")
+    void createAlwaysOpensWithFreeLimit() {
+        when(bookRepository.findById(7L))
+                .thenReturn(Optional.of(Book.builder().title("데미안").source(BookSource.MANUAL).build()));
+        ArgumentCaptor<Club> saved = ArgumentCaptor.forClass(Club.class);
+        // 정원만 보면 되므로 저장 다음 단계는 예외로 끊는다.
+        when(clubRepository.save(saved.capture())).thenThrow(new IllegalStateException("stop"));
+
+        assertThatThrownBy(() -> service.create(1L, create(3))).isInstanceOf(IllegalStateException.class);
+        assertThat(saved.getValue().getMemberLimit()).isEqualTo((short) 10);
     }
 
     @Test

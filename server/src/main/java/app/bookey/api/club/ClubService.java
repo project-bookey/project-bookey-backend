@@ -63,7 +63,8 @@ public class ClubService {
     // ────────────────────────────── 생성 ──────────────────────────────
 
     /**
-     * 모임은 기간 없이 이어지고 책은 만남마다 고른다 — 이름 · 정원 · 공개 범위만으로 연다.
+     * 모임은 기간 없이 이어지고 책은 만남마다 고른다 — 이름 · 공개 범위만으로 연다.
+     * 정원은 늘 무료 정원이고, 더 필요하면 만든 뒤 책갈피로 늘린다.
      * 처음 읽을 책을 함께 주면 그 책을 지금 읽는 책으로 바로 잡는다.
      */
     @Transactional
@@ -71,12 +72,11 @@ public class ClubService {
         requireOpsEnabled(OpsFlag.CLUB_CREATION_OPEN, "현재 모임 생성이 중단되었습니다.");
         rateLimiter.require("club:create:" + userId, CLUB_CREATE_DAILY_LIMIT, Duration.ofDays(1));
 
-        short memberLimit = request.memberLimit() == null
-                ? (short) properties.club().defaultMemberLimit()
-                : request.memberLimit().shortValue();
-        if (memberLimit > properties.club().freeMemberLimit()) {
+        // 옛 앱이 보내는 더 작은 정원(2·3명)은 쓰지 않는다 — 무료 정원보다 작게 열면 늘릴 때 그만큼 책갈피를 더 쓰게 된다.
+        int freeLimit = properties.club().freeMemberLimit();
+        if (request.memberLimit() != null && request.memberLimit() > freeLimit) {
             throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "정원은 " + properties.club().freeMemberLimit() + "명까지 고를 수 있습니다. 더 필요하면 모임을 만든 뒤 자리를 늘려 주세요.");
+                    "클럽은 " + freeLimit + "명으로 시작해요. 더 필요하면 클럽을 만든 뒤 자리를 늘려 주세요.");
         }
 
         Book book = request.bookId() == null
@@ -91,7 +91,7 @@ public class ClubService {
                 .coverUrl(book == null ? null : book.getCoverUrl())
                 .joinCode(generateUniqueCode())
                 .visibility(request.visibility())
-                .memberLimit(memberLimit)
+                .memberLimit((short) freeLimit)
                 .startsAt(LocalDate.now(KST))
                 .allowNudge(request.allowNudge() == null || request.allowNudge())
                 .build());
@@ -505,7 +505,7 @@ public class ClubService {
 
     private ClubSeatPolicy seatPolicy() {
         BookeyProperties.Club policy = properties.club();
-        return new ClubSeatPolicy(policy.freeMemberLimit(), policy.maxMemberLimit(), policy.seatCostBookmarks());
+        return new ClubSeatPolicy(policy.freeMemberLimit(), policy.maxMemberLimit(), policy.seatCostBookmarks(), policy.seatStep());
     }
 
     private MemberProgressView toMemberView(ClubMember member, User user, ReadingRecord record,

@@ -77,11 +77,12 @@ public record BookeyProperties(
     ) {}
 
     public record Club(
-            int defaultMemberLimit,
             /** 책갈피로 늘릴 수 있는 최대 정원. */
             int maxMemberLimit,
-            /** 무료 정원 — 모임 생성 시 이 이상은 고를 수 없다. */
+            /** 무료 정원 — 새 클럽은 늘 이 정원으로 연다. */
             int freeMemberLimit,
+            /** 자리를 늘리는 단위 — 목표 정원은 이 수의 배수여야 한다. */
+            int seatStep,
             /** 자리 1개를 늘리는 데 드는 책갈피. */
             int seatCostBookmarks,
             Duration nudgeCooldown,

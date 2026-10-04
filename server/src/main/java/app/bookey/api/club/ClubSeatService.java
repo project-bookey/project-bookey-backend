@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 
 /**
- * 모임 자리 늘리기. 무료 정원을 넘는 자리는 호스트가 책갈피로 연다.
+ * 모임 자리 늘리기. 무료 정원을 넘는 자리는 호스트가 책갈피로 연다 — 정해진 단위(10자리)씩만.
  * 늘린 자리는 그 모임에만 속한다 — 환불·이월·양도 경로를 두지 않는다.
  */
 @Service
@@ -45,7 +45,7 @@ public class ClubSeatService {
         }
 
         BookeyProperties.Club policy = properties.club();
-        int added = club.expandMemberLimit(request.targetLimit(), policy.maxMemberLimit());
+        int added = club.expandMemberLimit(request.targetLimit(), policy.maxMemberLimit(), policy.seatStep());
         // 책갈피가 모자라면 예외로 트랜잭션 전체가 롤백되어 정원도 되돌아간다.
         Wallet wallet = walletService.spendBookmarks(userId, added * policy.seatCostBookmarks(),
                 WalletTransactionKind.CLUB_SEAT, LEDGER_REF_TYPE, clubId);

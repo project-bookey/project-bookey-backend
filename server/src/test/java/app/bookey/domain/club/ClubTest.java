@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** 모임 정원 규칙 — 참가 시 정원 검사, 자리 늘리기 상한. */
+/** 모임 정원 규칙 — 참가 시 정원 검사, 자리 늘리기 상한·단위. */
 class ClubTest {
 
     private static Club club(int memberLimit) {
@@ -46,49 +46,63 @@ class ClubTest {
     @Test
     @DisplayName("자리를 늘리면 늘어난 자리 수를 돌려주고, 가득 찼던 모임에 다시 참가할 수 있다")
     void expandReturnsAddedSeats() {
-        Club club = club(3);
-        club.joinMember();
-        club.joinMember();
-        club.joinMember();
+        Club club = club(10);
+        for (int i = 0; i < 10; i++) {
+            club.joinMember();
+        }
 
-        assertThat(club.expandMemberLimit(6, 6)).isEqualTo(3);
-        assertThat(club.getMemberLimit()).isEqualTo((short) 6);
+        assertThat(club.expandMemberLimit(20, 50, 10)).isEqualTo(10);
+        assertThat(club.getMemberLimit()).isEqualTo((short) 20);
         club.joinMember();
-        assertThat(club.getMemberCount()).isEqualTo((short) 4);
+        assertThat(club.getMemberCount()).isEqualTo((short) 11);
     }
 
     @Test
     @DisplayName("지금 정원 이하로는 늘릴 수 없다")
     void expandRejectsNotLarger() {
-        Club club = club(4);
+        Club club = club(20);
 
-        assertThatThrownBy(() -> club.expandMemberLimit(4, 6))
+        assertThatThrownBy(() -> club.expandMemberLimit(20, 50, 10))
                 .extracting(ClubTest::codeOf)
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
-        assertThatThrownBy(() -> club.expandMemberLimit(3, 6))
+        assertThatThrownBy(() -> club.expandMemberLimit(10, 50, 10))
                 .extracting(ClubTest::codeOf)
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
-        assertThat(club.getMemberLimit()).isEqualTo((short) 4);
+        assertThat(club.getMemberLimit()).isEqualTo((short) 20);
     }
 
     @Test
     @DisplayName("최대 정원을 넘겨 늘릴 수 없다")
     void expandRejectsOverMax() {
-        Club club = club(3);
+        Club club = club(10);
 
-        assertThatThrownBy(() -> club.expandMemberLimit(7, 6))
+        assertThatThrownBy(() -> club.expandMemberLimit(60, 50, 10))
                 .extracting(ClubTest::codeOf)
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
-        assertThat(club.getMemberLimit()).isEqualTo((short) 3);
+        assertThat(club.getMemberLimit()).isEqualTo((short) 10);
+    }
+
+    @Test
+    @DisplayName("늘리는 단위의 배수가 아니면 늘릴 수 없다 — 단위가 어긋난 옛 정원도 다음 배수로는 늘린다")
+    void expandRejectsOffStep() {
+        Club club = club(10);
+
+        assertThatThrownBy(() -> club.expandMemberLimit(15, 50, 10))
+                .extracting(ClubTest::codeOf)
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+        assertThat(club.getMemberLimit()).isEqualTo((short) 10);
+
+        Club odd = club(13);
+        assertThat(odd.expandMemberLimit(20, 50, 10)).isEqualTo(7);
     }
 
     @Test
     @DisplayName("끝난 모임은 자리를 늘릴 수 없다 — 늘린 자리는 종료와 함께 사라진다")
     void expandRejectsEndedClub() {
-        Club club = club(3);
+        Club club = club(10);
         club.end();
 
-        assertThatThrownBy(() -> club.expandMemberLimit(4, 6))
+        assertThatThrownBy(() -> club.expandMemberLimit(20, 50, 10))
                 .extracting(ClubTest::codeOf)
                 .isEqualTo(ErrorCode.CLUB_ENDED);
     }
