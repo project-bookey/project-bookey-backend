@@ -89,6 +89,8 @@ common/             보안 · 에러 · 설정 · 공용 유틸
 
 모임은 기간이 없고(`clubs.ends_at` 은 예전 모임만, 호스트가 끝낼 때 끝난다) 책 한 권에 묶이지 않는다. 만남은 멤버 누구나 열고(고치기·취소는 연 사람과 호스트만, 2026-10-05), 만남(`club_meetings.book_id`, 선택)마다 책을 고르고, 다가오는 만남의 책이 `clubs.current_club_book_id`(지금 읽는 책)가 된다 — 판정은 순수 규칙 `ClubCurrentBook`, 반영은 `ClubService.syncCurrentBook`(만남 생성·수정·취소 때 + 매일 00:05 배치). 지금 책이 바뀌면 멤버마다 그 책의 읽기 기록을 `ClubMember.readingRecordId` 로 다시 잇는다(없으면 서재에 WANT_TO_READ 로 추가) — 진척·지금 읽는 중·스포일러 가림이 이 기록을 본다. 아직 책이 없는 모임의 멤버는 `readingRecordId` 가 null 이니 조회 시 null 키를 다룰 것. 조각·글은 쓸 때의 `club_book_id` 에 붙고, 지난 책의 글은 그 책의 뷰어 진도로 가린다(`ClubPostService.viewerStates`). 체크포인트·결산·기간 종료 배치는 걷어냈고(테이블은 남김), `daysLeft`·`checkpoints`·`nextCheckpoint` 는 예전 앱 호환용으로만 응답에 남아 있다.
 
+**나가기·내보내기 (2026-10-05, 사용자 결정)**: 멤버 행은 지우지 않고 `LEFT`/`KICKED` 로 두지만, `ClubService.forgetMemberTraces` 가 그 사람의 채팅 이용권(`club_chat_unlocks` — 다시 참가하면 책갈피를 다시 낸다)·채팅 읽음 위치·아직 시작하지 않은 만남 참여를 지운다. 다시 참가하면 같은 행이 `rejoin()` 으로 살아나며 `joinedAt` 이 새로 찍힌다. 채팅(`ClubCommunityService.chatMessages`)은 보낸 사람이 지금 ACTIVE 이고 그 `joinedAt` 뒤에 보낸 메시지만 그 사람 것으로 내리고, 나머지는 `senderId` 없이 '나간 멤버'·`mine=false` 로 내린다 — 다시 참가한 사람의 예전 메시지도 내 것이 아니다. 메모(조각)는 그대로 남는다.
+
 ### 어뷰징 감지 없음 (2026-10-05, 사용자 결정)
 
 한 번에 많이 읽거나 빨리 완독해도 의심하지 않는다. 세션의 비정상 속도(분당 5쪽 초과)·타이머 방치·4시간 초과 플래그와 리뷰의 순간 완독·하루 대량 완독(`FLAGGED`) 판정을 걷어냈다 — 관리자에게 완독을 증명하게 만들던 장치다. 4시간 초과 세션을 4시간으로 잘라 닫는 것은 그대로다. 예전에 '의심'으로 묶인 리뷰는 V52 가 풀었다. `reading_sessions.abuse_flags`·`counted_for_verification` 컬럼은 예전 값과 함께 남겨 두되 읽지 않고, 응답의 `SessionView.abuseFlags`(빈 목록)·`countedForVerification`(true)·`VerificationPreview.flags`(빈 목록)는 예전 앱 호환용이다. 감지를 다시 넣지 않는다.
