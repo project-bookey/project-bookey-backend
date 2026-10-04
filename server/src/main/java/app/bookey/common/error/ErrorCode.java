@@ -83,6 +83,7 @@ public enum ErrorCode {
     CLUB_CHAT_LOCKED(HttpStatus.PAYMENT_REQUIRED, "책갈피 2개로 클럽 채팅을 먼저 열어 주세요."),
     CLUB_MEETING_NOT_FOUND(HttpStatus.NOT_FOUND, "모임을 찾을 수 없어요."),
     MEETING_FULL(HttpStatus.CONFLICT, "모임 정원이 찼어요."),
+    MEETING_NOT_ATTENDING(HttpStatus.FORBIDDEN, "모임에 참여한 사람만 같이 읽을 수 있어요. 먼저 참여해 주세요."),
     MEETING_NOTE_READ_ONLY(HttpStatus.CONFLICT, "마무리했거나 끝난 모임의 노트라서 고칠 수 없어요."),
     MEETING_NOTE_TOO_LARGE(HttpStatus.CONTENT_TOO_LARGE, "노트가 꽉 차서 더 붙일 수 없어요."),
     NUDGE_COOLDOWN(HttpStatus.TOO_MANY_REQUESTS, "이미 찔렀어요. 24시간 뒤에 다시 보낼 수 있어요."),

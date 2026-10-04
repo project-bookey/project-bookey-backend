@@ -34,7 +34,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * 모임 공유 노트 — 모임(약속) 하나에 대형노트 한 권, 클럽 활성 멤버 누구나 함께 고친다.
+ * 모임 공유 노트 — 모임(약속) 하나에 대형노트 한 권. 클럽 멤버 누구나 보고, 그 모임에 참여한 멤버가 함께 고친다.
  *
  * <p>쓰기는 요소 단위 연산뿐이다({@link MeetingNoteOps}). 실시간 연결(웹소켓)로 들어온 연산과 REST 로 들어온 연산이
  * 모두 {@link #applyOps} 하나를 탄다 — 연결이 끊긴 앱은 같은 연산을 REST 로 보내면 된다.
@@ -54,6 +54,7 @@ public class ClubMeetingNoteService {
 
     private final ClubService clubService;
     private final ClubMeetingRepository meetingRepository;
+    private final ClubMeetingAttendeeRepository attendeeRepository;
     private final ClubMeetingNoteRepository noteRepository;
     private final ClubMeetingNoteImageRepository imageRepository;
     private final UserRepository userRepository;
@@ -86,14 +87,16 @@ public class ClubMeetingNoteService {
         Club club = clubService.getClub(clubId);
         ClubMeeting meeting = findMeeting(clubId, meetingId);
         boolean mayClose = canClose(club, meeting, userId);
+        boolean attending = attends(userId, meetingId);
         return noteRepository.findByMeetingId(meetingId)
                 .map(note -> toView(note, meeting,
                         contributorsOf(List.of(note.getId())).getOrDefault(note.getId(), List.of()),
-                        isReadOnly(club, meeting, note), mayClose))
+                        isReadOnly(club, meeting, note), mayClose, attending))
                 .orElseGet(() -> {
                     boolean readOnly = isReadOnly(club, meeting, null);
                     return new MeetingNoteView(null, clubId, meetingId, meeting.getTitle(), meeting.getStartsAt(),
-                            MeetingNoteOps.emptyDocument(), 0, 0, List.of(), null, readOnly, null, mayClose && !readOnly);
+                            MeetingNoteOps.emptyDocument(), 0, 0, List.of(), null, readOnly || !attending, null,
+                            mayClose && !readOnly, attending);
                 });
     }
 
@@ -109,27 +112,32 @@ public class ClubMeetingNoteService {
                         notes.getContent().stream().map(ClubMeetingNote::getMeetingId).toList()).stream()
                 .collect(Collectors.toMap(ClubMeeting::getId, Function.identity()));
         Map<Long, List<MeetingAttendeeView>> contributors = contributorsOf(noteIds);
+        Set<Long> attended = attendeeRepository.findAllById(meetings.keySet().stream()
+                        .map(meetingId -> new ClubMeetingAttendee.Key(meetingId, userId)).toList()).stream()
+                .map(ClubMeetingAttendee::getMeetingId).collect(Collectors.toSet());
         return PageResponse.of(notes, note -> {
             ClubMeeting meeting = meetings.get(note.getMeetingId());
             return toView(note, meeting, contributors.getOrDefault(note.getId(), List.of()),
-                    isReadOnly(club, meeting, note), canClose(club, meeting, userId));
+                    isReadOnly(club, meeting, note), canClose(club, meeting, userId),
+                    attended.contains(note.getMeetingId()));
         });
     }
 
-    /** 실시간 연결 인증 — 클럽 활성 멤버만, 모임이 그 클럽 것이어야 한다. */
+    /** 실시간 연결 인증 — 클럽 활성 멤버만, 모임이 그 클럽 것이어야 한다. 모임에 참여하지 않았으면 읽기 전용 연결이다. */
     @Transactional(readOnly = true)
     public MeetingNoteAccess access(Long userId, Long clubId, Long meetingId) {
         clubService.activeMember(clubId, userId);
         Club club = clubService.getClub(clubId);
         ClubMeeting meeting = findMeeting(clubId, meetingId);
         ClubMeetingNote note = noteRepository.findByMeetingId(meetingId).orElse(null);
-        return new MeetingNoteAccess(personOf(userId), isReadOnly(club, meeting, note), note == null ? 0 : note.getVersion());
+        boolean readOnly = isReadOnly(club, meeting, note) || !attends(userId, meetingId);
+        return new MeetingNoteAccess(personOf(userId), readOnly, note == null ? 0 : note.getVersion());
     }
 
     // ────────────────────────────── 쓰기 ──────────────────────────────
 
     /**
-     * 연산 적용. 싼 검사(멤버·형식·레이트리밋)를 먼저 하고, 노트 행을 잠근 뒤 적용·크기 검사·사진 연결까지 한 트랜잭션에서 한다.
+     * 연산 적용 — 모임에 참여한 멤버만. 싼 검사(멤버·참여·형식·레이트리밋)를 먼저 하고, 노트 행을 잠근 뒤 적용·크기 검사·사진 연결까지 한 트랜잭션에서 한다.
      * 노트가 없으면 여기서 처음 만든다.
      */
     @Transactional
@@ -140,6 +148,7 @@ public class ClubMeetingNoteService {
         if (isReadOnly(club, meeting)) {
             throw ApiException.of(ErrorCode.MEETING_NOTE_READ_ONLY);
         }
+        requireAttending(userId, meetingId);
         List<Op> ops = MeetingNoteOps.parse(rawOps);
         rateLimiter.require("meeting:note:ops:" + userId, OPS_RATE_LIMIT, Duration.ofMinutes(1));
 
@@ -172,6 +181,7 @@ public class ClubMeetingNoteService {
         if (isReadOnly(club, findMeeting(clubId, meetingId), noteRepository.findByMeetingId(meetingId).orElse(null))) {
             throw ApiException.of(ErrorCode.MEETING_NOTE_READ_ONLY);
         }
+        requireAttending(userId, meetingId);
         if (!storage.enabled()) {
             throw ApiException.of(ErrorCode.STORAGE_DISABLED);
         }
@@ -242,7 +252,7 @@ public class ClubMeetingNoteService {
             events.publishEvent(new MeetingNoteClosed(clubId, meetingId));
         }
         return toView(note, meeting, contributorsOf(List.of(note.getId())).getOrDefault(note.getId(), List.of()),
-                true, true);
+                true, true, attends(userId, meetingId));
     }
 
     // ────────────────────────────── 문서 ──────────────────────────────
@@ -313,13 +323,30 @@ public class ClubMeetingNoteService {
         return meeting != null && (userId.equals(meeting.getCreatedBy()) || club.isHost(userId));
     }
 
-    /** readOnly 와 '마무리할 수 있는 사람'을 받아 보기 값을 만든다 — 이미 읽기만 되는 노트는 마무리할 것이 없다. */
+    private boolean attends(Long userId, Long meetingId) {
+        return attendeeRepository.existsById(new ClubMeetingAttendee.Key(meetingId, userId));
+    }
+
+    /**
+     * 노트는 모임에 참여한 사람만 쓴다. 읽기 전용 코드로 거절해 예전 앱도 편집기를 잠그게 한다
+     * (편집 중에 참여를 취소한 사람도 다음 연산에서 잠긴다).
+     */
+    private void requireAttending(Long userId, Long meetingId) {
+        if (!attends(userId, meetingId)) {
+            throw new ApiException(ErrorCode.MEETING_NOTE_READ_ONLY, "모임에 참여한 사람만 노트를 쓸 수 있어요.");
+        }
+    }
+
+    /**
+     * 보기 값 — readOnly 는 노트 자체가 읽기만 되는지(끝난 클럽·취소된 모임·마무리)이고, 보는 사람이 참여하지 않았으면
+     * 응답의 readOnly 도 켠다. 마무리는 노트 자체가 아직 쓸 수 있을 때만 — 이미 읽기만 되는 노트는 마무리할 것이 없다.
+     */
     private MeetingNoteView toView(ClubMeetingNote note, ClubMeeting meeting, List<MeetingAttendeeView> contributors,
-                                   boolean readOnly, boolean mayClose) {
+                                   boolean readOnly, boolean mayClose, boolean attending) {
         return new MeetingNoteView(note.getId(), note.getClubId(), note.getMeetingId(),
                 meeting == null ? null : meeting.getTitle(), meeting == null ? null : meeting.getStartsAt(),
-                note.getDocument(), note.getVersion(), note.getElementCount(), contributors, note.getUpdatedAt(), readOnly,
-                note.getClosedAt(), mayClose && !readOnly);
+                note.getDocument(), note.getVersion(), note.getElementCount(), contributors, note.getUpdatedAt(),
+                readOnly || !attending, note.getClosedAt(), mayClose && !readOnly, attending);
     }
 
     private Map<Long, List<MeetingAttendeeView>> contributorsOf(Collection<Long> noteIds) {

@@ -22,13 +22,14 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 모임 최대 인원 — 정원이 차면 참여를 막고, 이미 참여한 사람보다 적게 줄이지 못한다.
+/** 모임 — 연 사람은 늘 참여자, 고치기·취소는 연 사람과 호스트. 최대 인원은 정원이 차면 참여를 막고, 이미 참여한 사람보다 적게 줄이지 못한다.
  *  채팅 — 지금 클럽에 없는 사람(다시 참가하기 전의 나 포함)의 메시지는 '나간 멤버'로 보인다. */
 class ClubCommunityServiceTest {
 
@@ -72,6 +73,40 @@ class ClubCommunityServiceTest {
         ClubMember host = ClubMember.builder().clubId(CLUB_ID).userId(HOST).role(ClubRole.HOST)
                 .shareProgress(true).allowNudge(true).build();
         when(clubService.activeMember(CLUB_ID, HOST)).thenReturn(host);
+        ClubMember me = ClubMember.builder().clubId(CLUB_ID).userId(ME).role(ClubRole.MEMBER)
+                .shareProgress(true).allowNudge(true).build();
+        when(clubService.activeMember(CLUB_ID, ME)).thenReturn(me);
+    }
+
+    @Test
+    @DisplayName("멤버도 모임을 열 수 있고, 연 사람은 처음부터 참여자다")
+    void creatorAttendsOwnMeeting() {
+        when(meetings.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.createMeeting(ME, CLUB_ID, request(null));
+
+        verify(attendees).save(argThat(a -> a.getUserId().equals(ME)));
+    }
+
+    @Test
+    @DisplayName("모임을 연 사람은 참여를 취소할 수 없다")
+    void creatorCannotUnattend() {
+        given(meeting(null), 1, false);
+
+        assertThatThrownBy(() -> service.unattend(HOST, CLUB_ID, MEETING_ID))
+                .extracting(ClubCommunityServiceTest::codeOf)
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+        verify(attendees, never()).deleteById(any());
+    }
+
+    @Test
+    @DisplayName("다른 멤버가 연 모임은 취소할 수 없다 — 연 사람과 호스트만")
+    void memberCannotCancelOthersMeeting() {
+        given(meeting(null), 1, false);
+
+        assertThatThrownBy(() -> service.cancelMeeting(ME, CLUB_ID, MEETING_ID))
+                .extracting(ClubCommunityServiceTest::codeOf)
+                .isEqualTo(ErrorCode.CLUB_NOT_HOST);
     }
 
     @Test
