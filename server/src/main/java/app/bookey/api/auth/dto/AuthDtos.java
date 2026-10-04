@@ -24,6 +24,12 @@ public final class AuthDtos {
             @NotBlank @Email @Size(max = 255) String email
     ) {}
 
+    /** 가입 전에 이메일 코드만 먼저 확인한다. 성공해도 코드는 소진하지 않고 실제 가입 때 다시 검증한다. */
+    public record EmailCodeVerifyRequest(
+            @NotBlank @Email @Size(max = 255) String email,
+            @NotBlank @Size(min = 6, max = 6) String code
+    ) {}
+
     /** devCode 는 bookey.auth.email-code.expose=true(로컬)일 때만 담긴다. */
     public record EmailCodeResponse(
             long expiresInSec,

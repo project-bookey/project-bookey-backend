@@ -6,6 +6,7 @@ import app.bookey.api.social.dto.SubscriptionDtos.SubscriptionCheckoutView;
 import app.bookey.api.social.dto.SubscriptionDtos.SubscriptionVerifyRequest;
 import app.bookey.api.social.payment.AppStorePaymentClient;
 import app.bookey.api.social.payment.TossPaymentClient;
+import app.bookey.api.social.payment.GooglePlayPaymentClient;
 import app.bookey.api.social.payment.TossPaymentClient.TossCreatePaymentRequest;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
@@ -27,7 +28,7 @@ import java.time.ZonedDateTime;
 import java.util.UUID;
 
 /**
- * 구독 (§14.2, 월 17,900원). MVP 는 관리자 지급(ADMIN 스토어)이 유일한 활성화 경로 —
+ * 구독 (§14.2, 월 5,900원). MVP 는 관리자 지급(ADMIN 스토어)이 유일한 활성화 경로 —
  * 스토어 IAP 영수증 검증이 붙으면 APPLE/GOOGLE 경로가 추가된다.
  */
 @Service
@@ -42,6 +43,7 @@ public class SubscriptionService {
     private final Clock clock;
     private final TossPaymentClient tossPaymentClient;
     private final AppStorePaymentClient appStorePaymentClient;
+    private final GooglePlayPaymentClient googlePlayPaymentClient;
 
     @Transactional(readOnly = true)
     public boolean isActive(Long userId) {
@@ -92,6 +94,10 @@ public class SubscriptionService {
         }
         if (request.provider() == SubscriptionStore.APPLE) {
             verifyApple(userId, request);
+            return;
+        }
+        if (request.provider() == SubscriptionStore.GOOGLE) {
+            verifyGoogle(userId, request);
             return;
         }
         throw ApiException.of(ErrorCode.PAYMENT_NOT_CONFIGURED);
@@ -188,6 +194,22 @@ public class SubscriptionService {
                 : transaction.originalTransactionId();
         activateFromPayment(userId, SubscriptionStore.APPLE, request.productId(), original,
                 Instant.ofEpochMilli(transaction.expiresDateMillis()));
+    }
+
+    private void verifyGoogle(Long userId, SubscriptionVerifyRequest request) {
+        String purchaseToken = request.receiptData();
+        if (purchaseToken == null || purchaseToken.isBlank()) {
+            throw ApiException.of(ErrorCode.INVALID_REQUEST);
+        }
+        GooglePlayPaymentClient.GoogleSubscription subscription =
+                googlePlayPaymentClient.getSubscription(properties.payment().google(), purchaseToken);
+        if (!request.productId().equals(subscription.productId())
+                || !"SUBSCRIPTION_STATE_ACTIVE".equals(subscription.state())
+                || !subscription.expiresAt().isAfter(clock.instant())) {
+            throw ApiException.of(ErrorCode.INVALID_REQUEST);
+        }
+        activateFromPayment(userId, SubscriptionStore.GOOGLE, request.productId(), purchaseToken,
+                subscription.expiresAt());
     }
 
     private void activateFromPayment(Long userId, SubscriptionStore store, String productId,

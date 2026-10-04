@@ -129,6 +129,17 @@ public class AuthService {
         return issueEmailCode(email, EmailCodePurpose.SIGNUP);
     }
 
+    /** 가입 폼에서 코드를 미리 확인한다. 성공한 코드는 가입 트랜잭션에서 다시 확인하고 그때 소진한다. */
+    @Transactional(noRollbackFor = ApiException.class)
+    public void verifySignupEmailCode(EmailCodeVerifyRequest request) {
+        requireSignupOpen();
+        String email = normalizeEmail(request.email());
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+        validateEmailCode(email, request.code(), EmailCodePurpose.SIGNUP, false);
+    }
+
     /**
      * 비밀번호 재설정 코드 발급 — 가입된 이메일에만 보낸다.
      * 가입 여부는 가입 코드 발급(EMAIL_ALREADY_EXISTS)에서도 이미 드러나므로 여기서 숨겨도 얻는 게 없다 —
@@ -174,7 +185,7 @@ public class AuthService {
         if (!user.getStatus().canLogin()) {
             throw ApiException.of(ErrorCode.USER_SUSPENDED);
         }
-        consumeEmailCode(email, request.code(), EmailCodePurpose.PASSWORD_RESET);
+        validateEmailCode(email, request.code(), EmailCodePurpose.PASSWORD_RESET, true);
         Instant now = Instant.now();
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         user.markEmailVerified(now);
@@ -218,7 +229,7 @@ public class AuthService {
                 if (request.code() == null || request.code().isBlank()) {
                     throw ApiException.of(ErrorCode.EMAIL_CODE_INVALID);
                 }
-                consumeEmailCode(email, request.code(), EmailCodePurpose.SIGNUP);
+                validateEmailCode(email, request.code(), EmailCodePurpose.SIGNUP, true);
             }
             case IDENTITY -> identity = requireVerifiedIdentity(request.identityVerificationId());
             case NONE -> {
@@ -264,7 +275,7 @@ public class AuthService {
     }
 
     /** 최신 발급 코드와 대조한다 — 소진·만료·시도 초과면 재발급을 유도하고, 불일치는 실패 횟수를 누적한다. */
-    private void consumeEmailCode(String email, String code, EmailCodePurpose purpose) {
+    private void validateEmailCode(String email, String code, EmailCodePurpose purpose, boolean consume) {
         BookeyProperties.Auth.EmailCode policy = properties.auth().emailCode();
         EmailVerification verification = emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(email, purpose)
                 .orElseThrow(() -> ApiException.of(ErrorCode.EMAIL_CODE_INVALID));
@@ -278,8 +289,10 @@ public class AuthService {
             emailVerificationRepository.save(verification);
             throw ApiException.of(ErrorCode.EMAIL_CODE_INVALID);
         }
-        verification.consume(now);
-        emailVerificationRepository.save(verification);
+        if (consume) {
+            verification.consume(now);
+            emailVerificationRepository.save(verification);
+        }
     }
 
     @Transactional

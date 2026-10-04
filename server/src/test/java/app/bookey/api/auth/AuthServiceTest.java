@@ -2,6 +2,7 @@ package app.bookey.api.auth;
 
 import app.bookey.api.auth.dto.AuthDtos.EmailCodeRequest;
 import app.bookey.api.auth.dto.AuthDtos.EmailCodeResponse;
+import app.bookey.api.auth.dto.AuthDtos.EmailCodeVerifyRequest;
 import app.bookey.api.auth.dto.AuthDtos.EmailLoginRequest;
 import app.bookey.api.auth.dto.AuthDtos.EmailSignupRequest;
 import app.bookey.api.auth.dto.AuthDtos.MeResponse;
@@ -318,6 +319,38 @@ class AuthServiceTest {
         assertApiError(() -> service(List.of())
                 .requestEmailCode(new EmailCodeRequest("new@dev.local")), ErrorCode.RATE_LIMITED);
         verify(emailVerificationRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("코드 사전 확인 — 올바른 코드는 가입 전까지 소진하지 않는다")
+    void verifySignupEmailCodeDoesNotConsumeCode() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        EmailVerification verification = verification("new@dev.local", "123456",
+                Instant.now().plus(Duration.ofMinutes(10)));
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
+                .thenReturn(Optional.of(verification));
+
+        service(List.of()).verifySignupEmailCode(new EmailCodeVerifyRequest("NEW@dev.local", "123456"));
+
+        assertThat(verification.isConsumed()).isFalse();
+        assertThat(verification.getAttemptCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("코드 사전 확인 — 틀린 코드는 실패 횟수를 누적한다")
+    void verifySignupEmailCodeRejectsWrongCode() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        EmailVerification verification = verification("new@dev.local", "123456",
+                Instant.now().plus(Duration.ofMinutes(10)));
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
+                .thenReturn(Optional.of(verification));
+
+        assertApiError(() -> service(List.of())
+                .verifySignupEmailCode(new EmailCodeVerifyRequest("new@dev.local", "999999")),
+                ErrorCode.EMAIL_CODE_INVALID);
+
+        assertThat(verification.getAttemptCount()).isEqualTo((short) 1);
+        verify(emailVerificationRepository).save(verification);
     }
 
     // ───────────── 이메일 가입 (인증 코드 필수) ─────────────

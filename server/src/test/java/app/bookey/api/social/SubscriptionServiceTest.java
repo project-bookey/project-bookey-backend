@@ -5,6 +5,7 @@ import app.bookey.api.social.dto.SubscriptionDtos.SubscriptionCheckoutRequest;
 import app.bookey.api.social.dto.SubscriptionDtos.SubscriptionVerifyRequest;
 import app.bookey.api.social.payment.AppStorePaymentClient;
 import app.bookey.api.social.payment.TossPaymentClient;
+import app.bookey.api.social.payment.GooglePlayPaymentClient;
 import app.bookey.domain.wallet.Subscription;
 import app.bookey.domain.wallet.SubscriptionRepository;
 import app.bookey.domain.wallet.SubscriptionStore;
@@ -33,25 +34,27 @@ import static org.mockito.Mockito.when;
 class SubscriptionServiceTest {
 
     private static final BookeyProperties.Social SOCIAL =
-            new BookeyProperties.Social(5, 16, 1, 2, 200, 50, 30, 17900);
+            new BookeyProperties.Social(5, 16, 1, 2, 200, 50, 30, 5900);
     private static final BookeyProperties.Payment PAYMENT = new BookeyProperties.Payment(
             "bookey.plus.monthly",
             new BookeyProperties.Payment.Toss(
                     "test_ck", "test_sk", "bookey://payment/toss-success",
                     "bookey://payment/toss-fail", "bookey"),
             new BookeyProperties.Payment.Apple(
-                    "issuer", "key", "app.bookey.mobile", "private-key", "SANDBOX"));
+                    "issuer", "key", "app.bookey.mobile", "private-key", "SANDBOX"),
+            new BookeyProperties.Payment.Google("app.bookey.mobile", "service@test", "private-key"));
 
     private final SubscriptionRepository subscriptionRepository = mock(SubscriptionRepository.class);
     private final WalletTransactionRepository transactionRepository = mock(WalletTransactionRepository.class);
     private final TossPaymentClient tossPaymentClient = mock(TossPaymentClient.class);
     private final AppStorePaymentClient appStorePaymentClient = mock(AppStorePaymentClient.class);
+    private final GooglePlayPaymentClient googlePlayPaymentClient = mock(GooglePlayPaymentClient.class);
     private final Clock clock = mock(Clock.class);
     private final BookeyProperties properties =
             new BookeyProperties(null, null, null, null, null, null, SOCIAL, PAYMENT, null, null);
     private final SubscriptionService service =
             new SubscriptionService(subscriptionRepository, transactionRepository, properties, clock,
-                    tossPaymentClient, appStorePaymentClient);
+                    tossPaymentClient, appStorePaymentClient, googlePlayPaymentClient);
 
     private Subscription activeSubscription(Instant start, Instant end) {
         return Subscription.builder()
@@ -144,7 +147,7 @@ class SubscriptionServiceTest {
         assertThat(view.provider()).isEqualTo(SubscriptionStore.TOSS);
         assertThat(view.productId()).isEqualTo("bookey.plus.monthly");
         assertThat(view.orderId()).startsWith("bookey-sub-1-");
-        assertThat(view.amountKrw()).isEqualTo(17900);
+        assertThat(view.amountKrw()).isEqualTo(5900);
         assertThat(view.customerKey()).isEqualTo("bookey-user-1");
         assertThat(view.checkoutUrl()).isEqualTo("https://checkout.tosspayments.com/test");
         assertThat(view.successUrl()).contains("provider=TOSS", "productId=bookey.plus.monthly");
@@ -157,13 +160,13 @@ class SubscriptionServiceTest {
         when(clock.instant()).thenReturn(now);
         when(subscriptionRepository.existsByStoreAndOriginalTransactionId(SubscriptionStore.TOSS, "pay_123"))
                 .thenReturn(false);
-        when(tossPaymentClient.confirm("test_sk", "pay_123", "bookey-sub-1-order", 17900))
-                .thenReturn(new TossPaymentClient.TossPayment("pay_123", "bookey-sub-1-order", 17900, "DONE"));
+        when(tossPaymentClient.confirm("test_sk", "pay_123", "bookey-sub-1-order", 5900))
+                .thenReturn(new TossPaymentClient.TossPayment("pay_123", "bookey-sub-1-order", 5900, "DONE"));
         ArgumentCaptor<Subscription> saved = ArgumentCaptor.forClass(Subscription.class);
 
         service.verify(1L, new SubscriptionVerifyRequest(
                 SubscriptionStore.TOSS, "bookey.plus.monthly", "bookey-sub-1-order",
-                17900, "pay_123", null, null));
+                5900, "pay_123", null, null));
 
         verify(subscriptionRepository).save(saved.capture());
         assertThat(saved.getValue().getUserId()).isEqualTo(1L);

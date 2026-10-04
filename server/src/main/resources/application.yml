@@ -121,7 +121,7 @@ bookey:
     bookmark-price-krw: 200             # 책갈피 1개 단건 구매가
     subscription-monthly-postcards: 50  # 구독 월 지급 엽서
     subscription-monthly-stamps: 30     # 구독 월 지급 우표
-    subscription-price-krw: 17900       # 월 구독가 (§14.9 확정) — 스토어 상품 구성 시 기준
+    subscription-price-krw: 5900        # 월 구독가 — 스토어 상품 구성 시 기준
   payment:
     subscription-product-id: ${SUBSCRIPTION_PRODUCT_ID:bookey.plus.monthly}
     toss:
@@ -136,6 +136,10 @@ bookey:
       bundle-id: ${APPSTORE_BUNDLE_ID:app.bookey.mobile}
       private-key: ${APPSTORE_PRIVATE_KEY:}
       environment: ${APPSTORE_ENVIRONMENT:SANDBOX} # SANDBOX | PRODUCTION
+    google:
+      package-name: ${GOOGLE_PLAY_PACKAGE_NAME:app.bookey.mobile}
+      service-account-email: ${GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL:}
+      private-key: ${GOOGLE_PLAY_PRIVATE_KEY:}
   storage:
     type: ${STORAGE_TYPE:local}                    # local | gcs | s3 | none(업로드 끔). prod 기본값은 application-prod.yml 에서 none
     local:

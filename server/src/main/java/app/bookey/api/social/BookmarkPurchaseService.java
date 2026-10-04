@@ -6,6 +6,8 @@ import app.bookey.api.social.dto.BookmarkPurchaseDtos.BookmarkPurchaseVerifyRequ
 import app.bookey.api.social.dto.SocialDtos.WalletView;
 import app.bookey.api.social.payment.TossPaymentClient;
 import app.bookey.api.social.payment.TossPaymentClient.TossCreatePaymentRequest;
+import app.bookey.api.social.payment.GooglePlayPaymentClient;
+import app.bookey.api.social.payment.AppStorePaymentClient;
 import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
@@ -16,16 +18,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Set;
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class BookmarkPurchaseService {
 
+    private static final Set<Integer> STORE_QUANTITIES = Set.of(5, 10, 50);
+
     private final WalletService walletService;
     private final BookmarkPurchaseRepository purchaseRepository;
     private final BookeyProperties properties;
     private final TossPaymentClient tossPaymentClient;
+    private final GooglePlayPaymentClient googlePlayPaymentClient;
+    private final AppStorePaymentClient appStorePaymentClient;
 
     @Transactional
     public BookmarkPurchaseCheckoutView checkout(Long userId, BookmarkPurchaseCheckoutRequest request) {
@@ -33,6 +40,9 @@ public class BookmarkPurchaseService {
             throw ApiException.of(ErrorCode.INVALID_REQUEST);
         }
         int quantity = request.quantity();
+        if (request.provider() != SubscriptionStore.TOSS && !STORE_QUANTITIES.contains(quantity)) {
+            throw ApiException.of(ErrorCode.INVALID_REQUEST);
+        }
         int bonus = bonusFor(quantity);
         int amountKrw = amountKrw(quantity);
         String productId = productId(quantity);
@@ -75,26 +85,40 @@ public class BookmarkPurchaseService {
         if (purchase.isPaid()) {
             return walletService.view(userId);
         }
-        if (purchase.getProvider() != SubscriptionStore.TOSS || request.provider() != SubscriptionStore.TOSS) {
-            throw ApiException.of(ErrorCode.PAYMENT_NOT_CONFIGURED);
-        }
+        if (purchase.getProvider() != request.provider()) throw ApiException.of(ErrorCode.INVALID_REQUEST);
         if (!purchase.getProductId().equals(request.productId())
                 || purchase.getQuantity() != request.quantity()
-                || purchase.getAmountKrw() != request.amountKrw()
-                || request.paymentKey() == null
-                || request.paymentKey().isBlank()) {
+                || purchase.getAmountKrw() != request.amountKrw()) {
             throw ApiException.of(ErrorCode.INVALID_REQUEST);
         }
-        TossPaymentClient.TossPayment payment = tossPaymentClient.confirm(
-                requireConfigured(properties.payment().toss().secretKey()),
-                request.paymentKey(), purchase.getOrderId(), purchase.getAmountKrw());
-        if (!request.paymentKey().equals(payment.paymentKey())
-                || !purchase.getOrderId().equals(payment.orderId())
-                || payment.totalAmount() != purchase.getAmountKrw()
-                || !"DONE".equals(payment.status())) {
-            throw ApiException.of(ErrorCode.INVALID_REQUEST);
+        String transactionId;
+        if (request.provider() == SubscriptionStore.TOSS) {
+            if (request.paymentKey() == null || request.paymentKey().isBlank()) throw ApiException.of(ErrorCode.INVALID_REQUEST);
+            TossPaymentClient.TossPayment payment = tossPaymentClient.confirm(
+                    requireConfigured(properties.payment().toss().secretKey()),
+                    request.paymentKey(), purchase.getOrderId(), purchase.getAmountKrw());
+            if (!request.paymentKey().equals(payment.paymentKey()) || !purchase.getOrderId().equals(payment.orderId())
+                    || payment.totalAmount() != purchase.getAmountKrw() || !"DONE".equals(payment.status()))
+                throw ApiException.of(ErrorCode.INVALID_REQUEST);
+            transactionId = payment.paymentKey();
+        } else if (request.provider() == SubscriptionStore.GOOGLE) {
+            if (request.receiptData() == null || request.receiptData().isBlank()) throw ApiException.of(ErrorCode.INVALID_REQUEST);
+            GooglePlayPaymentClient.GoogleProduct product = googlePlayPaymentClient.getProduct(
+                    properties.payment().google(), request.productId(), request.receiptData());
+            if (product.purchaseState() != 0) throw ApiException.of(ErrorCode.INVALID_REQUEST);
+            transactionId = request.receiptData();
+        } else if (request.provider() == SubscriptionStore.APPLE) {
+            if (request.originalTransactionId() == null || request.originalTransactionId().isBlank()) throw ApiException.of(ErrorCode.INVALID_REQUEST);
+            AppStorePaymentClient.AppStoreTransaction transaction = appStorePaymentClient.getTransaction(
+                    properties.payment().apple(), request.originalTransactionId());
+            if (!request.productId().equals(transaction.productId())
+                    || !properties.payment().apple().bundleId().equals(transaction.bundleId()))
+                throw ApiException.of(ErrorCode.INVALID_REQUEST);
+            transactionId = transaction.transactionId();
+        } else {
+            throw ApiException.of(ErrorCode.PAYMENT_NOT_CONFIGURED);
         }
-        purchase.markPaid(request.paymentKey());
+        purchase.markPaid(transactionId);
         return walletService.grantPurchasedBookmarks(userId, purchase.totalQuantity(), purchase.getId());
     }
 
