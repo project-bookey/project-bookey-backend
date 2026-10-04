@@ -55,6 +55,7 @@ public enum ErrorCode {
     TOTAL_PAGES_REQUIRED(HttpStatus.BAD_REQUEST, "총 페이지 수가 필요합니다."),
     RECORD_NOT_FOUND(HttpStatus.NOT_FOUND, "독서 기록을 찾을 수 없습니다."),
     ALREADY_IN_LIBRARY(HttpStatus.CONFLICT, "이미 서재에 있는 책입니다."),
+    REMARK_NOT_CLOSED(HttpStatus.CONFLICT, "다 읽었거나 하차한 책에만 한 마디를 남길 수 있어요."),
 
     // 세션
     SESSION_ALREADY_OPEN(HttpStatus.CONFLICT, "이미 진행 중인 독서 세션이 있습니다."),
