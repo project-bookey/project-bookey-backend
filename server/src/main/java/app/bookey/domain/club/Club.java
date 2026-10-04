@@ -144,11 +144,11 @@ public class Club extends BaseTimeEntity {
     }
 
     /**
-     * 정원을 targetLimit 으로 늘리고 새로 연 자리 수를 돌려준다.
+     * 정원을 targetLimit 으로 늘리고 새로 연 자리 수를 돌려준다. 목표 정원은 step 의 배수만 받는다.
      * 호스트 검사와 책갈피 결제는 서비스가 맡는다. 늘린 자리는 이 모임에만 속하고 종료 후에도 되돌리지 않는다
      * — 종료된 모임은 참가가 막히므로 자리가 자연히 사라지고, 결산 화면은 최종 정원을 그대로 보여준다.
      */
-    public int expandMemberLimit(int targetLimit, int maxLimit) {
+    public int expandMemberLimit(int targetLimit, int maxLimit, int step) {
         if (status.isOver()) {
             throw ApiException.of(ErrorCode.CLUB_ENDED);
         }
@@ -157,6 +157,9 @@ public class Club extends BaseTimeEntity {
         }
         if (targetLimit > maxLimit) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "정원은 " + maxLimit + "명까지 늘릴 수 있어요.");
+        }
+        if (targetLimit % step != 0) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "정원은 " + step + "명 단위로 늘릴 수 있어요.");
         }
         int added = targetLimit - memberLimit;
         this.memberLimit = (short) targetLimit;
