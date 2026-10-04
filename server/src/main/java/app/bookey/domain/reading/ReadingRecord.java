@@ -98,7 +98,7 @@ public class ReadingRecord extends BaseTimeEntity {
 
     public void pause() {
         if (this.status.isClosed()) {
-            throw new ApiException(ErrorCode.CONFLICT, "이미 완독/하차한 책입니다.");
+            throw new ApiException(ErrorCode.CONFLICT, "이미 완독했거나 하차한 책이에요.");
         }
         this.status = ReadingStatus.PAUSED;
     }

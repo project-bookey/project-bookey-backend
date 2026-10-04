@@ -9,7 +9,7 @@ import lombok.Getter;
 @Getter
 public enum NudgeMessage {
     READ_TOGETHER("같이 읽어요 📖"),
-    CHECKPOINT_SOON("체크포인트 얼마 안 남았어요"),
+    CHECKPOINT_SOON("모임 전에 같이 읽어요"),
     WAITING("기다리고 있어요");
 
     private final String text;

@@ -112,8 +112,8 @@ public class AdminInquiryService {
         // 잠금화면에 문의 내용이 보이지 않게 알림 문구는 유형만 담는다.
         notificationService.inApp(new NotificationService.NotificationRequest(
                 inquiry.getUserId(), NotificationType.INQUIRY_ANSWERED, null, null, null,
-                "문의하신 내용에 답변이 도착했어요",
-                "'" + inquiry.getCategory().getLabel() + "' 문의에 답변이 등록됐어요.",
+                "문의에 답변이 왔어요",
+                "'" + inquiry.getCategory().getLabel() + "' 문의에 Bookey가 답변했어요.",
                 Map.of("inquiryId", inquiry.getId()), null));
         auditService.log(admin, "ANSWER_INQUIRY", "INQUIRY", inquiryId, null, null,
                 Map.of("answer", truncate(answer)));

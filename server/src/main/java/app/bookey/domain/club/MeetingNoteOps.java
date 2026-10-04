@@ -48,10 +48,10 @@ public final class MeetingNoteOps {
     /** 요청 본문을 연산 목록으로 좁힌다. 모양이 틀리면 INVALID_REQUEST — 일부만 적용하지 않는다. */
     public static List<Op> parse(List<?> raw) {
         if (raw == null || raw.isEmpty()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "연산이 비어 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "노트 변경 내용을 저장하지 못했어요. 다시 시도해 주세요.");
         }
         if (raw.size() > MAX_OPS) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "연산은 한 번에 " + MAX_OPS + "개까지 보낼 수 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "노트 변경 내용을 저장하지 못했어요. 다시 시도해 주세요.");
         }
         List<Op> ops = new ArrayList<>(raw.size());
         for (Object item : raw) {
@@ -86,7 +86,7 @@ public final class MeetingNoteOps {
             }
         }
         if (byId.size() > MAX_ELEMENTS) {
-            throw new ApiException(ErrorCode.MEETING_NOTE_TOO_LARGE, "요소는 " + MAX_ELEMENTS + "개까지 둘 수 있습니다.");
+            throw new ApiException(ErrorCode.MEETING_NOTE_TOO_LARGE, "노트에는 " + MAX_ELEMENTS + "개까지 붙일 수 있어요.");
         }
         Map<String, Object> next = new LinkedHashMap<>(emptyDocument());
         if (document != null) {
@@ -132,7 +132,7 @@ public final class MeetingNoteOps {
 
     private static String requireId(Object id) {
         if (!(id instanceof String s) || s.isEmpty() || s.length() > MAX_ID_LENGTH) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "요소 id 가 올바르지 않습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "노트 변경 내용을 저장하지 못했어요. 다시 시도해 주세요.");
         }
         return s;
     }
@@ -146,6 +146,6 @@ public final class MeetingNoteOps {
     }
 
     private static ApiException invalid() {
-        return new ApiException(ErrorCode.INVALID_REQUEST, "연산 형식이 올바르지 않습니다.");
+        return new ApiException(ErrorCode.INVALID_REQUEST, "노트 변경 내용을 저장하지 못했어요. 다시 시도해 주세요.");
     }
 }

@@ -67,7 +67,7 @@ public class BookmarkPurchaseService {
                     "quantity=" + quantity);
             String failUrl = appendQuery(toss.failUrl(), "kind=BOOKMARK_PURCHASE");
             String checkoutUrl = tossPaymentClient.createCheckoutUrl(toss.secretKey(), new TossCreatePaymentRequest(
-                    orderId, "BOOKEY 책갈피 " + quantity + "개", amountKrw, customerKey,
+                    orderId, "Bookey 책갈피 " + quantity + "개", amountKrw, customerKey,
                     successUrl, failUrl, toss.appScheme()));
             return view(purchase.getProvider(), purchase.getProductId(), purchase.getOrderId(),
                     purchase.getQuantity(), purchase.getBonusQuantity(), purchase.getAmountKrw(), customerKey,

@@ -47,7 +47,7 @@ public final class AuthDtos {
     /** 가입 전에 이메일 코드만 먼저 확인한다. 성공해도 코드는 소진하지 않고 실제 가입 때 다시 검증한다. */
     public record EmailCodeVerifyRequest(
             @NotBlank @Email @Size(max = 255) String email,
-            @NotBlank @Size(min = 6, max = 6) String code
+            @NotBlank @Size(min = 6, max = 6, message = "6자리 코드를 적어 주세요.") String code
     ) {}
 
     /** devCode 는 bookey.auth.email-code.expose=true(로컬)일 때만 담긴다. */
@@ -58,10 +58,10 @@ public final class AuthDtos {
 
     public record EmailSignupRequest(
             @NotBlank @Email @Size(max = 255) String email,
-            @NotBlank @Size(min = 8, max = 72) String password,
+            @NotBlank @Size(min = 8, max = 72, message = "비밀번호는 8~72자로 정해 주세요.") String password,
             @NotBlank @Size(max = 50) String nickname,
             /** EMAIL_CODE 모드 — 이메일로 받은 6자리 인증 코드. */
-            @Size(min = 6, max = 6) String code,
+            @Size(min = 6, max = 6, message = "6자리 코드를 적어 주세요.") String code,
             /** IDENTITY 모드 — 포트원 본인인증 완료 id. */
             @Size(max = 100) String identityVerificationId,
             /** 없으면(옛 앱) 형식 오류가 아니라 LEGAL_CONSENT_REQUIRED 로 거절한다 — 무엇이 빠졌는지 알 수 있게. */
@@ -79,8 +79,8 @@ public final class AuthDtos {
     /** 비밀번호 재설정 — 이메일로 받은 6자리 코드와 새 비밀번호. 성공하면 바로 로그인된다. */
     public record PasswordResetRequest(
             @NotBlank @Email @Size(max = 255) String email,
-            @NotBlank @Size(min = 6, max = 6) String code,
-            @NotBlank @Size(min = 8, max = 72) String newPassword
+            @NotBlank @Size(min = 6, max = 6, message = "6자리 코드를 적어 주세요.") String code,
+            @NotBlank @Size(min = 8, max = 72, message = "비밀번호는 8~72자로 정해 주세요.") String newPassword
     ) {}
 
     public record EmailLoginRequest(

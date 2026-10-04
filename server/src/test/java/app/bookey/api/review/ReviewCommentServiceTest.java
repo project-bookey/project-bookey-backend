@@ -133,7 +133,7 @@ class ReviewCommentServiceTest {
 
         assertThatThrownBy(() -> ReviewCommentService.requireRepliable(reply))
                 .isInstanceOf(ApiException.class)
-                .hasMessage("답글에는 답글을 달 수 없습니다.")
+                .hasMessage("답글에는 다시 답글을 달 수 없어요.")
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(ErrorCode.COMMENT_REPLY_DEPTH);
     }

@@ -46,7 +46,7 @@ public class TossPaymentClient {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "Toss 결제창을 만들지 못했습니다.");
+            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "토스 결제창을 열지 못했어요.");
         }
     }
 
@@ -70,7 +70,7 @@ public class TossPaymentClient {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "Toss 결제를 승인하지 못했습니다.");
+            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "토스 결제를 마치지 못했어요.");
         }
     }
 

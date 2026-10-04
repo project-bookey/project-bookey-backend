@@ -176,7 +176,7 @@ public class ClubMeetingNoteService {
         }
         rateLimiter.require("meeting:note:image:" + userId, UPLOAD_RATE_LIMIT, Duration.ofMinutes(1));
         if (file == null || file.isEmpty()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "업로드할 파일이 비어 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "올릴 파일이 비어 있어요.");
         }
         long size = file.getSize();
         if (size > properties.storage().image().maxBytes()) {
@@ -227,7 +227,7 @@ public class ClubMeetingNoteService {
         Club club = clubService.getClub(clubId);
         ClubMeeting meeting = findMeeting(clubId, meetingId);
         if (!canClose(club, meeting, userId)) {
-            throw new ApiException(ErrorCode.FORBIDDEN, "노트는 모임을 연 사람만 마무리할 수 있어요.");
+            throw new ApiException(ErrorCode.FORBIDDEN, "노트는 모임을 연 사람이나 호스트만 마무리할 수 있어요.");
         }
         if (isReadOnly(club, meeting)) {
             throw ApiException.of(ErrorCode.MEETING_NOTE_READ_ONLY);
@@ -251,7 +251,7 @@ public class ClubMeetingNoteService {
         try {
             bytes = objectMapper.writeValueAsBytes(document);
         } catch (RuntimeException e) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "문서를 읽을 수 없습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "노트를 읽지 못했어요.");
         }
         if (bytes.length > MeetingNoteOps.MAX_DOCUMENT_BYTES) {
             throw ApiException.of(ErrorCode.MEETING_NOTE_TOO_LARGE);

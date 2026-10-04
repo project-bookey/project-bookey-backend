@@ -303,8 +303,8 @@ public class PostService {
         String nickname = liker == null ? "누군가" : liker.getNickname();
         notificationService.inApp(new NotificationService.NotificationRequest(
                 post.getUserId(), NotificationType.POST_LIKED, null, post.getReadingRecordId(), null,
-                "독후감에 좋아요가 눌렸어요",
-                nickname + "님이 \"" + post.getTitle() + "\"을 좋아합니다.",
+                "내 독후감에 좋아요가 달렸어요",
+                nickname + "님이 \"" + post.getTitle() + "\"에 좋아요를 눌렀어요.",
                 Map.of("postId", post.getId(), "fromUserId", likerId), null));
     }
 
