@@ -121,6 +121,8 @@ jobs:
           for attempt in $(seq 1 30); do
             if curl --fail --silent --show-error http://127.0.0.1:8080/actuator/health; then
               echo
+              # 배포 백업(DB 덤프 포함)은 30일만 보관한다 — 개인정보처리방침의 백업 보관 기간과 같다.
+              sudo find "${APP_DIR}/backups" -mindepth 1 -maxdepth 1 -type d -mtime +30 -exec rm -rf {} + || true
               exit 0
             fi
             sleep 5
