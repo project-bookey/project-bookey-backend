@@ -72,4 +72,9 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     @Query("SELECT COUNT(n) FROM Notification n WHERE n.sentAt >= :since")
     long countSentSince(@Param("since") Instant since);
+
+    /** 탈퇴 — 그 회원의 알림을 모두 지운다(푸시 발송 기록은 FK CASCADE 로 함께). */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM Notification n WHERE n.userId = :userId")
+    int deleteAllByUserId(@org.springframework.data.repository.query.Param("userId") Long userId);
 }

@@ -26,6 +26,8 @@ public enum NotificationType {
     POST_COMMENTED(false),
     /** 고객문의에 관리자가 답변했다 */
     INQUIRY_ANSWERED(false),
+    /** 광고성 정보 수신 동의·철회 처리 결과(정보통신망법 제50조 ⑧) */
+    CONSENT_RESULT(false),
 
     // 모임 (모임당 일 1건 / 전체 일 3건 — 개인 한도와 별도)
     CLUB_CHECKPOINT_DUE(true),

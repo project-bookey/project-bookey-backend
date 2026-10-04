@@ -54,4 +54,18 @@ class StorageKeysTest {
         assertThatThrownBy(() -> StorageKeys.forPostImage(1L, now, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    @DisplayName("아바타 URL → 키: 그 회원의 avatars/{userId}/{uuid}.{ext} 만 키로 돌려주고 나머지는 null")
+    void avatarKeyOfAcceptsOnlyOwnAvatar() {
+        String key = StorageKeys.forAvatar(7L, "jpg");
+
+        assertThat(StorageKeys.avatarKeyOf(7L, "https://bucket.s3.ap-northeast-2.amazonaws.com/" + key)).isEqualTo(key);
+        assertThat(StorageKeys.avatarKeyOf(7L, "https://cdn.example/" + key + "?v=2")).isEqualTo(key);
+        // 다른 회원의 사진, 소셜 프로필 사진, 경로를 끼워 넣은 URL 은 지우지 않는다.
+        assertThat(StorageKeys.avatarKeyOf(8L, "https://cdn.example/" + key)).isNull();
+        assertThat(StorageKeys.avatarKeyOf(7L, "https://k.kakaocdn.net/dn/profile.jpg")).isNull();
+        assertThat(StorageKeys.avatarKeyOf(7L, "https://cdn.example/avatars/7/../posts/1/2026/09/x.jpg")).isNull();
+        assertThat(StorageKeys.avatarKeyOf(7L, null)).isNull();
+    }
 }

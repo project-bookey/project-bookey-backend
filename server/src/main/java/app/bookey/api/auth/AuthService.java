@@ -1,6 +1,7 @@
 package app.bookey.api.auth;
 
 import app.bookey.api.auth.dto.AuthDtos.*;
+import app.bookey.api.legal.ConsentService;
 import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
@@ -31,9 +32,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthService {
 
-    public static final String TERMS_VERSION = "2026-09-27";
-    public static final String PRIVACY_VERSION = "2026-09-27";
-
     private final UserRepository userRepository;
     private final UserIdentityRepository identityRepository;
     private final UserDeviceRepository deviceRepository;
@@ -49,6 +47,8 @@ public class AuthService {
     private final IdentityVerifier identityVerifier;
     private final InquiryRepository inquiryRepository;
     private final DeletedEmailHashRepository deletedEmailHashRepository;
+    private final ConsentService consentService;
+    private final AccountEraser accountEraser;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -67,8 +67,10 @@ public class AuthService {
         }
         identityRepository.deleteAllByUserId(userId);
         deviceRepository.deleteAllByUserId(userId);
-        refreshTokenRepository.revokeAllByUserId(userId, now);
+        refreshTokenRepository.deleteAllByUserId(userId);
+        // 알림·방문 기록·올린 프로필 사진 파일은 바로 지운다(AccountEraser).
         // 나머지 기록은 30일 유예기간 뒤 AccountDeletionJob이 FK cascade로 삭제한다.
+        accountEraser.erase(user);
         user.anonymizeForDeletion(now);
     }
 
@@ -85,7 +87,10 @@ public class AuthService {
         return verifier;
     }
 
-    /** 소셜 로그인 — 연동된 계정은 로그인하고, 처음 보는 소셜 계정은 바로 가입시킨다. */
+    /**
+     * 소셜 로그인 — 연동된 계정은 로그인하고, 처음 보는 소셜 계정은 가입 동의가 함께 오면 가입시킨다.
+     * 동의가 없으면 계정을 만들지 않고 LEGAL_CONSENT_REQUIRED — 앱이 동의를 받아 같은 token 으로 다시 부른다.
+     */
     @Transactional
     public TokenResponse socialLogin(SocialLoginRequest request) {
         SocialProfile profile = verifierFor(request.provider()).verify(request.token());
@@ -93,7 +98,7 @@ public class AuthService {
         var existingIdentity = identityRepository
                 .findByProviderAndProviderUid(profile.provider(), profile.providerUid());
         if (existingIdentity.isEmpty()) {
-            return socialSignup(profile);
+            return socialSignup(profile, request.consent());
         }
 
         User user = userRepository.findById(existingIdentity.get().getUserId())
@@ -104,10 +109,12 @@ public class AuthService {
         return issueTokens(user, false);
     }
 
-    private TokenResponse socialSignup(SocialProfile profile) {
+    private TokenResponse socialSignup(SocialProfile profile, SignupConsent consent) {
         requireSignupOpen();
         String email = normalizeNullableEmail(profile.email());
         if (email != null) requireEmailAvailable(email);
+        // 이메일 충돌을 먼저 본다 — 동의를 다 받고 나서야 가입할 수 없는 계정이라고 알리지 않게.
+        consentService.requireSignupConsent(consent);
         User user = User.builder()
                 .handle(handleGenerator.generate(handleSeed(profile)))
                 .email(email)
@@ -119,6 +126,7 @@ public class AuthService {
         }
         User saved = userRepository.save(user);
         identityRepository.save(new UserIdentity(saved.getId(), profile.provider(), profile.providerUid()));
+        consentService.recordSignup(saved.getId(), consent, Instant.now());
         return issueTokens(saved, true);
     }
 
@@ -218,7 +226,7 @@ public class AuthService {
     @Transactional(noRollbackFor = ApiException.class)
     public TokenResponse emailSignup(EmailSignupRequest request) {
         requireSignupOpen();
-        requireLegalConsent(request);
+        consentService.requireSignupConsent(request.consent());
         String email = normalizeEmail(request.email());
         requireEmailAvailable(email);
         String nickname = request.nickname().trim();
@@ -251,17 +259,9 @@ public class AuthService {
         } else {
             user.markEmailVerified(now);
         }
-        user.recordLegalConsent(request.termsVersion(), request.privacyVersion(), now);
-        return issueTokens(userRepository.save(user), true);
-    }
-
-    private void requireLegalConsent(EmailSignupRequest request) {
-        if (!Boolean.TRUE.equals(request.termsAgreed())
-                || !TERMS_VERSION.equals(request.termsVersion())
-                || !Boolean.TRUE.equals(request.privacyAgreed())
-                || !PRIVACY_VERSION.equals(request.privacyVersion())) {
-            throw ApiException.of(ErrorCode.LEGAL_CONSENT_REQUIRED);
-        }
+        User saved = userRepository.save(user);
+        consentService.recordSignup(saved.getId(), request.consent(), now);
+        return issueTokens(saved, true);
     }
 
     /** 본인인증 결과를 포트원에서 재조회하고, 같은 사람(CI)의 중복 가입을 막는다. */
@@ -459,12 +459,12 @@ public class AuthService {
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)));
     }
 
-    /** 내 정보 응답 — 연동된 소셜은 저장소에서 읽어 함께 내려준다. */
+    /** 내 정보 응답 — 연동된 소셜과 동의 상태는 저장소에서 읽어 함께 내려준다. */
     public MeResponse toMe(User user) {
         return toMe(user, providersOf(identityRepository.findAllByUserId(user.getId())));
     }
 
-    public static MeResponse toMe(User user, List<AuthProvider> linkedProviders) {
+    private MeResponse toMe(User user, List<AuthProvider> linkedProviders) {
         return new MeResponse(
                 user.getId(), user.getHandle(), user.getNickname(), user.getEmail(),
                 user.getAvatarUrl(), user.getGender(), user.getBirthDate(),
@@ -474,7 +474,8 @@ public class AuthService {
                 user.isAllowNudge(), user.getStatus().name(),
                 List.of(user.getPreferredCategories()),
                 linkedProviders,
-                user.getPasswordHash() != null);
+                user.getPasswordHash() != null,
+                consentService.states(user.getId()));
     }
 
     /** 연동 목록 → provider 만, 중복 없이 enum 순서로. */

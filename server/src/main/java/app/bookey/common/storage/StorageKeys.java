@@ -51,6 +51,29 @@ public final class StorageKeys {
         return "avatars/" + userId + "/" + UUID.randomUUID() + "." + safeExtension(extension);
     }
 
+    private static final java.util.regex.Pattern AVATAR_KEY =
+            java.util.regex.Pattern.compile("avatars/(\\d+)/[A-Za-z0-9-]+\\.[A-Za-z0-9]+");
+
+    /**
+     * 프로필 사진 URL → 저장소 키. 우리 저장소에 올린 그 회원의 사진(avatars/{userId}/{uuid}.{ext})이 아니면 null —
+     * 소셜 프로필 사진 URL 이나 손으로 넣은 URL 로 다른 파일을 지우지 않게 모양을 엄격히 본다.
+     */
+    public static String avatarKeyOf(long userId, String url) {
+        if (url == null) {
+            return null;
+        }
+        int at = url.indexOf("avatars/" + userId + "/");
+        if (at < 0) {
+            return null;
+        }
+        String key = url.substring(at);
+        int query = key.indexOf('?');
+        if (query >= 0) {
+            key = key.substring(0, query);
+        }
+        return AVATAR_KEY.matcher(key).matches() ? key : null;
+    }
+
     /** 확장자는 스니퍼가 준 값만 오지만, 경로가 될 수 있는 문자는 여기서 한 번 더 막는다. */
     private static String safeExtension(String extension) {
         if (extension == null || extension.isBlank()

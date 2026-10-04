@@ -205,11 +205,13 @@ public class User extends BaseTimeEntity {
     }
 
     /** 가입 당시 동의한 법적 문서의 버전과 시각을 감사 가능한 형태로 남긴다. */
-    public void recordLegalConsent(String termsVersion, String privacyVersion, java.time.Instant at) {
-        this.termsVersion = termsVersion;
-        this.termsAgreedAt = at;
-        this.privacyVersion = privacyVersion;
-        this.privacyAgreedAt = at;
+    /**
+     * 선택 정보 동의 철회 — 성별·생년월일을 지운다. 본인인증으로 가입했어도 지운다
+     * (프로필에서 고칠 수 있는 칸이라 회원이 넣은 값과 구분되지 않는다 — 본인·연령 확인은 CI 와 인증 일시로 남는다).
+     */
+    public void clearDemographics() {
+        this.gender = null;
+        this.birthDate = null;
     }
 
     public void updatePreferredCategories(String[] categories) {
