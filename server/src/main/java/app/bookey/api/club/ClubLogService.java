@@ -259,7 +259,7 @@ public class ClubLogService {
 
     /**
      * 지금 읽는 중 — 열린 세션이 있는 멤버. 진척 비공개 멤버와 나는 뺀다.
-     * 4시간 넘게 열린 세션은 정리 배치가 닫기 전이라도 읽는 중으로 치지 않는다.
+     * 잠깐 쉬는 세션과, 독서 시간이 4시간을 넘겨 정리 배치가 곧 닫을 세션은 읽는 중으로 치지 않는다.
      */
     public List<ReadingNowView> readingNow(Long userId, Long clubId) {
         clubService.activeMember(clubId, userId);
@@ -270,10 +270,10 @@ public class ClubLogService {
         if (byRecord.isEmpty()) {
             return List.of();
         }
-        Instant staleBefore = clock.instant().minus(ReadingSession.MAX_SESSION);
+        Instant now = clock.instant();
         List<ReadingSession> open = sessionRepository
                 .findAllByReadingRecordIdInAndEndedAtIsNull(List.copyOf(byRecord.keySet())).stream()
-                .filter(s -> s.getStartedAt().isAfter(staleBefore))
+                .filter(s -> s.isReadingNow(now))
                 .sorted(Comparator.comparing(ReadingSession::getStartedAt))
                 .toList();
         if (open.isEmpty()) {
