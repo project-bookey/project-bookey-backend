@@ -6,7 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.util.Collection;
 import java.util.List;
 
 public interface ReviewRepository extends JpaRepository<Review, Long> {
@@ -59,19 +58,6 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
                     AND n.id > r.id)
             """)
     List<Object[]> overallRating(@Param("bookId") Long bookId);
-
-    /**
-     * 광장 완독 자랑에 붙일 리뷰 — 그 회차들에 쓴 보이는 리뷰. 회차 컬럼엔 인덱스가 없어
-     * 사람·책(idx_reviews_user_book)으로 먼저 좁히고 회차로 거른다. 회차마다 최신 하나는 호출부가 고른다.
-     */
-    @Query("""
-            SELECT r FROM Review r
-            WHERE r.userId IN :userIds AND r.bookId IN :bookIds
-              AND r.readingRecordId IN :recordIds AND r.status = 'VISIBLE'
-            """)
-    List<Review> findVisibleByRecords(@Param("userIds") Collection<Long> userIds,
-                                      @Param("bookIds") Collection<Long> bookIds,
-                                      @Param("recordIds") Collection<Long> recordIds);
 
     Page<Review> findAllByUserIdAndStatusOrderByCreatedAtDesc(Long userId, String status, Pageable pageable);
 
