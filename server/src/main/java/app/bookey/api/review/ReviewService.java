@@ -59,9 +59,8 @@ public class ReviewService {
     @Transactional
     public ReviewView create(Long userId, CreateReviewRequest request) {
         ReadingRecord record = ownedRecord(userId, request.readingRecordId());
-        if (reviewRepository.existsByUserIdAndReadingRecordId(userId, record.getId())) {
-            throw ApiException.of(ErrorCode.REVIEW_ALREADY_EXISTS);
-        }
+        // 한 사람이 같은 책(읽기 기록)에 리뷰를 여러 개 쓸 수 있다 (2026-10-04 정책 변경, V46).
+        // 평점은 사람마다 가장 최근 리뷰 하나만 세므로 여러 번 써도 평균이 부풀지 않는다.
         // 별점은 완독 여부와 무관하게 허용한다 (2026-09-01 정책 변경).
         // 신뢰 평점(검증 평점)은 VERIFIED_FULL 리뷰만 집계하므로 오염되지 않는다.
         Book book = bookRepository.findById(record.getBookId())
