@@ -31,7 +31,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-/** 모임 공유 노트 — 권한(활성 멤버)·읽기 전용(끝난 클럽·취소된 모임)·연산 적용과 방송. */
+/** 모임 공유 노트 — 권한(활성 멤버, 쓰기는 모임 참여자)·읽기 전용(끝난 클럽·취소된 모임)·연산 적용과 방송. */
 class ClubMeetingNoteServiceTest {
 
     private static final long CLUB_ID = 10L, OTHER_CLUB = 11L, MEETING_ID = 50L, NOTE_ID = 500L;
@@ -40,6 +40,7 @@ class ClubMeetingNoteServiceTest {
 
     private final ClubService clubService = mock(ClubService.class);
     private final ClubMeetingRepository meetingRepository = mock(ClubMeetingRepository.class);
+    private final ClubMeetingAttendeeRepository attendeeRepository = mock(ClubMeetingAttendeeRepository.class);
     private final ClubMeetingNoteRepository noteRepository = mock(ClubMeetingNoteRepository.class);
     private final ClubMeetingNoteImageRepository imageRepository = mock(ClubMeetingNoteImageRepository.class);
     private final UserRepository userRepository = mock(UserRepository.class);
@@ -51,7 +52,7 @@ class ClubMeetingNoteServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ClubMeetingNoteService(clubService, meetingRepository, noteRepository, imageRepository,
+        service = new ClubMeetingNoteService(clubService, meetingRepository, attendeeRepository, noteRepository, imageRepository,
                 userRepository, mock(StorageService.class), rateLimiter, properties, new ObjectMapper(), events,
                 Clock.fixed(NOW, ZoneOffset.UTC));
         var activeClub = club(ClubStatus.ACTIVE);
@@ -61,6 +62,12 @@ class ClubMeetingNoteServiceTest {
         when(meetingRepository.findById(MEETING_ID)).thenReturn(Optional.of(openMeeting));
         when(userRepository.findById(anyLong())).thenReturn(Optional.empty());
         when(noteRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
+        // 기본은 모임에 참여한 멤버 — 참여하지 않은 경우는 notAttending() 으로.
+        when(attendeeRepository.existsById(any())).thenReturn(true);
+    }
+
+    private void notAttending() {
+        when(attendeeRepository.existsById(new ClubMeetingAttendee.Key(MEETING_ID, ME))).thenReturn(false);
     }
 
     // ────────────────────────────── 픽스처 ──────────────────────────────
@@ -163,7 +170,30 @@ class ClubMeetingNoteServiceTest {
         assertThat(service.get(ME, CLUB_ID, MEETING_ID).readOnly()).isTrue();
     }
 
+    @Test
+    @DisplayName("모임에 참여하지 않은 멤버에게 노트는 볼 수만 있다 — readOnly, attending false, 실시간 연결도 읽기 전용")
+    void nonAttendeeReadsOnly() {
+        notAttending();
+        when(noteRepository.findByMeetingId(MEETING_ID)).thenReturn(Optional.empty());
+
+        MeetingNoteView view = service.get(ME, CLUB_ID, MEETING_ID);
+
+        assertThat(view.readOnly()).isTrue();
+        assertThat(view.attending()).isFalse();
+        assertThat(service.access(ME, CLUB_ID, MEETING_ID).readOnly()).isTrue();
+    }
+
     // ────────────────────────────── 연산 ──────────────────────────────
+
+    @Test
+    @DisplayName("모임에 참여하지 않은 멤버의 연산은 잠그기 전에 거절한다 — MEETING_NOTE_READ_ONLY(예전 앱도 잠긴다)")
+    void applyOpsRejectsNonAttendee() {
+        notAttending();
+
+        assertCode(() -> service.applyOps(ME, CLUB_ID, MEETING_ID, ops("a"), null), ErrorCode.MEETING_NOTE_READ_ONLY);
+        verify(noteRepository, never()).insertIfAbsent(anyLong(), anyLong());
+        verify(events, never()).publishEvent(any());
+    }
 
     @Test
     @DisplayName("연산을 적용하면 노트를 (없으면 만들고) 잠근 뒤 고치고 version 을 올려 방송한다")
