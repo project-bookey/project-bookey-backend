@@ -45,7 +45,7 @@ public class GooglePlayPaymentClient {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "Google Play 구독을 검증하지 못했습니다.");
+            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "Google Play 결제를 확인하지 못했어요.");
         }
     }
 
@@ -56,7 +56,7 @@ public class GooglePlayPaymentClient {
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
-            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "Google Play 구매를 검증하지 못했습니다.");
+            throw new ApiException(ErrorCode.PAYMENT_NOT_CONFIGURED, "Google Play 결제를 확인하지 못했어요.");
         }
     }
 

@@ -62,7 +62,7 @@ public class ChatService {
     @Transactional
     public ChatSummaryView open(Long userId, Long otherUserId) {
         if (userId.equals(otherUserId)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "자신과는 채팅할 수 없습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "나 자신과는 채팅할 수 없어요.");
         }
         User other = userRepository.findById(otherUserId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
@@ -229,26 +229,26 @@ public class ChatService {
         String body = trimToNull(request.body());
         String explicitSticker = trimToNull(request.stickerCode());
         if (request.type() == ChatMessageType.TEXT && explicitSticker != null) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "텍스트 메시지에는 이모티콘 코드를 지정할 수 없습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "보낼 수 없는 이모티콘이에요.");
         }
         boolean stickerRequest = request.type() == ChatMessageType.STICKER || explicitSticker != null;
 
         if (stickerRequest) {
             String code = explicitSticker == null ? body : explicitSticker;
             if (!BookeyStickerRegistry.isStickerCode(code)) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST, "지원하지 않는 이모티콘입니다.");
+                throw new ApiException(ErrorCode.INVALID_REQUEST, "보낼 수 없는 이모티콘이에요.");
             }
             return new MessagePayload(code, ChatMessageType.STICKER, code);
         }
 
         if (BookeyStickerRegistry.looksLikeStickerCode(body)) {
             if (!BookeyStickerRegistry.isStickerCode(body)) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST, "지원하지 않는 이모티콘입니다.");
+                throw new ApiException(ErrorCode.INVALID_REQUEST, "보낼 수 없는 이모티콘이에요.");
             }
             return new MessagePayload(body, ChatMessageType.STICKER, body);
         }
         if (body == null) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "메시지 내용을 입력해 주세요.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "메시지를 적어 주세요.");
         }
         return new MessagePayload(body, ChatMessageType.TEXT, null);
     }

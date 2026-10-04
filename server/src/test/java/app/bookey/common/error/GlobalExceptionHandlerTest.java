@@ -48,7 +48,7 @@ class GlobalExceptionHandlerTest {
 
         assertThat(broken.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(broken.getBody().code()).isEqualTo("INVALID_REQUEST");
-        assertThat(broken.getBody().message()).isEqualTo("업로드 형식이 올바르지 않습니다.");
+        assertThat(broken.getBody().message()).isEqualTo("올린 파일 형식이 맞지 않아요.");
         assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(missing.getBody().code()).isEqualTo("INVALID_REQUEST");
     }
@@ -62,6 +62,6 @@ class GlobalExceptionHandlerTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
-        assertThat(response.getBody().message()).isEqualTo("지원하지 않는 Content-Type 입니다.");
+        assertThat(response.getBody().message()).isEqualTo("처리할 수 없는 형식이에요.");
     }
 }

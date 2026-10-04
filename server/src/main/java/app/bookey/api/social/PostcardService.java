@@ -64,7 +64,7 @@ public class PostcardService {
             Post post = postRepository.findById(request.postId())
                     .orElseThrow(() -> ApiException.of(ErrorCode.POST_NOT_FOUND));
             if (!post.isOwnedBy(to.getId())) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST, "이 독후감은 받는 사람의 글이 아닙니다.");
+                throw new ApiException(ErrorCode.INVALID_REQUEST, "받는 사람이 쓴 독후감이 아니에요.");
             }
         }
         if (postcardRepository.existsByFromUserIdAndToUserIdAndStatus(

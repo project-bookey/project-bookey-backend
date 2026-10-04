@@ -130,13 +130,13 @@ public class ClubPostService {
 
         ClubPostType type = request.type() == null ? ClubPostType.DISCUSSION : request.type();
         if (type == ClubPostType.LOG) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "읽기로그 조각은 조각 남기기로만 올릴 수 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "메모는 '메모 남기기'로만 올릴 수 있어요.");
         }
         if (type.requiresModerator() && !me.canModerate()) {
-            throw new ApiException(ErrorCode.FORBIDDEN, "공지는 호스트·운영자만 작성할 수 있습니다.");
+            throw new ApiException(ErrorCode.FORBIDDEN, "공지는 호스트와 운영진만 쓸 수 있어요.");
         }
         if (type.requiresAnchorPage() && request.anchorPage() == null) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "인용은 페이지를 함께 남겨야 합니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "문장을 옮길 때는 쪽 번호도 함께 적어 주세요.");
         }
 
         ClubPost parent = null;
@@ -221,24 +221,24 @@ public class ClubPostService {
             throw ApiException.of(ErrorCode.FORBIDDEN);
         }
         if (!post.isVisible()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "가려지거나 지워진 글은 고칠 수 없습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "가려졌거나 지워진 글은 고칠 수 없어요.");
         }
 
         String body = request.body() == null ? "" : request.body().trim();
         boolean hasImage = post.getImageUrl() != null;
         if (body.isEmpty() && !hasImage) {
             throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    post.getType() == ClubPostType.LOG ? "사진이나 한 줄 중 하나는 남겨 주세요." : "내용을 비울 수 없습니다.");
+                    post.getType() == ClubPostType.LOG ? "사진이나 한 줄 중 하나는 남겨 주세요." : "내용을 적어 주세요.");
         }
         if (post.getType() == ClubPostType.LOG && body.length() > ClubLogService.BODY_MAX_LENGTH) {
             throw new ApiException(ErrorCode.INVALID_REQUEST,
-                    "한 줄은 " + ClubLogService.BODY_MAX_LENGTH + "자까지 쓸 수 있습니다.");
+                    "한 줄은 " + ClubLogService.BODY_MAX_LENGTH + "자까지 쓸 수 있어요.");
         }
         if (post.getType().requiresAnchorPage() && request.anchorPage() == null) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "인용은 페이지를 함께 남겨야 합니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "문장을 옮길 때는 쪽 번호도 함께 적어 주세요.");
         }
         if (request.spoilerLevel() == SpoilerLevel.PAGE && request.anchorPage() == null) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "쪽에 붙이려면 쪽 번호가 필요합니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "쪽 번호를 적어야 그 쪽에 붙일 수 있어요.");
         }
 
         post.edit(body, request.anchorPage(), request.spoilerLevel(), Instant.now());
@@ -289,7 +289,7 @@ public class ClubPostService {
         clubService.activeMember(clubId, userId);
         ClubPost post = getPost(clubId, postId);
         if (post.isAuthor(userId)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "자기 글은 신고할 수 없습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "내 글은 신고할 수 없어요.");
         }
         if (abuseReportRepository.existsByTargetTypeAndTargetIdAndReporterId(
                 "CLUB_POST", postId, userId)) {

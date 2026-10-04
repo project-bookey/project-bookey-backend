@@ -210,7 +210,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> service.socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token", null)))
                 .isInstanceOf(ApiException.class)
-                .hasMessage("지원하지 않는 로그인 방식입니다.")
+                .hasMessage("지원하지 않는 로그인 방식이에요.")
                 .extracting(e -> ((ApiException) e).getErrorCode())
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
         verify(refreshTokenRepository, never()).save(any());

@@ -41,7 +41,7 @@ public class ClubNudgeService {
     public void nudge(Long fromUserId, Long clubId, NudgeRequest request) {
         Club club = clubService.getClub(clubId);
         if (!club.isAllowNudge()) {
-            throw new ApiException(ErrorCode.FORBIDDEN, "이 모임은 찌르기를 사용하지 않습니다.");
+            throw new ApiException(ErrorCode.FORBIDDEN, "이 클럽은 찌르기를 쓰지 않아요.");
         }
         if (club.getStatus().isOver()) {
             throw ApiException.of(ErrorCode.CLUB_ENDED);
@@ -49,7 +49,7 @@ public class ClubNudgeService {
         clubService.activeMember(clubId, fromUserId);
 
         if (fromUserId.equals(request.toUserId())) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "자신은 찌를 수 없습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "나 자신은 찌를 수 없어요.");
         }
         ClubMember target = clubService.activeMember(clubId, request.toUserId());
         User targetUser = userRepository.findById(request.toUserId())

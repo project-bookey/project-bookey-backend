@@ -47,7 +47,7 @@ public class InquiryImageService {
         }
         rateLimiter.require("inquiry:image:" + userId, UPLOAD_RATE_LIMIT, Duration.ofMinutes(1));
         if (file == null || file.isEmpty()) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "업로드할 파일이 비어 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "올릴 파일이 비어 있어요.");
         }
         long size = file.getSize();
         if (size > properties.storage().image().maxBytes()) {

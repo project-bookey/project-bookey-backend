@@ -26,7 +26,7 @@ public final class PostDtos {
     public record CreatePostRequest(Long bookId, Long readingRecordId,
             @NotBlank @Size(max = 300) String title, @NotNull @Size(max = 20000) String bodyMd,
             @NotNull PostVisibility visibility, List<@Size(max = 30) String> tags,
-            @Size(max = 10) List<Long> imageIds,
+            @Size(max = 10, message = "사진은 {max}장까지 붙일 수 있어요.") List<Long> imageIds,
             @Schema(requiredMode = NOT_REQUIRED, description = "더 쓰지 않는다 — 보내도 무시한다(옛 앱 호환)")
             List<Long> quoteIds,
             @Schema(requiredMode = NOT_REQUIRED, description = "모임 안에서 쓸 때 그 모임 id — 활성 멤버·진행 중 모임만")
@@ -43,7 +43,7 @@ public final class PostDtos {
             List<@Size(max = 30) String> tags,
             PostVisibility visibility,
             @Schema(requiredMode = NOT_REQUIRED, description = "생략하면 유지, 빈 목록이면 사진을 전부 뗌")
-            @Size(max = 10) List<Long> imageIds,
+            @Size(max = 10, message = "사진은 {max}장까지 붙일 수 있어요.") List<Long> imageIds,
             @Schema(requiredMode = NOT_REQUIRED, description = "더 쓰지 않는다 — 보내도 무시한다(옛 앱 호환)")
             List<Long> quoteIds) {}
 

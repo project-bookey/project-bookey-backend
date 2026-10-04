@@ -71,7 +71,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnreadable(HttpMessageNotReadableException e) {
         log.debug("Unreadable request body - {}", e.getMessage());
         return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
-                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "요청 본문을 해석할 수 없습니다."));
+                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "보낸 내용을 읽지 못했어요. 다시 시도해 주세요."));
     }
 
     /**
@@ -90,7 +90,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMultipart(Exception e) {
         log.debug("Multipart request rejected - {}", e.getMessage());
         return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
-                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "업로드 형식이 올바르지 않습니다."));
+                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "올린 파일 형식이 맞지 않아요."));
     }
 
     /**
@@ -101,7 +101,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleUnsupportedMediaType(HttpMediaTypeNotSupportedException e) {
         log.debug("Unsupported media type - {}", e.getMessage());
         return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
-                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "지원하지 않는 Content-Type 입니다."));
+                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "처리할 수 없는 형식이에요."));
     }
 
     @ExceptionHandler(Exception.class)

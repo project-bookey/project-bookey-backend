@@ -31,10 +31,10 @@ public final class PostRules {
             return;
         }
         if (clubPost && !CLUB_VISIBILITIES.contains(visibility)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "모임 독후감은 '모임+광장 공개'나 '모임만 공개'로만 올릴 수 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "클럽에서 쓴 독후감은 '클럽만'이나 '광장에도'로만 올릴 수 있어요.");
         }
         if (!clubPost && !PLAIN_VISIBILITIES.contains(visibility)) {
-            throw new ApiException(ErrorCode.INVALID_REQUEST, "모임 공개는 모임 안에서 쓴 독후감에만 쓸 수 있습니다.");
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "'클럽만'은 클럽에서 쓴 독후감에만 고를 수 있어요.");
         }
     }
 
@@ -46,10 +46,10 @@ public final class PostRules {
     public static void requireContent(boolean creating, String bodyMd, List<Long> imageIds) {
         if (creating || bodyMd != null) {
             if (bodyMd == null || bodyMd.isBlank()) {
-                throw new ApiException(ErrorCode.INVALID_REQUEST, "본문을 입력해 주세요.");
+                throw new ApiException(ErrorCode.INVALID_REQUEST, "본문을 적어 주세요.");
             }
         }
-        requireCount(imageIds, MAX_IMAGES, "사진은 " + MAX_IMAGES + "장까지 붙일 수 있습니다.");
+        requireCount(imageIds, MAX_IMAGES, "사진은 " + MAX_IMAGES + "장까지 붙일 수 있어요.");
     }
 
     private static void requireCount(List<Long> ids, int max, String message) {
