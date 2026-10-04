@@ -122,6 +122,10 @@ public final class ClubDtos {
             Instant nextMeetingAt,
             /** 다음 만남 제목 — 잡힌 만남이 없으면 null. */
             String nextMeetingTitle,
+            /** 내가 참여한 만남 중 가장 가까운 것의 시각 — 목록 카드의 날짜. 참여한 다가오는 만남이 없으면 null. */
+            Instant myNextMeetingAt,
+            /** 내가 참여한 만남 중 가장 가까운 것의 제목 — 없으면 null. */
+            String myNextMeetingTitle,
             /** 한 줄 소개. */
             String description,
             /** 클럽 머리 배경 사진 — 없으면 null. */
