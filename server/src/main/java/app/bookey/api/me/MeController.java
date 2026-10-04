@@ -47,6 +47,10 @@ public class MeController {
                              @Valid @RequestBody UpdateProfileRequest request) {
         User entity = userRepository.findById(user.id())
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        if (request.nickname() != null && !request.nickname().isBlank()
+                && userRepository.existsByNicknameIgnoreCaseAndIdNot(request.nickname().trim(), user.id())) {
+            throw ApiException.of(ErrorCode.NICKNAME_ALREADY_EXISTS);
+        }
         entity.updateProfile(request.nickname(), request.avatarUrl());
         entity.updateDemographics(request.gender(), request.birthDate());
         entity.updatePreferredCategories(
@@ -69,7 +73,7 @@ public class MeController {
         return ResponseEntity.noContent().build();
     }
 
-    @Operation(summary = "계정 영구 삭제 — 개인정보·로그인 수단 제거 및 계정 종료")
+    @Operation(summary = "계정 탈퇴 — 즉시 로그인 차단, 30일 뒤 연관 기록 영구 삭제")
     @DeleteMapping
     public ResponseEntity<Void> deleteAccount(@AuthenticationPrincipal AuthUser user) {
         authService.deleteAccount(user.id());

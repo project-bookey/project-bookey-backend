@@ -96,6 +96,9 @@ public class User extends BaseTimeEntity {
     @Column(nullable = false, length = 20)
     private UserStatus status;
 
+    @Column(name = "deletion_requested_at")
+    private java.time.Instant deletionRequestedAt;
+
     /** 온보딩에서 고른 선호 카테고리 — 추천·피드 개인화 입력값. */
     @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.ARRAY)
     @Column(name = "preferred_categories", nullable = false, columnDefinition = "text[]")
@@ -119,7 +122,7 @@ public class User extends BaseTimeEntity {
 
     public void updateProfile(String nickname, String avatarUrl) {
         if (nickname != null && !nickname.isBlank()) {
-            this.nickname = nickname;
+            this.nickname = nickname.trim();
         }
         if (avatarUrl != null) {
             this.avatarUrl = avatarUrl;
@@ -162,7 +165,7 @@ public class User extends BaseTimeEntity {
     }
 
     /** 계정 삭제 요청 시 로그인·식별 가능한 개인정보를 영구 제거한다. */
-    public void anonymizeForDeletion() {
+    public void anonymizeForDeletion(java.time.Instant requestedAt) {
         this.handle = "deleted_" + id;
         this.email = null;
         this.passwordHash = null;
@@ -179,6 +182,7 @@ public class User extends BaseTimeEntity {
         this.preferredCategories = new String[0];
         this.allowNudge = false;
         this.status = UserStatus.TERMINATED;
+        this.deletionRequestedAt = requestedAt;
     }
 
     public void setPasswordHash(String passwordHash) {

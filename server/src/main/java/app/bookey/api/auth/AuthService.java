@@ -48,6 +48,7 @@ public class AuthService {
     private final EmailCodeSender emailCodeSender;
     private final IdentityVerifier identityVerifier;
     private final InquiryRepository inquiryRepository;
+    private final DeletedEmailHashRepository deletedEmailHashRepository;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -58,12 +59,17 @@ public class AuthService {
     public void deleteAccount(Long userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        Instant now = Instant.now();
+        if (user.getEmail() != null) {
+            String normalizedEmail = normalizeEmail(user.getEmail());
+            deletedEmailHashRepository.save(new DeletedEmailHash(sha256(normalizedEmail), now));
+            emailVerificationRepository.deleteAllByEmail(normalizedEmail);
+        }
         identityRepository.deleteAllByUserId(userId);
         deviceRepository.deleteAllByUserId(userId);
-        refreshTokenRepository.revokeAllByUserId(userId, Instant.now());
-        // 사용자 행은 익명화만 하므로 FK CASCADE 가 일어나지 않는다 — 문의(본문·사진)는 직접 지운다.
-        inquiryRepository.deleteAllByUserId(userId);
-        user.anonymizeForDeletion();
+        refreshTokenRepository.revokeAllByUserId(userId, now);
+        // 나머지 기록은 30일 유예기간 뒤 AccountDeletionJob이 FK cascade로 삭제한다.
+        user.anonymizeForDeletion(now);
     }
 
     private SocialTokenVerifier verifierFor(AuthProvider provider) {
@@ -101,13 +107,11 @@ public class AuthService {
     private TokenResponse socialSignup(SocialProfile profile) {
         requireSignupOpen();
         String email = normalizeNullableEmail(profile.email());
-        if (email != null && userRepository.existsByEmailIgnoreCase(email)) {
-            throw ApiException.of(ErrorCode.EMAIL_ALREADY_EXISTS);
-        }
+        if (email != null) requireEmailAvailable(email);
         User user = User.builder()
                 .handle(handleGenerator.generate(handleSeed(profile)))
                 .email(email)
-                .nickname(displayName(profile))
+                .nickname(availableNickname(displayName(profile)))
                 .avatarUrl(profile.avatarUrl())
                 .build();
         if (email != null) {
@@ -123,9 +127,7 @@ public class AuthService {
     public EmailCodeResponse requestEmailCode(EmailCodeRequest request) {
         requireSignupOpen();
         String email = normalizeEmail(request.email());
-        if (userRepository.existsByEmailIgnoreCase(email)) {
-            throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
-        }
+        requireEmailAvailable(email);
         return issueEmailCode(email, EmailCodePurpose.SIGNUP);
     }
 
@@ -134,9 +136,7 @@ public class AuthService {
     public void verifySignupEmailCode(EmailCodeVerifyRequest request) {
         requireSignupOpen();
         String email = normalizeEmail(request.email());
-        if (userRepository.existsByEmailIgnoreCase(email)) {
-            throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
-        }
+        requireEmailAvailable(email);
         validateEmailCode(email, request.code(), EmailCodePurpose.SIGNUP, false);
     }
 
@@ -220,8 +220,10 @@ public class AuthService {
         requireSignupOpen();
         requireLegalConsent(request);
         String email = normalizeEmail(request.email());
-        if (userRepository.existsByEmailIgnoreCase(email)) {
-            throw new ApiException(ErrorCode.EMAIL_ALREADY_EXISTS);
+        requireEmailAvailable(email);
+        String nickname = request.nickname().trim();
+        if (userRepository.existsByNicknameIgnoreCase(nickname)) {
+            throw ApiException.of(ErrorCode.NICKNAME_ALREADY_EXISTS);
         }
         VerifiedIdentity identity = null;
         switch (properties.auth().signupVerification()) {
@@ -239,7 +241,7 @@ public class AuthService {
         User user = User.builder()
                 .handle(handleGenerator.generate(email.substring(0, email.indexOf("@"))))
                 .email(email)
-                .nickname(request.nickname().trim())
+                .nickname(nickname)
                 .build();
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         Instant now = Instant.now();
@@ -315,6 +317,27 @@ public class AuthService {
 
     private static String normalizeNullableEmail(String email) {
         return email == null || email.isBlank() ? null : normalizeEmail(email);
+    }
+
+    private void requireEmailAvailable(String email) {
+        if (deletedEmailHashRepository.existsById(sha256(normalizeEmail(email)))) {
+            throw ApiException.of(ErrorCode.EMAIL_REJOIN_BLOCKED);
+        }
+        if (userRepository.existsByEmailIgnoreCase(email)) {
+            throw ApiException.of(ErrorCode.EMAIL_ALREADY_EXISTS);
+        }
+    }
+
+    private String availableNickname(String requested) {
+        String trimmed = requested.trim();
+        String base = trimmed.substring(0, Math.min(trimmed.length(), 50));
+        if (!userRepository.existsByNicknameIgnoreCase(base)) return base;
+        for (int suffix = 2; suffix < 10_000; suffix++) {
+            String tail = "_" + suffix;
+            String candidate = base.substring(0, Math.min(base.length(), 50 - tail.length())) + tail;
+            if (!userRepository.existsByNicknameIgnoreCase(candidate)) return candidate;
+        }
+        throw ApiException.of(ErrorCode.NICKNAME_ALREADY_EXISTS);
     }
 
     private static String handleSeed(SocialProfile profile) {

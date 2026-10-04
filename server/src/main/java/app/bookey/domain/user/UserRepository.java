@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.time.Instant;
+import java.util.List;
 
 public interface UserRepository extends JpaRepository<User, Long> {
 
@@ -20,6 +22,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByHandle(String handle);
 
     boolean existsByEmailIgnoreCase(String email);
+
+    boolean existsByNicknameIgnoreCase(String nickname);
+
+    boolean existsByNicknameIgnoreCaseAndIdNot(String nickname, Long id);
+
+    List<User> findAllByStatusAndDeletionRequestedAtLessThanEqual(UserStatus status, Instant cutoff);
 
     /**
      * 관리자 회원 검색.

@@ -2,6 +2,7 @@ package app.bookey.common.error;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -45,6 +46,19 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException e) {
         return ResponseEntity.status(ErrorCode.FORBIDDEN.getStatus())
                 .body(ErrorResponse.of(ErrorCode.FORBIDDEN, ErrorCode.FORBIDDEN.getMessage()));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErrorResponse> handleIntegrity(DataIntegrityViolationException e) {
+        String detail = e.getMostSpecificCause().getMessage();
+        ErrorCode code = detail != null && detail.contains("uq_users_active_nickname_ci")
+                ? ErrorCode.NICKNAME_ALREADY_EXISTS
+                : detail != null && detail.contains("users_email_key")
+                ? ErrorCode.EMAIL_ALREADY_EXISTS
+                : ErrorCode.CONFLICT;
+        log.debug("Data integrity conflict {} - {}", code, detail);
+        return ResponseEntity.status(code.getStatus())
+                .body(ErrorResponse.of(code, code.getMessage()));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
