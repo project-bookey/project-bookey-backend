@@ -1,1 +1,3 @@
-package app.bookey.domain.club; import org.springframework.data.jpa.repository.JpaRepository; public interface ClubChatUnlockRepository extends JpaRepository<ClubChatUnlock,Long>{ boolean existsByClubIdAndUserId(Long clubId,Long userId); }
+package app.bookey.domain.club; import org.springframework.data.jpa.repository.JpaRepository; import org.springframework.data.jpa.repository.Modifying; import org.springframework.data.jpa.repository.Query; import org.springframework.data.repository.query.Param; public interface ClubChatUnlockRepository extends JpaRepository<ClubChatUnlock,Long>{ boolean existsByClubIdAndUserId(Long clubId,Long userId);
+ /** 클럽을 나가면 채팅 이용권도 사라진다 — 다시 참가하면 새로 열어야 한다. */
+ @Modifying @Query("delete from ClubChatUnlock u where u.clubId=:clubId and u.userId=:userId") void deleteByClubIdAndUserId(@Param("clubId") Long clubId,@Param("userId") Long userId); }

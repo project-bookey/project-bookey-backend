@@ -51,6 +51,9 @@ public class ClubService {
     private final ClubMeetingRepository meetingRepository;
     private final ClubPostRepository postRepository;
     private final ClubEventRepository eventRepository;
+    private final ClubChatUnlockRepository chatUnlockRepository;
+    private final ClubChatReadRepository chatReadRepository;
+    private final ClubMeetingAttendeeRepository attendeeRepository;
     private final BookRepository bookRepository;
     private final ReadingRecordRepository recordRepository;
     private final ReadingSessionRepository sessionRepository;
@@ -338,6 +341,7 @@ public class ClubService {
         }
         member.leave();
         club.leaveMember();
+        forgetMemberTraces(clubId, userId);
         eventRepository.save(new ClubEvent(clubId, userId, ClubEventType.LEFT, Map.of()));
         if (club.getMemberCount() == 0) {
             club.end();
@@ -354,8 +358,21 @@ public class ClubService {
         ClubMember target = activeMember(clubId, request.userId());
         target.kick(request.reason());
         club.leaveMember();
+        forgetMemberTraces(clubId, request.userId());
         eventRepository.save(new ClubEvent(clubId, request.userId(), ClubEventType.KICKED,
                 Map.of("reason", request.reason())));
+    }
+
+    /**
+     * 나간(내보내진) 멤버의 흔적을 지운다 — 다시 참가하면 새 멤버로 시작한다.
+     * 채팅 이용권(다시 열려면 책갈피를 다시 낸다)과 읽음 위치, 아직 시작하지 않은 모임의 참여를 지운다.
+     * 채팅에 남긴 메시지는 그대로 두고, 보여 줄 때 '나간 멤버'로 바꾼다(ClubCommunityService.chatMessages).
+     * 메모(조각)는 그대로 남는다(사용자 결정, 2026-10-05).
+     */
+    private void forgetMemberTraces(Long clubId, Long userId) {
+        chatUnlockRepository.deleteByClubIdAndUserId(clubId, userId);
+        chatReadRepository.deleteByClubIdAndUserId(clubId, userId);
+        attendeeRepository.deleteUpcomingByClubIdAndUserId(clubId, userId, Instant.now());
     }
 
     @Transactional

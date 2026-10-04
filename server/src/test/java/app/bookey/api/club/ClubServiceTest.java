@@ -5,6 +5,7 @@ import app.bookey.api.club.dto.ClubDtos.ClubSummaryView;
 import app.bookey.api.club.dto.ClubDtos.CreateClubRequest;
 import app.bookey.api.club.dto.ClubDtos.JoinPublicRequest;
 import app.bookey.api.club.dto.ClubDtos.JoinRequest;
+import app.bookey.api.club.dto.ClubDtos.KickRequest;
 import app.bookey.api.library.ProgressService;
 import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
@@ -42,7 +43,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 모임 생성 정원 제한, 정원을 건드리는 참가 경로의 행 잠금, 읽을 책이 아직 없는 모임의 홈, 목록 카드의 내 다음 모임. */
+/** 모임 생성 정원 제한, 정원을 건드리는 참가 경로의 행 잠금, 읽을 책이 아직 없는 모임의 홈, 목록 카드의 내 다음 모임,
+ *  나가기·내보내기 때 지우는 흔적. */
 class ClubServiceTest {
 
     private static final BookeyProperties.Club CLUB_POLICY =
@@ -52,6 +54,9 @@ class ClubServiceTest {
     private final ClubMemberRepository memberRepository = mock(ClubMemberRepository.class);
     private final BookRepository bookRepository = mock(BookRepository.class);
     private final ClubMeetingRepository meetingRepository = mock(ClubMeetingRepository.class);
+    private final ClubChatUnlockRepository chatUnlockRepository = mock(ClubChatUnlockRepository.class);
+    private final ClubChatReadRepository chatReadRepository = mock(ClubChatReadRepository.class);
+    private final ClubMeetingAttendeeRepository attendeeRepository = mock(ClubMeetingAttendeeRepository.class);
     private final ClubService service = new ClubService(
             clubRepository,
             mock(ClubBookRepository.class),
@@ -59,6 +64,9 @@ class ClubServiceTest {
             meetingRepository,
             mock(ClubPostRepository.class),
             mock(ClubEventRepository.class),
+            chatUnlockRepository,
+            chatReadRepository,
+            attendeeRepository,
             bookRepository,
             mock(ReadingRecordRepository.class),
             mock(ReadingSessionRepository.class),
@@ -179,6 +187,44 @@ class ClubServiceTest {
         assertThat(clubs.content().get(0).myNextMeetingTitle()).isEqualTo("10월 모임");
         assertThat(clubs.content().get(1).myNextMeetingAt()).isNull();
         assertThat(clubs.content().get(1).myNextMeetingTitle()).isNull();
+    }
+
+    @Test
+    @DisplayName("나가면 채팅 이용권·읽음 위치·아직 시작하지 않은 모임 참여를 지운다 — 다시 참가하면 새 멤버로 시작한다")
+    void leaveForgetsChatAccessAndUpcomingAttendance() {
+        ClubMember member = givenTwoMemberClub();
+
+        service.leave(2L, 10L);
+
+        assertThat(member.getStatus()).isEqualTo(ClubMemberStatus.LEFT);
+        verify(chatUnlockRepository).deleteByClubIdAndUserId(10L, 2L);
+        verify(chatReadRepository).deleteByClubIdAndUserId(10L, 2L);
+        verify(attendeeRepository).deleteUpcomingByClubIdAndUserId(eq(10L), eq(2L), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("내보낸 멤버도 채팅 이용권·읽음 위치·아직 시작하지 않은 모임 참여를 지운다")
+    void kickForgetsChatAccessAndUpcomingAttendance() {
+        ClubMember member = givenTwoMemberClub();
+
+        service.kick(1L, 10L, new KickRequest(2L, "광고"));
+
+        assertThat(member.getStatus()).isEqualTo(ClubMemberStatus.KICKED);
+        verify(chatUnlockRepository).deleteByClubIdAndUserId(10L, 2L);
+        verify(chatReadRepository).deleteByClubIdAndUserId(10L, 2L);
+        verify(attendeeRepository).deleteUpcomingByClubIdAndUserId(eq(10L), eq(2L), any(Instant.class));
+    }
+
+    /** 호스트(1)와 멤버(2) 둘이 있는 모임 10 — 멤버 행을 돌려준다. */
+    private ClubMember givenTwoMemberClub() {
+        Club club = Club.builder().ownerId(1L).name("월요일의 데미안").joinCode("ABC234")
+                .memberLimit((short) 10).startsAt(LocalDate.of(2026, 10, 3)).allowNudge(true).build();
+        club.joinMember();
+        club.joinMember();
+        ClubMember member = ClubMember.builder().clubId(10L).userId(2L).role(ClubRole.MEMBER).build();
+        when(clubRepository.findById(10L)).thenReturn(Optional.of(club));
+        when(memberRepository.findByClubIdAndUserId(10L, 2L)).thenReturn(Optional.of(member));
+        return member;
     }
 
     private static Club club(Long id) throws ReflectiveOperationException {
