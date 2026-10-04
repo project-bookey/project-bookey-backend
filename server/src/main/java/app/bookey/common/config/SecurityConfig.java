@@ -64,6 +64,20 @@ public class SecurityConfig {
 
     @Bean
     @Order(2)
+    public SecurityFilterChain webSocketFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher("/ws/**")
+                .csrf(csrf -> csrf.disable())
+                // Expo Go·네이티브 런타임의 Origin은 웹 도메인과 다르다. 핸드셰이크만 열고
+                // 실제 사용자는 소켓의 첫 auth 메시지에서 USER_ACCESS JWT로 검증한다.
+                .cors(cors -> cors.configurationSource(webSocketCorsSource()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+        return http.build();
+    }
+
+    @Bean
+    @Order(3)
     public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
         RestAuthenticationEntryPoint entryPoint = new RestAuthenticationEntryPoint(objectMapper);
         http
@@ -100,6 +114,17 @@ public class SecurityConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    /** 웹소켓은 Origin 대신 연결 직후 USER_ACCESS JWT로 사용자를 인증한다. */
+    private CorsConfigurationSource webSocketCorsSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedMethods(List.of("GET", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", config);
         return source;
