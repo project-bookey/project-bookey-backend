@@ -40,10 +40,10 @@ public record BookeyProperties(
         public enum SignupVerification { EMAIL_CODE, IDENTITY, NONE }
 
         /**
-         * ttl 은 코드를 입력·확인할 수 있는 시간, cooldown 은 다시 받기까지의 대기, verifiedTtl 은 가입 폼에서 확인을 마친 코드를
+         * ttl 은 코드를 입력·확인할 수 있는 시간, hourlyLimit 은 같은 이메일·용도로 1시간에 받을 수 있는 코드 수, verifiedTtl 은 가입 폼에서 확인을 마친 코드를
          * 가입 요청까지 더 쓸 수 있는 시간이다. expose 가 true 면 코드 발급 응답에 코드를 동봉한다 — 로컬 개발·스모크 전용, 운영은 반드시 false.
          */
-        public record EmailCode(Duration ttl, Duration cooldown, Duration verifiedTtl, int maxAttempts, boolean expose) {}
+        public record EmailCode(Duration ttl, int hourlyLimit, Duration verifiedTtl, int maxAttempts, boolean expose) {}
 
         /**
          * 포트원 본인인증. apiSecret 이 비어 있고 allowDevStub 이면 "dev-" 접두 id 를 통과시키는

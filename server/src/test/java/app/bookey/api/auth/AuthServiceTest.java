@@ -17,6 +17,7 @@ import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
+import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.inquiry.InquiryRepository;
 import app.bookey.domain.legal.ConsentKind;
 import app.bookey.domain.legal.LegalDocument;
@@ -36,6 +37,7 @@ import app.bookey.domain.user.UserDeviceRepository;
 import app.bookey.domain.user.UserRepository;
 import app.bookey.domain.user.UserStatus;
 import io.jsonwebtoken.Claims;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -53,6 +55,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -83,11 +87,11 @@ class AuthServiceTest {
     /** 기본 테스트 모드는 EMAIL_CODE — 본인인증 모드는 identityService() 로 따로 만든다. */
     private static final BookeyProperties.Auth AUTH = new BookeyProperties.Auth(
             BookeyProperties.Auth.SignupVerification.EMAIL_CODE,
-            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), Duration.ofMinutes(30), 5, true),
+            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), 10, Duration.ofMinutes(30), 5, true),
             IDENTITY_STUB);
     private static final BookeyProperties.Auth AUTH_IDENTITY = new BookeyProperties.Auth(
             BookeyProperties.Auth.SignupVerification.IDENTITY,
-            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), Duration.ofMinutes(30), 5, true),
+            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), 10, Duration.ofMinutes(30), 5, true),
             IDENTITY_STUB);
 
     private final UserRepository userRepository = mock(UserRepository.class);
@@ -112,12 +116,19 @@ class AuthServiceTest {
                     Duration.ofHours(1), Duration.ofDays(30), Duration.ofMinutes(30)),
             AUTH, null, null, null, null, null, null, null, null);
     private final JwtTokenProvider tokenProvider = new JwtTokenProvider(properties);
+    private final RateLimiter rateLimiter = mock(RateLimiter.class);
+
+    /** 코드 발급 상한은 따로 시험한다 — 나머지 시험에서는 늘 통과시킨다. */
+    @BeforeEach
+    void allowEmailCodes() {
+        when(rateLimiter.tryAcquire(anyString(), anyInt(), any())).thenReturn(true);
+    }
 
     private AuthService service(List<SocialTokenVerifier> verifiers) {
         return new AuthService(userRepository, identityRepository, deviceRepository, refreshTokenRepository,
                 opsFlagRepository, emailVerificationRepository, tokenProvider, handleGenerator,
                 properties, verifiers, PLAIN, emailCodeSender, identityVerifier, inquiryRepository,
-                deletedEmailHashRepository, consentService, accountEraser);
+                deletedEmailHashRepository, consentService, accountEraser, rateLimiter);
     }
 
     /** IDENTITY 모드 서비스 — 가입이 휴대폰 본인인증을 요구한다. */
@@ -130,7 +141,7 @@ class AuthServiceTest {
                 opsFlagRepository, emailVerificationRepository,
                 new JwtTokenProvider(identityProps), handleGenerator,
                 identityProps, List.of(), PLAIN, emailCodeSender, identityVerifier, inquiryRepository,
-                deletedEmailHashRepository, consentService, accountEraser);
+                deletedEmailHashRepository, consentService, accountEraser, rateLimiter);
     }
 
     private User user(long id, String email, String password) {
@@ -325,7 +336,6 @@ class AuthServiceTest {
                 .requestEmailCode(new EmailCodeRequest("  New@Dev.Local "));
 
         assertThat(res.expiresInSec()).isEqualTo(600L);
-        assertThat(res.resendAfterSec()).isEqualTo(60L);
         assertThat(res.devCode()).hasSize(6).containsOnlyDigits();
 
         ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
@@ -346,17 +356,30 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("코드 발급 — 쿨다운(1분) 안의 재요청은 RATE_LIMITED")
-    void requestEmailCodeWithinCooldown() {
+    @DisplayName("코드 발급 — 방금 받았어도 기다림 없이 바로 새 코드를 다시 받는다")
+    void requestEmailCodeAgainRightAway() {
         when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
         EmailVerification latest = verification("new@dev.local", "123456", Instant.now().plus(Duration.ofMinutes(10)));
         set(latest, "createdAt", Instant.now());
         when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
                 .thenReturn(Optional.of(latest));
 
+        service(List.of()).requestEmailCode(new EmailCodeRequest("new@dev.local"));
+
+        verify(emailVerificationRepository).save(any());
+        verify(rateLimiter).tryAcquire("email-code:SIGNUP:new@dev.local", 10, Duration.ofHours(1));
+    }
+
+    @Test
+    @DisplayName("코드 발급 — 같은 이메일로 1시간 상한을 넘기면 RATE_LIMITED, 발송하지 않는다")
+    void requestEmailCodeOverHourlyLimit() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        when(rateLimiter.tryAcquire("email-code:SIGNUP:new@dev.local", 10, Duration.ofHours(1))).thenReturn(false);
+
         assertApiError(() -> service(List.of())
                 .requestEmailCode(new EmailCodeRequest("new@dev.local")), ErrorCode.RATE_LIMITED);
         verify(emailVerificationRepository, never()).save(any());
+        verify(emailCodeSender, never()).send(any(), any(), any(), any());
     }
 
     @Test
@@ -634,7 +657,6 @@ class AuthServiceTest {
                 .requestPasswordResetCode(new EmailCodeRequest("  Tester1@Dev.Local "));
 
         assertThat(res.expiresInSec()).isEqualTo(600L);
-        assertThat(res.resendAfterSec()).isEqualTo(60L);
         assertThat(res.devCode()).hasSize(6).containsOnlyDigits();
         ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
         verify(emailVerificationRepository).save(saved.capture());
@@ -663,15 +685,12 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("재설정 코드 발급 — 쿨다운(1분) 안의 재요청은 RATE_LIMITED")
-    void requestPasswordResetCodeWithinCooldown() {
+    @DisplayName("재설정 코드 발급 — 가입 코드와 상한을 따로 세고, 1시간 상한을 넘기면 RATE_LIMITED")
+    void requestPasswordResetCodeOverHourlyLimit() {
         when(userRepository.findByEmailIgnoreCase("tester1@dev.local"))
                 .thenReturn(Optional.of(user(7L, "tester1@dev.local", "password1234")));
-        EmailVerification latest = verification("tester1@dev.local", EmailCodePurpose.PASSWORD_RESET, "123456",
-                Instant.now().plus(Duration.ofMinutes(10)));
-        set(latest, "createdAt", Instant.now());
-        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(
-                "tester1@dev.local", EmailCodePurpose.PASSWORD_RESET)).thenReturn(Optional.of(latest));
+        when(rateLimiter.tryAcquire("email-code:PASSWORD_RESET:tester1@dev.local", 10, Duration.ofHours(1)))
+                .thenReturn(false);
 
         assertApiError(() -> service(List.of())
                 .requestPasswordResetCode(new EmailCodeRequest("tester1@dev.local")), ErrorCode.RATE_LIMITED);
