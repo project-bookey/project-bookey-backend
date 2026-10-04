@@ -62,6 +62,13 @@ public class EmailVerification extends BaseTimeEntity {
         attemptCount++;
     }
 
+    /** 확인을 마친 코드의 유효 시각을 늘린다 — 이미 더 늦으면 그대로 둔다. */
+    public void holdUntil(Instant until) {
+        if (until.isAfter(expiresAt)) {
+            this.expiresAt = until;
+        }
+    }
+
     public void consume(Instant now) {
         this.consumedAt = now;
     }

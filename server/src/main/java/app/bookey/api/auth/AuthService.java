@@ -139,7 +139,10 @@ public class AuthService {
         return issueEmailCode(email, EmailCodePurpose.SIGNUP);
     }
 
-    /** 가입 폼에서 코드를 미리 확인한다. 성공한 코드는 가입 트랜잭션에서 다시 확인하고 그때 소진한다. */
+    /**
+     * 가입 폼에서 코드를 미리 확인한다. 성공한 코드는 가입 트랜잭션에서 다시 확인하고 그때 소진한다.
+     * 코드를 입력할 시간(ttl)은 짧아도, 확인을 마친 뒤 약관을 읽는 동안 만료되지 않게 verifiedTtl 만큼 늘려 둔다.
+     */
     @Transactional(noRollbackFor = ApiException.class)
     public void verifySignupEmailCode(EmailCodeVerifyRequest request) {
         requireSignupOpen();
@@ -177,7 +180,7 @@ public class AuthService {
         String code = "%06d".formatted(secureRandom.nextInt(1_000_000));
         emailVerificationRepository.save(new EmailVerification(email, purpose, sha256(code), now.plus(policy.ttl())));
         emailCodeSender.send(email, code, policy.ttl(), purpose);
-        return new EmailCodeResponse(policy.ttl().toSeconds(), policy.expose() ? code : null);
+        return new EmailCodeResponse(policy.ttl().toSeconds(), policy.cooldown().toSeconds(), policy.expose() ? code : null);
     }
 
     /**
@@ -276,7 +279,10 @@ public class AuthService {
         return identity;
     }
 
-    /** 최신 발급 코드와 대조한다 — 소진·만료·시도 초과면 재발급을 유도하고, 불일치는 실패 횟수를 누적한다. */
+    /**
+     * 최신 발급 코드와 대조한다 — 소진·만료·시도 초과면 재발급을 유도하고, 불일치는 실패 횟수를 누적한다.
+     * 소진하지 않는 확인(가입 폼의 사전 확인)이 맞으면 가입을 마칠 시간만큼 유효 시각을 늘린다.
+     */
     private void validateEmailCode(String email, String code, EmailCodePurpose purpose, boolean consume) {
         BookeyProperties.Auth.EmailCode policy = properties.auth().emailCode();
         EmailVerification verification = emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc(email, purpose)
@@ -293,8 +299,10 @@ public class AuthService {
         }
         if (consume) {
             verification.consume(now);
-            emailVerificationRepository.save(verification);
+        } else {
+            verification.holdUntil(now.plus(policy.verifiedTtl()));
         }
+        emailVerificationRepository.save(verification);
     }
 
     @Transactional

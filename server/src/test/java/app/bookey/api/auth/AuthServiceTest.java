@@ -83,11 +83,11 @@ class AuthServiceTest {
     /** 기본 테스트 모드는 EMAIL_CODE — 본인인증 모드는 identityService() 로 따로 만든다. */
     private static final BookeyProperties.Auth AUTH = new BookeyProperties.Auth(
             BookeyProperties.Auth.SignupVerification.EMAIL_CODE,
-            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), 5, true),
+            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), Duration.ofMinutes(30), 5, true),
             IDENTITY_STUB);
     private static final BookeyProperties.Auth AUTH_IDENTITY = new BookeyProperties.Auth(
             BookeyProperties.Auth.SignupVerification.IDENTITY,
-            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), 5, true),
+            new BookeyProperties.Auth.EmailCode(Duration.ofMinutes(10), Duration.ofMinutes(1), Duration.ofMinutes(30), 5, true),
             IDENTITY_STUB);
 
     private final UserRepository userRepository = mock(UserRepository.class);
@@ -325,6 +325,7 @@ class AuthServiceTest {
                 .requestEmailCode(new EmailCodeRequest("  New@Dev.Local "));
 
         assertThat(res.expiresInSec()).isEqualTo(600L);
+        assertThat(res.resendAfterSec()).isEqualTo(60L);
         assertThat(res.devCode()).hasSize(6).containsOnlyDigits();
 
         ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
@@ -371,6 +372,23 @@ class AuthServiceTest {
 
         assertThat(verification.isConsumed()).isFalse();
         assertThat(verification.getAttemptCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("코드 사전 확인 — 맞은 코드는 가입을 마칠 시간(30분)만큼 유효 시각을 늘린다")
+    void verifySignupEmailCodeHoldsCodeForSignup() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        EmailVerification verification = verification("new@dev.local", "123456",
+                Instant.now().plus(Duration.ofMinutes(1)));
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
+                .thenReturn(Optional.of(verification));
+
+        service(List.of()).verifySignupEmailCode(new EmailCodeVerifyRequest("new@dev.local", "123456"));
+
+        assertThat(verification.getExpiresAt()).isAfter(Instant.now().plus(Duration.ofMinutes(29)));
+        verify(emailVerificationRepository).save(verification);
+        // 늘린 뒤에는 처음 유효 시각이 지나도 가입에서 쓸 수 있다.
+        assertThat(verification.isExpired(Instant.now().plus(Duration.ofMinutes(5)))).isFalse();
     }
 
     @Test
@@ -616,6 +634,7 @@ class AuthServiceTest {
                 .requestPasswordResetCode(new EmailCodeRequest("  Tester1@Dev.Local "));
 
         assertThat(res.expiresInSec()).isEqualTo(600L);
+        assertThat(res.resendAfterSec()).isEqualTo(60L);
         assertThat(res.devCode()).hasSize(6).containsOnlyDigits();
         ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
         verify(emailVerificationRepository).save(saved.capture());
