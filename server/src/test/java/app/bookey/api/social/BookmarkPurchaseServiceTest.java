@@ -3,7 +3,10 @@ package app.bookey.api.social;
 import app.bookey.api.social.dto.BookmarkPurchaseDtos.BookmarkPurchaseCheckoutRequest;
 import app.bookey.api.social.dto.BookmarkPurchaseDtos.BookmarkPurchaseVerifyRequest;
 import app.bookey.api.social.payment.TossPaymentClient;
+import app.bookey.api.social.payment.GooglePlayPaymentClient;
+import app.bookey.api.social.payment.AppStorePaymentClient;
 import app.bookey.common.config.BookeyProperties;
+import app.bookey.common.error.ApiException;
 import app.bookey.domain.wallet.BookmarkPurchase;
 import app.bookey.domain.wallet.BookmarkPurchaseRepository;
 import app.bookey.domain.wallet.SubscriptionStore;
@@ -13,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -21,22 +25,26 @@ import static org.mockito.Mockito.when;
 class BookmarkPurchaseServiceTest {
 
     private static final BookeyProperties.Social SOCIAL =
-            new BookeyProperties.Social(5, 16, 1, 2, 200, 50, 30, 17900);
+            new BookeyProperties.Social(5, 16, 1, 2, 200, 50, 30, 5900);
     private static final BookeyProperties.Payment PAYMENT = new BookeyProperties.Payment(
             "bookey.plus.monthly",
             new BookeyProperties.Payment.Toss(
                     "test_ck", "test_sk", "bookey://payment/toss-success",
                     "bookey://payment/toss-fail", "bookey"),
             new BookeyProperties.Payment.Apple(
-                    "issuer", "key", "app.bookey.mobile", "private-key", "SANDBOX"));
+                    "issuer", "key", "app.bookey.mobile", "private-key", "SANDBOX"),
+            new BookeyProperties.Payment.Google("app.bookey.mobile", "service@test", "private-key"));
 
     private final WalletService walletService = mock(WalletService.class);
     private final BookmarkPurchaseRepository purchaseRepository = mock(BookmarkPurchaseRepository.class);
     private final TossPaymentClient tossPaymentClient = mock(TossPaymentClient.class);
+    private final GooglePlayPaymentClient googlePlayPaymentClient = mock(GooglePlayPaymentClient.class);
+    private final AppStorePaymentClient appStorePaymentClient = mock(AppStorePaymentClient.class);
     private final BookeyProperties properties =
             new BookeyProperties(null, null, null, null, null, null, SOCIAL, PAYMENT, null, null);
     private final BookmarkPurchaseService service =
-            new BookmarkPurchaseService(walletService, purchaseRepository, properties, tossPaymentClient);
+            new BookmarkPurchaseService(walletService, purchaseRepository, properties, tossPaymentClient,
+                    googlePlayPaymentClient, appStorePaymentClient);
 
     @Test
     @DisplayName("체크아웃 — 책갈피 수량, 보너스, 금액을 담은 Toss 결제창 URL 을 만든다")
@@ -55,6 +63,14 @@ class BookmarkPurchaseServiceTest {
         assertThat(view.amountKrw()).isEqualTo(2000);
         assertThat(view.checkoutUrl()).isEqualTo("https://checkout.toss.test");
         assertThat(view.successUrl()).contains("kind=BOOKMARK_PURCHASE", "quantity=10");
+    }
+
+    @Test
+    @DisplayName("스토어 체크아웃 — 등록되지 않은 임의 수량은 거절한다")
+    void rejectUnknownStoreQuantity() {
+        assertThatThrownBy(() -> service.checkout(
+                1L, new BookmarkPurchaseCheckoutRequest(SubscriptionStore.APPLE, 7)))
+                .isInstanceOf(ApiException.class);
     }
 
     @Test

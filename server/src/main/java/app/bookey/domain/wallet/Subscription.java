@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.Instant;
 
-/** 구독 (§14.2, 월 17,900원). 현재 기간과 월 재화 지급 멱등 키를 가진다. */
+/** 구독 (§14.2, 월 5,900원). 현재 기간과 월 재화 지급 멱등 키를 가진다. */
 @Getter
 @Entity
 @Table(name = "subscriptions")

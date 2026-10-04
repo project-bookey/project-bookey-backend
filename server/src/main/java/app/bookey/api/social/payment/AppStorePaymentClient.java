@@ -100,6 +100,9 @@ public class AppStorePaymentClient {
     }
 
     private static long longValue(Object value) {
+        if (value == null) {
+            return 0L;
+        }
         if (value instanceof Number number) {
             return number.longValue();
         }

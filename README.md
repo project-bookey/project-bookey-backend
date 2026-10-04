@@ -98,8 +98,14 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` | 인증 코드 메일 발송용 SMTP 접속 정보 |
 | `MAIL_FROM` | 발신자 이메일 주소 |
 | `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | 운영 최초 관리자 생성용. 관리자 계정이 0명일 때만 사용 |
+| `GOOGLE_OAUTH_CLIENT_IDS` | 허용할 Google OAuth 클라이언트 ID 목록(쉼표 구분) |
+| `APPLE_OAUTH_AUDIENCES` | 허용할 Apple Sign in audience 목록(기본 `app.bookey.mobile`) |
 | `TOSS_CLIENT_KEY` / `TOSS_SECRET_KEY` | Toss Payments 결제 연동 |
 | `TOSS_SUCCESS_URL` / `TOSS_FAIL_URL` | Toss 결제 완료/실패 딥링크 또는 웹 URL |
+| `SUBSCRIPTION_PRODUCT_ID` | App Store/Google Play 공통 구독 상품 ID |
+| `APPSTORE_ISSUER_ID` / `APPSTORE_KEY_ID` / `APPSTORE_PRIVATE_KEY` | App Store Server API 결제 검증 자격 증명 |
+| `GOOGLE_PLAY_PACKAGE_NAME` | Google Play 앱 패키지명 |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_PLAY_PRIVATE_KEY` | Google Play Developer API 결제 검증 서비스 계정 |
 | `STORAGE_TYPE` | 독후감 사진 저장소 — `local`(기본) / `gcs` / `none`(업로드 끔). `prod` 프로파일 기본값은 `none` |
 | `STORAGE_LOCAL_DIR` | `local` 일 때 파일을 둘 디렉터리 (기본 `./uploads` → `server/uploads`) |
 | `STORAGE_PUBLIC_BASE_URL` | `local` 일 때 사진 URL 의 origin (예: `http://192.168.0.10:8080`). 비우면 요청 origin |

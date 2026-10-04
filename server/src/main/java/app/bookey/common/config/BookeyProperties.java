@@ -103,12 +103,14 @@ public record BookeyProperties(
     public record Payment(
             String subscriptionProductId,
             Toss toss,
-            Apple apple
+            Apple apple,
+            Google google
     ) {
         public record Toss(String clientKey, String secretKey, String successUrl, String failUrl,
                            String appScheme) {}
         public record Apple(String issuerId, String keyId, String bundleId, String privateKey,
                             String environment) {}
+        public record Google(String packageName, String serviceAccountEmail, String privateKey) {}
     }
 
     /** 업로드 파일 저장소. type 은 local | gcs | s3 | none. */

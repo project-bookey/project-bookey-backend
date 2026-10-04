@@ -37,6 +37,13 @@ public class AuthController {
         return authService.requestEmailCode(request);
     }
 
+    @Operation(summary = "가입 이메일 인증 코드 사전 확인 — 성공해도 실제 가입 전까지 소진하지 않는다")
+    @PostMapping("/email/code/verify")
+    public ResponseEntity<Void> verifyEmailCode(@Valid @RequestBody EmailCodeVerifyRequest request) {
+        authService.verifySignupEmailCode(request);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "이메일 회원가입 — 설정에 따라 이메일 코드 또는 휴대폰 본인인증 필요")
     @PostMapping("/signup")
     public TokenResponse signup(@Valid @RequestBody EmailSignupRequest request) {
