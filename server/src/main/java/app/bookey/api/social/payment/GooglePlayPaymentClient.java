@@ -41,7 +41,9 @@ public class GooglePlayPaymentClient {
             if (items == null || items.isEmpty()) throw ApiException.of(ErrorCode.INVALID_REQUEST);
             Map<String, Object> item = items.get(0);
             return new GoogleSubscription(string(item.get("productId")), state,
-                    Instant.parse(string(item.get("expiryTime"))));
+                    parseInstant(body.get("startTime"), clock.instant()),
+                    Instant.parse(string(item.get("expiryTime"))),
+                    string(body.get("acknowledgementState")));
         } catch (ApiException e) {
             throw e;
         } catch (Exception e) {
@@ -104,6 +106,12 @@ public class GooglePlayPaymentClient {
     private static int number(Object value) { return value instanceof Number n ? n.intValue() : Integer.parseInt(string(value)); }
     private static boolean blank(String value) { return value == null || value.isBlank(); }
 
-    public record GoogleSubscription(String productId, String state, Instant expiresAt) {}
+    private static Instant parseInstant(Object value, Instant fallback) {
+        String text = string(value);
+        return text.isBlank() ? fallback : Instant.parse(text);
+    }
+
+    public record GoogleSubscription(String productId, String state, Instant startsAt,
+                                     Instant expiresAt, String acknowledgementState) {}
     public record GoogleProduct(int purchaseState, String orderId) {}
 }

@@ -10,4 +10,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, Long
     Optional<Subscription> findTopByUserIdOrderByIdDesc(Long userId);
 
     boolean existsByStoreAndOriginalTransactionId(SubscriptionStore store, String originalTransactionId);
+
+    Optional<Subscription> findByStoreAndOriginalTransactionId(SubscriptionStore store,
+                                                                 String originalTransactionId);
 }

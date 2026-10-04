@@ -110,7 +110,8 @@ public record BookeyProperties(
                            String appScheme) {}
         public record Apple(String issuerId, String keyId, String bundleId, String privateKey,
                             String environment) {}
-        public record Google(String packageName, String serviceAccountEmail, String privateKey) {}
+        public record Google(String packageName, String serviceAccountEmail, String privateKey,
+                             String rtdnToken) {}
     }
 
     /** 업로드 파일 저장소. type 은 local | gcs | s3 | none. */

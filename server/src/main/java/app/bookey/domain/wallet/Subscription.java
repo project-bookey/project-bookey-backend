@@ -44,7 +44,7 @@ public class Subscription extends BaseTimeEntity {
     @Column(name = "last_grant_period_start")
     private Instant lastGrantPeriodStart;
 
-    @Column(name = "original_transaction_id", length = 200)
+    @Column(name = "original_transaction_id", columnDefinition = "text")
     private String originalTransactionId;
 
     @Builder
@@ -76,6 +76,18 @@ public class Subscription extends BaseTimeEntity {
         this.status = SubscriptionStatus.ACTIVE;
         this.currentPeriodStart = newPeriodStart;
         this.currentPeriodEnd = newPeriodEnd;
+    }
+
+    /** 스토어 서버 상태 동기화. 갱신 기간이 바뀌면 월 지급 멱등 기준도 새 기간을 바라본다. */
+    public void syncActivePeriod(Instant newPeriodStart, Instant newPeriodEnd) {
+        this.status = SubscriptionStatus.ACTIVE;
+        this.currentPeriodStart = newPeriodStart;
+        this.currentPeriodEnd = newPeriodEnd;
+    }
+
+    public void expire(Instant at) {
+        this.status = SubscriptionStatus.EXPIRED;
+        if (currentPeriodEnd.isAfter(at)) this.currentPeriodEnd = at;
     }
 
     public void cancel(Instant now) {

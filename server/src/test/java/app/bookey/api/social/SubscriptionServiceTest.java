@@ -42,7 +42,7 @@ class SubscriptionServiceTest {
                     "bookey://payment/toss-fail", "bookey"),
             new BookeyProperties.Payment.Apple(
                     "issuer", "key", "app.bookey.mobile", "private-key", "SANDBOX"),
-            new BookeyProperties.Payment.Google("app.bookey.mobile", "service@test", "private-key"));
+            new BookeyProperties.Payment.Google("app.bookey.mobile", "service@test", "private-key", "rtdn-token"));
 
     private final SubscriptionRepository subscriptionRepository = mock(SubscriptionRepository.class);
     private final WalletTransactionRepository transactionRepository = mock(WalletTransactionRepository.class);
@@ -199,5 +199,55 @@ class SubscriptionServiceTest {
         assertThat(saved.getValue().getStore()).isEqualTo(SubscriptionStore.APPLE);
         assertThat(saved.getValue().getOriginalTransactionId()).isEqualTo("orig_123");
         assertThat(saved.getValue().getCurrentPeriodEnd()).isEqualTo(expires);
+    }
+
+    @Test
+    @DisplayName("Google Play 검증 — Play API의 활성 구독 기간과 구매 토큰을 저장한다")
+    void verifyGoogle() {
+        Instant now = Instant.parse("2026-09-06T03:00:00Z");
+        Instant starts = now.minusSeconds(60);
+        Instant expires = now.plusSeconds(31L * 24 * 60 * 60);
+        when(clock.instant()).thenReturn(now);
+        when(subscriptionRepository.findByStoreAndOriginalTransactionId(SubscriptionStore.GOOGLE, "play-token"))
+                .thenReturn(Optional.empty());
+        when(googlePlayPaymentClient.getSubscription(PAYMENT.google(), "play-token"))
+                .thenReturn(new GooglePlayPaymentClient.GoogleSubscription(
+                        "bookey.plus.monthly", "SUBSCRIPTION_STATE_ACTIVE", starts, expires,
+                        "ACKNOWLEDGEMENT_STATE_PENDING"));
+        ArgumentCaptor<Subscription> saved = ArgumentCaptor.forClass(Subscription.class);
+
+        service.verify(1L, new SubscriptionVerifyRequest(
+                SubscriptionStore.GOOGLE, "bookey.plus.monthly", null,
+                null, null, "play-token", null));
+
+        verify(subscriptionRepository).save(saved.capture());
+        assertThat(saved.getValue().getStore()).isEqualTo(SubscriptionStore.GOOGLE);
+        assertThat(saved.getValue().getOriginalTransactionId()).isEqualTo("play-token");
+        assertThat(saved.getValue().getCurrentPeriodStart()).isEqualTo(starts);
+        assertThat(saved.getValue().getCurrentPeriodEnd()).isEqualTo(expires);
+    }
+
+    @Test
+    @DisplayName("Google RTDN 동기화 — 자동 갱신 취소여도 결제된 만료일까지 권한을 유지한다")
+    void syncGoogleCanceledUntilExpiry() {
+        Instant now = Instant.parse("2026-09-06T03:00:00Z");
+        Instant starts = now.minusSeconds(60);
+        Instant expires = now.plusSeconds(7 * 24 * 60 * 60);
+        Subscription local = Subscription.builder()
+                .userId(1L).store(SubscriptionStore.GOOGLE).productId("bookey.plus.monthly")
+                .originalTransactionId("play-token")
+                .currentPeriodStart(starts).currentPeriodEnd(now.plusSeconds(60)).build();
+        when(clock.instant()).thenReturn(now);
+        when(subscriptionRepository.findByStoreAndOriginalTransactionId(SubscriptionStore.GOOGLE, "play-token"))
+                .thenReturn(Optional.of(local));
+        when(googlePlayPaymentClient.getSubscription(PAYMENT.google(), "play-token"))
+                .thenReturn(new GooglePlayPaymentClient.GoogleSubscription(
+                        "bookey.plus.monthly", "SUBSCRIPTION_STATE_CANCELED", starts, expires,
+                        "ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED"));
+
+        service.syncGoogleSubscription("play-token");
+
+        assertThat(local.isActiveAt(expires.minusSeconds(1))).isTrue();
+        assertThat(local.getCurrentPeriodEnd()).isEqualTo(expires);
     }
 }

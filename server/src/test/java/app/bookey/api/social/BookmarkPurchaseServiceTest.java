@@ -33,7 +33,7 @@ class BookmarkPurchaseServiceTest {
                     "bookey://payment/toss-fail", "bookey"),
             new BookeyProperties.Payment.Apple(
                     "issuer", "key", "app.bookey.mobile", "private-key", "SANDBOX"),
-            new BookeyProperties.Payment.Google("app.bookey.mobile", "service@test", "private-key"));
+            new BookeyProperties.Payment.Google("app.bookey.mobile", "service@test", "private-key", "rtdn-token"));
 
     private final WalletService walletService = mock(WalletService.class);
     private final BookmarkPurchaseRepository purchaseRepository = mock(BookmarkPurchaseRepository.class);

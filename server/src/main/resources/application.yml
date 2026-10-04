@@ -140,6 +140,8 @@ bookey:
       package-name: ${GOOGLE_PLAY_PACKAGE_NAME:app.bookey.mobile}
       service-account-email: ${GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL:}
       private-key: ${GOOGLE_PLAY_PRIVATE_KEY:}
+      # Pub/Sub push URL을 /api/v1/webhooks/google?token=<값> 으로 등록한다.
+      rtdn-token: ${GOOGLE_PLAY_RTDN_TOKEN:}
   storage:
     type: ${STORAGE_TYPE:local}                    # local | gcs | s3 | none(업로드 끔). prod 기본값은 application-prod.yml 에서 none
     local:
