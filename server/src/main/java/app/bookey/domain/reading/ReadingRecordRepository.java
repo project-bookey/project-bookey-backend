@@ -89,10 +89,11 @@ public interface ReadingRecordRepository extends JpaRepository<ReadingRecord, Lo
             """)
     List<BookSavedCount> countSavedPerBook(Pageable pageable);
 
-    /** 광장(플라자) 완독 자랑 피드용 — idx_reading_records_finished_feed 부분 인덱스를 탄다. */
+    /** 광장(플라자) 완독 자랑 피드용 — idx_reading_records_finished_feed 부분 인덱스를 탄다. 탈퇴한 사람의 완독은 뺀다. */
     @Query("""
             SELECT r FROM ReadingRecord r
             WHERE r.status = 'FINISHED' AND r.finishedAt IS NOT NULL
+              AND r.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
             ORDER BY r.finishedAt DESC, r.id DESC
             """)
     Page<ReadingRecord> findFinishFeed(Pageable pageable);

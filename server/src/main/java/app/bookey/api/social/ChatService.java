@@ -20,6 +20,7 @@ import app.bookey.domain.social.ChatRepository;
 import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -65,6 +66,7 @@ public class ChatService {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "나 자신과는 채팅할 수 없어요.");
         }
         User other = userRepository.findById(otherUserId)
+                .filter(found -> found.getStatus() != UserStatus.TERMINATED)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         Chat chat = findPair(userId, otherUserId).orElseGet(() -> {
             if (!postcardRepository.existsRepliedBetween(userId, otherUserId)) {
@@ -143,11 +145,14 @@ public class ChatService {
         chatRepository.delete(chat);
     }
 
-    /** 없는 방과 남의 방은 똑같이 CHAT_NOT_FOUND — 방의 존재를 드러내지 않는다. */
+    /**
+     * 없는 방과 남의 방은 똑같이 CHAT_NOT_FOUND — 방의 존재를 드러내지 않는다.
+     * 상대가 탈퇴한 방도 없는 것으로 본다 — 그 사람의 메시지가 남아 있다(30일 뒤 계정과 함께 지워진다).
+     */
     private Chat participantChat(Long userId, Long chatId) {
         Chat chat = chatRepository.findById(chatId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CHAT_NOT_FOUND));
-        if (!chat.isParticipant(userId)) {
+        if (!chat.isParticipant(userId) || userRepository.isTerminated(chat.counterpartOf(userId))) {
             throw ApiException.of(ErrorCode.CHAT_NOT_FOUND);
         }
         return chat;
@@ -156,7 +161,7 @@ public class ChatService {
     /** 채팅을 열 수 있는가 — 이미 방이 있거나 엽서 답장이 오간 사이. 프로필의 채팅 버튼이 쓴다. */
     @Transactional(readOnly = true)
     public boolean canChat(Long userId, Long otherUserId) {
-        if (userId.equals(otherUserId)) {
+        if (userId.equals(otherUserId) || userRepository.isTerminated(otherUserId)) {
             return false;
         }
         return findPair(userId, otherUserId).isPresent()

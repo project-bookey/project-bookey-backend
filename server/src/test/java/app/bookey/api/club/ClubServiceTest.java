@@ -19,7 +19,9 @@ import app.bookey.domain.book.BookSource;
 import app.bookey.domain.club.*;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingSessionRepository;
+import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -44,7 +46,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /** 모임 생성 정원 제한, 정원을 건드리는 참가 경로의 행 잠금, 읽을 책이 아직 없는 모임의 홈, 목록 카드의 내 다음 모임,
- *  나가기·내보내기 때 지우는 흔적. */
+ *  나가기·내보내기 때 지우는 흔적, 탈퇴할 때 클럽 나가기와 호스트 넘기기. */
 class ClubServiceTest {
 
     private static final BookeyProperties.Club CLUB_POLICY =
@@ -57,6 +59,7 @@ class ClubServiceTest {
     private final ClubChatUnlockRepository chatUnlockRepository = mock(ClubChatUnlockRepository.class);
     private final ClubChatReadRepository chatReadRepository = mock(ClubChatReadRepository.class);
     private final ClubMeetingAttendeeRepository attendeeRepository = mock(ClubMeetingAttendeeRepository.class);
+    private final UserRepository userRepository = mock(UserRepository.class);
     private final ClubService service = new ClubService(
             clubRepository,
             mock(ClubBookRepository.class),
@@ -70,7 +73,7 @@ class ClubServiceTest {
             bookRepository,
             mock(ReadingRecordRepository.class),
             mock(ReadingSessionRepository.class),
-            mock(UserRepository.class),
+            userRepository,
             mock(OpsFlagRepository.class),
             mock(ProgressService.class),
             mock(RateLimiter.class),
@@ -213,6 +216,93 @@ class ClubServiceTest {
         verify(chatUnlockRepository).deleteByClubIdAndUserId(10L, 2L);
         verify(chatReadRepository).deleteByClubIdAndUserId(10L, 2L);
         verify(attendeeRepository).deleteUpcomingByClubIdAndUserId(eq(10L), eq(2L), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("탈퇴하면 클럽을 나가고, 호스트 자리는 먼저 들어온 멤버보다 운영진에게 먼저 넘긴다")
+    void withdrawalHandsHostToModeratorFirst() throws ReflectiveOperationException {
+        Club club = givenClubOwnedBy(1L, 3);
+        ClubMember host = member(1L, ClubRole.HOST, "2026-09-01T00:00:00Z");
+        ClubMember early = member(2L, ClubRole.MEMBER, "2026-09-02T00:00:00Z");
+        ClubMember moderator = member(3L, ClubRole.MODERATOR, "2026-09-05T00:00:00Z");
+        when(memberRepository.findAllByUserIdAndStatus(1L, ClubMemberStatus.ACTIVE)).thenReturn(List.of(host));
+        when(memberRepository.findAllByClubIdAndStatus(10L, ClubMemberStatus.ACTIVE))
+                .thenReturn(List.of(host, early, moderator));
+        when(userRepository.findAllById(any())).thenReturn(List.of(user(2L), user(3L)));
+
+        service.leaveAllOnWithdrawal(1L);
+
+        assertThat(club.getOwnerId()).isEqualTo(3L);
+        assertThat(moderator.getRole()).isEqualTo(ClubRole.HOST);
+        assertThat(host.getRole()).isEqualTo(ClubRole.MEMBER);
+        assertThat(host.getStatus()).isEqualTo(ClubMemberStatus.LEFT);
+        assertThat(club.getMemberCount()).isEqualTo((short) 2);
+        assertThat(club.getStatus().isOver()).isFalse();
+        verify(chatUnlockRepository).deleteByClubIdAndUserId(10L, 1L);
+        verify(attendeeRepository).deleteUpcomingByClubIdAndUserId(eq(10L), eq(1L), any(Instant.class));
+    }
+
+    @Test
+    @DisplayName("탈퇴한 멤버는 호스트 자리를 이어받지 않는다 — 다음으로 먼저 들어온 멤버가 받는다")
+    void withdrawalSkipsTerminatedSuccessor() throws ReflectiveOperationException {
+        Club club = givenClubOwnedBy(1L, 3);
+        ClubMember host = member(1L, ClubRole.HOST, "2026-09-01T00:00:00Z");
+        ClubMember gone = member(2L, ClubRole.MEMBER, "2026-09-02T00:00:00Z");
+        ClubMember next = member(3L, ClubRole.MEMBER, "2026-09-03T00:00:00Z");
+        when(memberRepository.findAllByUserIdAndStatus(1L, ClubMemberStatus.ACTIVE)).thenReturn(List.of(host));
+        when(memberRepository.findAllByClubIdAndStatus(10L, ClubMemberStatus.ACTIVE))
+                .thenReturn(List.of(host, gone, next));
+        User terminated = user(2L);
+        terminated.changeStatus(UserStatus.TERMINATED);
+        when(userRepository.findAllById(any())).thenReturn(List.of(terminated, user(3L)));
+
+        service.leaveAllOnWithdrawal(1L);
+
+        assertThat(club.getOwnerId()).isEqualTo(3L);
+        assertThat(next.getRole()).isEqualTo(ClubRole.HOST);
+        assertThat(gone.getRole()).isEqualTo(ClubRole.MEMBER);
+    }
+
+    @Test
+    @DisplayName("혼자 남은 호스트가 탈퇴하면 클럽을 끝낸다")
+    void withdrawalEndsClubWithNoOneLeft() throws ReflectiveOperationException {
+        Club club = givenClubOwnedBy(1L, 1);
+        ClubMember host = member(1L, ClubRole.HOST, "2026-09-01T00:00:00Z");
+        when(memberRepository.findAllByUserIdAndStatus(1L, ClubMemberStatus.ACTIVE)).thenReturn(List.of(host));
+        when(memberRepository.findAllByClubIdAndStatus(10L, ClubMemberStatus.ACTIVE)).thenReturn(List.of(host));
+
+        service.leaveAllOnWithdrawal(1L);
+
+        assertThat(host.getStatus()).isEqualTo(ClubMemberStatus.LEFT);
+        assertThat(club.getMemberCount()).isZero();
+        assertThat(club.getStatus()).isEqualTo(ClubStatus.ENDED);
+    }
+
+    /** 사람 수만큼 참가한 모임 10 — 탈퇴 경로는 행을 잠가 읽는다. */
+    private Club givenClubOwnedBy(Long ownerId, int people) throws ReflectiveOperationException {
+        Club club = club(10L);
+        club.transferHost(ownerId);
+        for (int i = 0; i < people; i++) {
+            club.joinMember();
+        }
+        when(clubRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(club));
+        return club;
+    }
+
+    private static ClubMember member(Long userId, ClubRole role, String joinedAt) throws ReflectiveOperationException {
+        ClubMember member = ClubMember.builder().clubId(10L).userId(userId).role(role).build();
+        Field f = ClubMember.class.getDeclaredField("joinedAt");
+        f.setAccessible(true);
+        f.set(member, Instant.parse(joinedAt));
+        return member;
+    }
+
+    private static User user(Long id) throws ReflectiveOperationException {
+        User user = User.builder().handle("reader" + id).nickname("독자" + id).build();
+        Field f = User.class.getDeclaredField("id");
+        f.setAccessible(true);
+        f.set(user, id);
+        return user;
     }
 
     /** 호스트(1)와 멤버(2) 둘이 있는 모임 10 — 멤버 행을 돌려준다. */

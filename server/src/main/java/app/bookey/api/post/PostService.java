@@ -30,6 +30,7 @@ import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -207,16 +208,14 @@ public class PostService {
     /** 공개 블로그 — bookey.app/@{handle} (§F7 SEO 유입). 비회원이므로 likedByMe·mine 은 false. */
     @Transactional(readOnly = true)
     public PageResponse<PostView> listPublicByHandle(String handle, Pageable pageable) {
-        User user = userRepository.findByHandle(handle)
-                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        User user = blogOwner(handle);
         return toPage(postRepository.findAllByUserIdAndVisibilityOrderByPublishedAtDescIdDesc(
                 user.getId(), PostVisibility.PUBLIC, pageable), null);
     }
 
     @Transactional
     public PostView readPublic(String handle, String slug) {
-        User user = userRepository.findByHandle(handle)
-                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        User user = blogOwner(handle);
         Post post = postRepository.findByUserIdAndSlug(user.getId(), slug)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         // 공개 블로그는 비회원 경로라 비공개·모임 공개 글은 없는 것으로 본다.
@@ -235,6 +234,13 @@ public class PostService {
 
     // ────────────────────────────── 검증 ──────────────────────────────
 
+    /** 공개 블로그 주인 — 탈퇴한 사람의 블로그는 없는 것으로 본다. */
+    private User blogOwner(String handle) {
+        return userRepository.findByHandle(handle)
+                .filter(user -> user.getStatus() != UserStatus.TERMINATED)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+    }
+
     private Post owned(Long userId, Long postId) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.POST_NOT_FOUND));
@@ -246,12 +252,14 @@ public class PostService {
 
     /**
      * 없는 글과 읽을 수 없는 글은 똑같이 POST_NOT_FOUND — 비공개 글의 존재를 드러내지 않는다.
+     * 탈퇴한 사람의 글도 읽을 수 없는 글이다.
      * 댓글도 같은 규칙을 써야 하므로 package-private 로 열어 {@link PostCommentService} 가 함께 쓴다.
      */
     Post readable(Long viewerId, Long postId) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.POST_NOT_FOUND));
-        if (!post.isReadableBy(viewerId, isClubReader(viewerId, post))) {
+        if (!post.isReadableBy(viewerId, isClubReader(viewerId, post))
+                || (!post.isOwnedBy(viewerId) && userRepository.isTerminated(post.getUserId()))) {
             throw ApiException.of(ErrorCode.POST_NOT_FOUND);
         }
         return post;

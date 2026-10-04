@@ -14,6 +14,7 @@ import app.bookey.domain.club.*;
 import app.bookey.domain.club.MeetingNoteOps.Op;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -333,7 +334,11 @@ public class ClubMeetingNoteService {
         for (Object[] pair : pairs) {
             long noteId = ((Number) pair[0]).longValue();
             long userId = ((Number) pair[1]).longValue();
-            out.computeIfAbsent(noteId, k -> new ArrayList<>()).add(person(userId, users.get(userId)));
+            User user = users.get(userId);
+            if (user != null && user.getStatus() == UserStatus.TERMINATED) {
+                continue;   // 노트는 함께 만든 것이라 남기되, 탈퇴한 사람은 참여자로 보여 주지 않는다
+            }
+            out.computeIfAbsent(noteId, k -> new ArrayList<>()).add(person(userId, user));
         }
         return out;
     }

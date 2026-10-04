@@ -109,17 +109,19 @@ public class ReviewCommentService {
 
     // ────────────────────────────── 내부 ──────────────────────────────
 
-    /** 숨겨지거나 지워진 리뷰는 없는 것으로 본다 — 댓글도 달 수 없다. */
+    /** 숨겨지거나 지워진 리뷰, 탈퇴한 사람의 리뷰는 없는 것으로 본다 — 댓글도 달 수 없다. */
     private void requireVisibleReview(Long reviewId) {
         reviewRepository.findById(reviewId)
                 .filter(Review::isVisible)
+                .filter(review -> !userRepository.isTerminated(review.getUserId()))
                 .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
     }
 
-    /** 경로의 리뷰에 달린 댓글만 찾는다 — 다른 리뷰의 댓글 id 는 없는 것으로 본다. */
+    /** 경로의 리뷰에 달린 댓글만 찾는다 — 다른 리뷰의 댓글 id 와 탈퇴한 사람의 댓글은 없는 것으로 본다. */
     private ReviewComment requireComment(Long reviewId, Long commentId) {
         return commentRepository.findById(commentId)
                 .filter(found -> found.belongsTo(reviewId))
+                .filter(found -> !userRepository.isTerminated(found.getUserId()))
                 .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_COMMENT_NOT_FOUND));
     }
 

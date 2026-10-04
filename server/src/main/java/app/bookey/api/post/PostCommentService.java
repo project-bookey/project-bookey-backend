@@ -74,6 +74,7 @@ public class PostCommentService {
         if (request.parentId() != null) {
             PostComment parent = commentRepository.findById(request.parentId())
                     .filter(found -> found.belongsTo(postId))
+                    .filter(found -> !userRepository.isTerminated(found.getUserId()))
                     .orElseThrow(() -> ApiException.of(ErrorCode.POST_COMMENT_NOT_FOUND));
             if (!PostComment.canReplyTo(parent)) {
                 throw ApiException.of(ErrorCode.COMMENT_REPLY_DEPTH);

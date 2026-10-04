@@ -14,10 +14,12 @@ public interface ChatRepository extends JpaRepository<Chat, Long> {
     @Query("SELECT c FROM Chat c WHERE c.aUserId = :aUserId AND c.bUserId = :bUserId")
     Optional<Chat> findPair(@Param("aUserId") Long aUserId, @Param("bUserId") Long bUserId);
 
-    /** 내 채팅 목록 — 마지막 메시지 시각(없으면 개설 시각) 최신순. */
+    /** 내 채팅 목록 — 마지막 메시지 시각(없으면 개설 시각) 최신순. 상대가 탈퇴한(계정이 종료된) 방은 뺀다. */
     @Query("""
             SELECT c FROM Chat c
-            WHERE c.aUserId = :userId OR c.bUserId = :userId
+            WHERE (c.aUserId = :userId OR c.bUserId = :userId)
+              AND c.aUserId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+              AND c.bUserId NOT IN (SELECT t2.id FROM User t2 WHERE t2.status = 'TERMINATED')
             ORDER BY COALESCE(c.lastMessageAt, c.createdAt) DESC, c.id DESC
             """)
     Page<Chat> findAllMine(@Param("userId") Long userId, Pageable pageable);

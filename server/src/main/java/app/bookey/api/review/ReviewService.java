@@ -113,11 +113,12 @@ public class ReviewService {
         review.softDelete();
     }
 
-    /** 리뷰 단건 — 숨겨지거나 지워진 리뷰는 없는 것으로 본다. */
+    /** 리뷰 단건 — 숨겨지거나 지워진 리뷰, 탈퇴한 사람의 리뷰는 없는 것으로 본다. */
     @Transactional(readOnly = true)
     public ReviewView detail(Long reviewId) {
         Review review = reviewRepository.findById(reviewId)
                 .filter(Review::isVisible)
+                .filter(found -> !userRepository.isTerminated(found.getUserId()))
                 .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
         return toView(review, userRepository.findById(review.getUserId()).orElse(null),
                 loadCommentCounts(List.of(review)).getOrDefault(reviewId, 0L),

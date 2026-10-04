@@ -29,6 +29,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByStatusAndDeletionRequestedAtLessThanEqual(UserStatus status, Instant cutoff);
 
+    /** 탈퇴를 요청한 계정 — 아직 30일이 지나지 않아 행이 남아 있는 사람까지. */
+    List<User> findAllByStatusAndDeletionRequestedAtIsNotNull(UserStatus status);
+
+    boolean existsByIdAndStatus(Long id, UserStatus status);
+
+    /**
+     * 탈퇴했거나 운영팀이 계정을 종료한 사람인가 — 그 사람의 글·기록·메시지는 다른 사람에게 보이지 않는다.
+     * 목록 쿼리는 같은 규칙을 {@code x.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')} 로 건다.
+     */
+    default boolean isTerminated(Long userId) {
+        return userId != null && existsByIdAndStatus(userId, UserStatus.TERMINATED);
+    }
+
     /**
      * 관리자 회원 검색.
      *

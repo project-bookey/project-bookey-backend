@@ -14,12 +14,14 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
     /**
      * 토론 목록. 스포일러 마스킹은 서버에서 본문을 제거하는 방식이므로
      * 조회 자체는 전체를 가져오되, "내 진도까지만 보기"가 켜지면 anchor 필터를 건다(§8.5).
+     * 이 파일의 목록 조회는 모두 탈퇴한(계정이 종료된) 사람의 글을 뺀다.
      */
     @Query("""
             SELECT p FROM ClubPost p
             WHERE p.clubId = :clubId
               AND p.parentId IS NULL
               AND p.status = 'VISIBLE'
+              AND p.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
               AND p.type <> 'LOG'
             ORDER BY p.pinned DESC, p.createdAt DESC
             """)
@@ -31,6 +33,7 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
             WHERE p.clubId = :clubId
               AND p.parentId IS NULL
               AND p.status = 'VISIBLE'
+              AND p.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
               AND p.type <> 'LOG'
               AND (p.anchorPage IS NULL OR p.anchorPage <= :maxAnchorPage)
             ORDER BY p.pinned DESC, p.createdAt DESC
@@ -45,6 +48,7 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
             WHERE p.clubId = :clubId
               AND p.type = 'LOG'
               AND p.status = 'VISIBLE'
+              AND p.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
               AND p.createdAt >= :from AND p.createdAt < :to
             ORDER BY p.createdAt ASC
             """)
@@ -56,6 +60,7 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
             WHERE p.clubId = :clubId
               AND p.type = 'LOG'
               AND p.status = 'VISIBLE'
+              AND p.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
               AND p.createdAt >= :from AND p.createdAt < :to
             """)
     List<Instant> findLogTimes(@Param("clubId") Long clubId, @Param("from") Instant from, @Param("to") Instant to);
@@ -67,6 +72,7 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
               AND p.type = 'QUOTE'
               AND p.parentId IS NULL
               AND p.status = 'VISIBLE'
+              AND p.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
               AND p.createdAt >= :from AND p.createdAt < :to
             ORDER BY p.reactionCount DESC, p.createdAt ASC
             """)
@@ -76,13 +82,29 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
     @Query("""
             SELECT DISTINCT p.clubId FROM ClubPost p
             WHERE p.type = 'LOG' AND p.status = 'VISIBLE'
+              AND p.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
               AND p.createdAt >= :from AND p.createdAt < :to
             """)
     List<Long> findClubIdsWithLogsBetween(@Param("from") Instant from, @Param("to") Instant to);
 
-    List<ClubPost> findAllByParentIdAndStatusOrderByCreatedAtAsc(Long parentId, String status);
+    /** 글 하나의 댓글 — 탈퇴한 사람의 댓글은 뺀다. */
+    @Query("""
+            SELECT p FROM ClubPost p
+            WHERE p.parentId = :parentId AND p.status = :status
+              AND p.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+            ORDER BY p.createdAt ASC
+            """)
+    List<ClubPost> findAllByParentIdAndStatusOrderByCreatedAtAsc(@Param("parentId") Long parentId,
+                                                                 @Param("status") String status);
 
-    List<ClubPost> findAllByParentIdInAndStatus(List<Long> parentIds, String status);
+    /** 목록 글들의 댓글 — 탈퇴한 사람의 댓글은 뺀다. */
+    @Query("""
+            SELECT p FROM ClubPost p
+            WHERE p.parentId IN :parentIds AND p.status = :status
+              AND p.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+            """)
+    List<ClubPost> findAllByParentIdInAndStatus(@Param("parentIds") List<Long> parentIds,
+                                                @Param("status") String status);
 
     long countByClubIdAndStatus(Long clubId, String status);
 
@@ -102,6 +124,7 @@ public interface ClubPostRepository extends JpaRepository<ClubPost, Long> {
     @Query("""
             SELECT p FROM ClubPost p
             WHERE p.clubId = :clubId AND p.status = 'VISIBLE' AND p.type = 'QUOTE'
+              AND p.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
             ORDER BY p.reactionCount DESC
             """)
     List<ClubPost> findBestQuotes(@Param("clubId") Long clubId, Pageable pageable);

@@ -47,6 +47,7 @@ public class ProfileController {
                                         @PathVariable Long userId,
                                         @RequestParam(defaultValue = "0") int page,
                                         @RequestParam(defaultValue = "20") int size) {
+        profileService.requireUser(userId);
         return postService.listPublicByUser(user.id(), userId, PageRequest.of(page, size));
     }
 

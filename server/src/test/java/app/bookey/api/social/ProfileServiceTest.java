@@ -11,6 +11,7 @@ import app.bookey.domain.social.ProfileVisitRepository;
 import app.bookey.domain.social.UserFollowRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -88,6 +89,24 @@ class ProfileServiceTest {
                 .thenReturn(true);
         service.profile(1L, 2L);
         verify(visitRepository, org.mockito.Mockito.times(1)).save(any());
+    }
+
+    @Test
+    @DisplayName("탈퇴한 사람의 프로필·독후감·서재·통계는 없는 사람으로 본다 — 방문도 남기지 않는다")
+    void terminatedUserIsNotFound() {
+        host().changeStatus(UserStatus.TERMINATED);
+        when(userRepository.existsById(2L)).thenReturn(true);
+        when(userRepository.isTerminated(2L)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.profile(1L, 2L))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
+        assertThatThrownBy(() -> service.requireUser(2L))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
+        verify(visitRepository, never()).save(any());
     }
 
     @Test

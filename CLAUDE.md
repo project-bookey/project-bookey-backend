@@ -91,6 +91,16 @@ common/             보안 · 에러 · 설정 · 공용 유틸
 
 **나가기·내보내기 (2026-10-05, 사용자 결정)**: 멤버 행은 지우지 않고 `LEFT`/`KICKED` 로 두지만, `ClubService.forgetMemberTraces` 가 그 사람의 채팅 이용권(`club_chat_unlocks` — 다시 참가하면 책갈피를 다시 낸다)·채팅 읽음 위치·아직 시작하지 않은 만남 참여를 지운다. 다시 참가하면 같은 행이 `rejoin()` 으로 살아나며 `joinedAt` 이 새로 찍힌다. 채팅(`ClubCommunityService.chatMessages`)은 보낸 사람이 지금 ACTIVE 이고 그 `joinedAt` 뒤에 보낸 메시지만 그 사람 것으로 내리고, 나머지는 `senderId` 없이 '나간 멤버'·`mine=false` 로 내린다 — 다시 참가한 사람의 예전 메시지도 내 것이 아니다. 메모(조각)는 그대로 남는다.
 
+### 탈퇴한 사람의 기록은 보이지 않는다 (2026-10-05, 사용자 요청)
+
+탈퇴를 요청하면 계정 행은 익명화된 채(`TERMINATED`) 30일 남았다가 `AccountDeletionJob` 이 지운다. 그 30일 동안에도 그 사람의 기록은 다른 사람에게 보이지 않는다 — 데이터는 지우지 않고 조회에서 뺀다. 판정은 계정 상태 `TERMINATED` 하나라 운영팀이 계정을 종료한 사람도 같다.
+
+- 목록 쿼리는 `x.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')`(네이티브는 `users`)를 건다: 독후감(피드·HOT·책별·클럽별), 독후감·리뷰 댓글과 그 수(탈퇴한 사람의 댓글에 달린 답글도 빠진다), 리뷰 목록·평점, 한 줄평, 광장 완독, 좋아요 수·좋아요 누른 사람, 책 좋아요 수, 팔로워·팔로잉 목록과 수, 받은·보낸 엽서, 1:1 채팅 목록(상대가 탈퇴한 방), 클럽 채팅 메시지와 안 읽은 수, 클럽 글·메모·댓글.
+- 한 건 조회는 `UserRepository.isTerminated` 로 없는 것처럼 답한다: 독후감(`PostService.readable`), 공개 블로그, 리뷰 상세와 댓글, 클럽 글, 프로필·남의 독후감·서재·통계(`ProfileService.profile`·`requireUser` → 404), 1:1 채팅방, 엽서 답장, 팔로우·엽서·채팅 시작.
+- 모임 참여자·모임 노트 참여자 목록에서도 뺀다. 모임 노트 내용은 함께 만든 것이라 남긴다.
+- 탈퇴하는 순간(`AccountEraser`) 참가한 클럽을 모두 나가고(`ClubService.leaveAllOnWithdrawal` — 호스트면 탈퇴하지 않은 활성 멤버 중 운영진 → 먼저 들어온 사람에게 넘기고, 남은 사람이 없으면 클럽을 끝낸다), 그 사람이 한 일로 남에게 간 알림(본문에 닉네임이 굳어 있는 좋아요·댓글·팔로우·엽서·채팅·찌르기 알림, payload 의 `fromUserId`·`commenterId`·팔로우의 `userId`)을 지운다. 이 처리 전에 탈퇴한 사람과 실패한 경우는 매일 04:00·04:05 배치가 다시 한다.
+- 새 조회를 만들 때 남의 기록을 내려준다면 같은 조건을 건다. 테스트의 `mock(UserRepository.class)` 는 `isTerminated` 가 false 다.
+
 ### 어뷰징 감지 없음 (2026-10-05, 사용자 결정)
 
 한 번에 많이 읽거나 빨리 완독해도 의심하지 않는다. 세션의 비정상 속도(분당 5쪽 초과)·타이머 방치·4시간 초과 플래그와 리뷰의 순간 완독·하루 대량 완독(`FLAGGED`) 판정을 걷어냈다 — 관리자에게 완독을 증명하게 만들던 장치다. 4시간 초과 세션을 4시간으로 잘라 닫는 것은 그대로다. 예전에 '의심'으로 묶인 리뷰는 V52 가 풀었다. `reading_sessions.abuse_flags`·`counted_for_verification` 컬럼은 예전 값과 함께 남겨 두되 읽지 않고, 응답의 `SessionView.abuseFlags`(빈 목록)·`countedForVerification`(true)·`VerificationPreview.flags`(빈 목록)는 예전 앱 호환용이다. 감지를 다시 넣지 않는다.

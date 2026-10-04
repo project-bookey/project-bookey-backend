@@ -11,12 +11,13 @@ import java.util.List;
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     /**
-     * 도서 상세 리뷰 목록.
+     * 도서 상세 리뷰 목록 — 탈퇴한(계정이 종료된) 사람의 리뷰는 뺀다. 아래 평점도 같은 리뷰로만 계산한다.
      * 기본 정렬: 완독 검증 > 부분 검증 > 미검증, 동일 등급 내 도움됨 순 (§F6).
      */
     @Query("""
             SELECT r FROM Review r
             WHERE r.bookId = :bookId AND r.status = 'VISIBLE'
+              AND r.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
               AND (:verifiedOnly = false OR r.verificationLevel = 'VERIFIED_FULL')
             ORDER BY CASE r.verificationLevel
                         WHEN 'VERIFIED_FULL' THEN 0
@@ -38,6 +39,7 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
             FROM Review r
             WHERE r.bookId = :bookId AND r.status = 'VISIBLE'
               AND r.rating IS NOT NULL AND r.verificationLevel = 'VERIFIED_FULL'
+              AND r.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
               AND NOT EXISTS (
                   SELECT n.id FROM Review n
                   WHERE n.userId = r.userId AND n.bookId = r.bookId AND n.status = 'VISIBLE'
@@ -51,6 +53,7 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
             SELECT AVG(CAST(r.rating AS double)), COUNT(r)
             FROM Review r
             WHERE r.bookId = :bookId AND r.status = 'VISIBLE' AND r.rating IS NOT NULL
+              AND r.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
               AND NOT EXISTS (
                   SELECT n.id FROM Review n
                   WHERE n.userId = r.userId AND n.bookId = r.bookId AND n.status = 'VISIBLE'

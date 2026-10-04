@@ -331,10 +331,11 @@ public class ClubPostService {
 
     // ────────────────────────────── 내부 ──────────────────────────────
 
+    /** 다른 클럽의 글과 탈퇴한 사람의 글은 없는 것으로 본다. */
     private ClubPost getPost(Long clubId, Long postId) {
         ClubPost post = postRepository.findById(postId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        if (!post.getClubId().equals(clubId)) {
+        if (!post.getClubId().equals(clubId) || userRepository.isTerminated(post.getUserId())) {
             throw ApiException.of(ErrorCode.NOT_FOUND);
         }
         return post;

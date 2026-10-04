@@ -12,6 +12,7 @@ import app.bookey.domain.social.UserFollow;
 import app.bookey.domain.social.UserFollowRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -46,6 +47,7 @@ public class FollowService {
             throw ApiException.of(ErrorCode.FOLLOW_SELF);
         }
         User target = userRepository.findById(targetUserId)
+                .filter(found -> found.getStatus() != UserStatus.TERMINATED)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         boolean followsMe = followRepository.existsByFollowerIdAndFolloweeId(targetUserId, userId);
         UserFollow follow = followRepository.findByFollowerIdAndFolloweeId(userId, targetUserId)

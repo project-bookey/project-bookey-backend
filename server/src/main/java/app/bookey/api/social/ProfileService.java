@@ -16,6 +16,7 @@ import app.bookey.domain.social.ProfileVisitRepository;
 import app.bookey.domain.social.UserFollowRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -52,10 +53,11 @@ public class ProfileService {
     private final ChatService chatService;
     private final Clock clock;
 
-    /** 유저 프로필 — 남의 프로필을 열면 방문 기록이 남는다(방문자·날짜당 1건, KST). */
+    /** 유저 프로필 — 남의 프로필을 열면 방문 기록이 남는다(방문자·날짜당 1건, KST). 탈퇴한 사람은 없는 사람이다. */
     @Transactional
     public UserProfileView profile(Long viewerId, Long userId) {
         User user = userRepository.findById(userId)
+                .filter(found -> found.getStatus() != UserStatus.TERMINATED)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         boolean me = userId.equals(viewerId);
         if (!me) {
@@ -73,10 +75,10 @@ public class ProfileService {
                 !me && chatService.canChat(viewerId, userId), me);
     }
 
-    /** 없는 유저면 404 — 남의 서재·통계를 열 때 빈 목록 대신 '없는 사람'으로 답하게 한다. */
+    /** 없는 유저면 404 — 남의 독후감·서재·통계를 열 때 빈 목록 대신 '없는 사람'으로 답하게 한다. 탈퇴한 사람도 같다. */
     @Transactional(readOnly = true)
     public void requireUser(Long userId) {
-        if (!userRepository.existsById(userId)) {
+        if (!userRepository.existsById(userId) || userRepository.isTerminated(userId)) {
             throw ApiException.of(ErrorCode.NOT_FOUND);
         }
     }

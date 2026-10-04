@@ -17,6 +17,7 @@ import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.social.PostcardStatus;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import app.bookey.domain.wallet.Wallet;
 import app.bookey.domain.wallet.WalletTransactionKind;
 import lombok.RequiredArgsConstructor;
@@ -58,6 +59,7 @@ public class PostcardService {
         }
         String body = requireBody(request.body());
         User to = userRepository.findById(request.toUserId())
+                .filter(found -> found.getStatus() != UserStatus.TERMINATED)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         // 글 컨텍스트는 수신자의 글이어야 한다 — "이 글을 보고 보냈다"가 성립하도록.
         if (request.postId() != null) {
@@ -92,8 +94,8 @@ public class PostcardService {
     public PostcardView reply(Long userId, Long postcardId, ReplyPostcardRequest request) {
         Postcard postcard = postcardRepository.findById(postcardId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.POSTCARD_NOT_FOUND));
-        if (!postcard.isRecipient(userId)) {
-            // 남의 엽서는 존재도 드러내지 않는다.
+        if (!postcard.isRecipient(userId) || userRepository.isTerminated(postcard.getFromUserId())) {
+            // 남의 엽서는 존재도 드러내지 않는다. 탈퇴한 사람이 보낸 엽서도 없는 것으로 본다.
             throw ApiException.of(ErrorCode.POSTCARD_NOT_FOUND);
         }
         if (postcard.isReplied()) {

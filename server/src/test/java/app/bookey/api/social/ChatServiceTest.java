@@ -16,6 +16,7 @@ import app.bookey.domain.social.ChatRepository;
 import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -101,6 +102,21 @@ class ChatServiceTest {
         assertThat(view.otherUserId()).isEqualTo(2L);
         assertThat(view.otherNickname()).isEqualTo("상대");
         assertThat(view.unreadCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("상대가 탈퇴한 방은 없는 방으로 본다 — 메시지를 읽을 수도, 새로 열 수도 없다")
+    void chatWithTerminatedUserIsHidden() {
+        Chat chat = Chat.of(1L, 2L);
+        set(chat, "id", 10L);
+        when(chatRepository.findById(10L)).thenReturn(Optional.of(chat));
+        when(userRepository.isTerminated(2L)).thenReturn(true);
+        other(2L).changeStatus(UserStatus.TERMINATED);
+
+        assertApiError(() -> service.messages(1L, 10L, null), ErrorCode.CHAT_NOT_FOUND);
+        assertApiError(() -> service.open(1L, 2L), ErrorCode.NOT_FOUND);
+        assertThat(service.canChat(1L, 2L)).isFalse();
+        verify(messageRepository, never()).findAllByChatIdOrderByIdDesc(any(), any());
     }
 
     @Test

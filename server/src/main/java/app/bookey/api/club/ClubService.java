@@ -17,6 +17,7 @@ import app.bookey.domain.club.*;
 import app.bookey.domain.reading.*;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
+import app.bookey.domain.user.UserStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -373,6 +374,51 @@ public class ClubService {
         chatUnlockRepository.deleteByClubIdAndUserId(clubId, userId);
         chatReadRepository.deleteByClubIdAndUserId(clubId, userId);
         attendeeRepository.deleteUpcomingByClubIdAndUserId(clubId, userId, Instant.now());
+    }
+
+    /**
+     * 탈퇴 — 참가한 클럽을 모두 나간다. 30일 뒤 계정이 지워질 때까지 기다리면 그동안 멤버 목록·자리·호스트 자리에
+     * 탈퇴한 사람이 남는다. 호스트였으면 남은 멤버에게 넘기고(운영진 → 먼저 들어온 사람, AccountDeletionJob 과 같은 순서),
+     * 남은 멤버가 없으면 클럽을 끝낸다. 이미 나간 클럽은 건드리지 않으므로 여러 번 불러도 된다.
+     */
+    @Transactional
+    public void leaveAllOnWithdrawal(Long userId) {
+        for (ClubMember member : memberRepository.findAllByUserIdAndStatus(userId, ClubMemberStatus.ACTIVE)) {
+            Club club = clubRepository.findByIdForUpdate(member.getClubId()).orElse(null);
+            if (club == null) {
+                continue;
+            }
+            if (club.isHost(userId)) {
+                successorOf(club.getId(), userId).ifPresent(next -> {
+                    next.changeRole(ClubRole.HOST);
+                    member.changeRole(ClubRole.MEMBER);
+                    club.transferHost(next.getUserId());
+                });
+            }
+            member.leave();
+            club.leaveMember();
+            forgetMemberTraces(club.getId(), userId);
+            eventRepository.save(new ClubEvent(club.getId(), userId, ClubEventType.LEFT, Map.of()));
+            if (club.getMemberCount() == 0) {
+                club.end();
+            }
+        }
+    }
+
+    /** 호스트 자리를 이어받을 멤버 — 탈퇴하지 않은 활성 멤버 중 운영진 먼저, 그다음 먼저 들어온 사람. */
+    private Optional<ClubMember> successorOf(Long clubId, Long leavingUserId) {
+        List<ClubMember> others = memberRepository.findAllByClubIdAndStatus(clubId, ClubMemberStatus.ACTIVE).stream()
+                .filter(m -> !m.getUserId().equals(leavingUserId))
+                .toList();
+        Set<Long> terminated = loadUsers(others).values().stream()
+                .filter(user -> user.getStatus() == UserStatus.TERMINATED)
+                .map(User::getId)
+                .collect(Collectors.toSet());
+        return others.stream()
+                .filter(m -> !terminated.contains(m.getUserId()))
+                .min(Comparator.comparing(ClubMember::getRole)
+                        .thenComparing(ClubMember::getJoinedAt)
+                        .thenComparing(ClubMember::getId));
     }
 
     @Transactional

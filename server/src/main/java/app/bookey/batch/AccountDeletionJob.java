@@ -1,5 +1,7 @@
 package app.bookey.batch;
 
+import app.bookey.api.club.ClubService;
+import app.bookey.domain.notification.NotificationRepository;
 import app.bookey.domain.user.UserRepository;
 import app.bookey.domain.user.UserStatus;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,31 @@ import java.time.temporal.ChronoUnit;
 public class AccountDeletionJob {
     private final UserRepository userRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final ClubService clubService;
+    private final NotificationRepository notificationRepository;
+
+    /*
+     * 아래 두 작업은 탈퇴할 때 바로 하는 정리(AccountEraser) 가운데 남에게 간 알림 지우기와 클럽 나가기를 다시 한다 —
+     * 그 처리가 들어오기 전에 탈퇴한 사람과 그때 실패한 경우를 메운다. 이미 정리됐으면 아무것도 바뀌지 않는다.
+     */
+
+    @Scheduled(cron = "0 0 4 * * *", zone = "Asia/Seoul")
+    @Transactional
+    public void deleteNotificationsCausedByWithdrawnUsers() {
+        notificationRepository.deleteAllCausedByWithdrawnUsers();
+    }
+
+    /** 사람마다 따로 처리한다 — 한 사람이 실패해도 다음 사람은 계속한다. */
+    @Scheduled(cron = "0 5 4 * * *", zone = "Asia/Seoul")
+    public void leaveClubsOfWithdrawnUsers() {
+        for (var user : userRepository.findAllByStatusAndDeletionRequestedAtIsNotNull(UserStatus.TERMINATED)) {
+            try {
+                clubService.leaveAllOnWithdrawal(user.getId());
+            } catch (RuntimeException e) {
+                log.warn("Failed to leave clubs of withdrawn account: userId={}", user.getId(), e);
+            }
+        }
+    }
 
     @Scheduled(cron = "0 10 4 * * *", zone = "Asia/Seoul")
     @Transactional

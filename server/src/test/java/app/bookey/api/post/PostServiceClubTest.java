@@ -37,7 +37,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 모임 독후감 규칙 — 작성 자격(활성 멤버·진행 중 모임), CLUB 공개 글 읽기, 모임별 목록 멤버 제한. */
+/** 모임 독후감 규칙 — 작성 자격(활성 멤버·진행 중 모임), CLUB 공개 글 읽기, 모임별 목록 멤버 제한, 탈퇴한 사람의 글. */
 class PostServiceClubTest {
 
     private static final long CLUB_ID = 3L;
@@ -49,13 +49,14 @@ class PostServiceClubTest {
     private final ClubService clubService = mock(ClubService.class);
     private final ClubMemberRepository memberRepository = mock(ClubMemberRepository.class);
     private final RateLimiter rateLimiter = mock(RateLimiter.class);
+    private final UserRepository userRepository = mock(UserRepository.class);
     private PostService service;
 
     @BeforeEach
     void setUp() {
         service = new PostService(postRepository, mock(PostImageRepository.class),
                 mock(PostLikeRepository.class), mock(PostCommentRepository.class),
-                mock(BookRepository.class), mock(ReadingRecordRepository.class), mock(UserRepository.class),
+                mock(BookRepository.class), mock(ReadingRecordRepository.class), userRepository,
                 clubService, mock(ClubRepository.class), memberRepository,
                 mock(NotificationService.class), rateLimiter);
     }
@@ -181,6 +182,15 @@ class PostServiceClubTest {
 
         assertThat(service.readable(OUTSIDER, 1L)).isSameAs(post);
         verify(memberRepository, never()).findByClubIdAndUserId(any(), any());
+    }
+
+    @Test
+    @DisplayName("탈퇴한 사람의 글은 공개 글이어도 없는 글로 본다")
+    void postOfTerminatedAuthorIsHidden() {
+        when(postRepository.findById(1L)).thenReturn(Optional.of(clubPost(PostVisibility.PUBLIC)));
+        when(userRepository.isTerminated(AUTHOR)).thenReturn(true);
+
+        assertCode(() -> service.readable(OUTSIDER, 1L), ErrorCode.POST_NOT_FOUND);
     }
 
     // ────────────────────────────── 모임별 목록 ──────────────────────────────

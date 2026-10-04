@@ -12,11 +12,22 @@ public interface PostLikeRepository extends JpaRepository<PostLike, Long> {
 
     Optional<PostLike> findByUserIdAndPostId(Long userId, Long postId);
 
-    /** 좋아요 누른 사람 목록 — 최신순 (§14.2 구독 열람권). */
+    /** 좋아요 누른 사람 목록 — 최신순 (§14.2 구독 열람권). 탈퇴한 사람은 빼고 센다(아래 수도 같다). */
+    @Query("""
+            SELECT l FROM PostLike l
+            WHERE l.postId = :postId
+              AND l.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+            ORDER BY l.id DESC
+            """)
     org.springframework.data.domain.Page<PostLike> findAllByPostIdOrderByIdDesc(
-            Long postId, org.springframework.data.domain.Pageable pageable);
+            @Param("postId") Long postId, org.springframework.data.domain.Pageable pageable);
 
-    long countByPostId(Long postId);
+    @Query("""
+            SELECT COUNT(l) FROM PostLike l
+            WHERE l.postId = :postId
+              AND l.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+            """)
+    long countByPostId(@Param("postId") Long postId);
 
     List<PostLike> findAllByUserIdAndPostIdIn(Long userId, Collection<Long> postIds);
 
@@ -25,6 +36,7 @@ public interface PostLikeRepository extends JpaRepository<PostLike, Long> {
             SELECT l.postId AS postId, COUNT(l) AS likeCount
             FROM PostLike l
             WHERE l.postId IN :postIds
+              AND l.userId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
             GROUP BY l.postId
             """)
     List<PostLikeCount> countPerPost(@Param("postIds") Collection<Long> postIds);

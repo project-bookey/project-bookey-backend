@@ -16,15 +16,38 @@ public interface UserFollowRepository extends JpaRepository<UserFollow, Long> {
 
     Optional<UserFollow> findByFollowerIdAndFolloweeId(Long followerId, Long followeeId);
 
-    long countByFolloweeId(Long followeeId);
+    /** 팔로워 수 — 탈퇴한(계정이 종료된) 사람은 빼고 센다. 아래 목록·수도 모두 같다. */
+    @Query("""
+            SELECT COUNT(f) FROM UserFollow f
+            WHERE f.followeeId = :followeeId
+              AND f.followerId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+            """)
+    long countByFolloweeId(@Param("followeeId") Long followeeId);
 
-    long countByFollowerId(Long followerId);
+    @Query("""
+            SELECT COUNT(f) FROM UserFollow f
+            WHERE f.followerId = :followerId
+              AND f.followeeId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+            """)
+    long countByFollowerId(@Param("followerId") Long followerId);
 
     /** 나를 팔로우하는 사람들 — 최신순. */
-    Page<UserFollow> findAllByFolloweeIdOrderByIdDesc(Long followeeId, Pageable pageable);
+    @Query("""
+            SELECT f FROM UserFollow f
+            WHERE f.followeeId = :followeeId
+              AND f.followerId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+            ORDER BY f.id DESC
+            """)
+    Page<UserFollow> findAllByFolloweeIdOrderByIdDesc(@Param("followeeId") Long followeeId, Pageable pageable);
 
     /** 내가 팔로우하는 사람들 — 최신순. */
-    Page<UserFollow> findAllByFollowerIdOrderByIdDesc(Long followerId, Pageable pageable);
+    @Query("""
+            SELECT f FROM UserFollow f
+            WHERE f.followerId = :followerId
+              AND f.followeeId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+            ORDER BY f.id DESC
+            """)
+    Page<UserFollow> findAllByFollowerIdOrderByIdDesc(@Param("followerId") Long followerId, Pageable pageable);
 
     /** 맞팔로우 플래그 배치 판정용 — 내가 이 사람들을 팔로우하는가. */
     List<UserFollow> findAllByFollowerIdAndFolloweeIdIn(Long followerId, Collection<Long> followeeIds);
