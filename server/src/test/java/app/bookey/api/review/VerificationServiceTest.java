@@ -47,14 +47,10 @@ class VerificationServiceTest {
     }
 
     @Test
-    @DisplayName("검증에서 제외된 세션은 커버리지에 넣지 않는다")
-    void excludesFlaggedSessions() {
-        ReadingSession abnormal = ReadingSession.builder()
-                .readingRecordId(1L).userId(1L).startedAt(START)
-                .startPage(0).source(SessionSource.TIMER).build();
-        abnormal.close(START.plus(Duration.ofMinutes(5)), 300, 0.9, 5, null);  // 분당 60쪽
+    @DisplayName("빨리 읽은 구간도 커버리지에 넣는다 — 어뷰징 감지 없음")
+    void countsFastSessions() {
+        ReadingSession fast = closed(0, 300, 5);  // 분당 60쪽
 
-        assertThat(abnormal.isCountedForVerification()).isFalse();
-        assertThat(VerificationService.mergeUniquePages(List.of(abnormal))).isZero();
+        assertThat(VerificationService.mergeUniquePages(List.of(fast))).isEqualTo(300);
     }
 }

@@ -7,14 +7,10 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -64,13 +60,6 @@ public class ReadingSession {
     @Column(columnDefinition = "text")
     private String memo;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "abuse_flags", nullable = false, columnDefinition = "jsonb")
-    private List<String> abuseFlags = new ArrayList<>();
-
-    @Column(name = "counted_for_verification", nullable = false)
-    private boolean countedForVerification = true;
-
     @Column(name = "client_uuid")
     private UUID clientUuid;
 
@@ -86,7 +75,6 @@ public class ReadingSession {
         this.startPage = startPage;
         this.source = source == null ? SessionSource.TIMER : source;
         this.clientUuid = clientUuid;
-        this.abuseFlags = new ArrayList<>();
     }
 
     public boolean isOpen() {
@@ -94,7 +82,7 @@ public class ReadingSession {
     }
 
     /**
-     * 세션 종료. 어뷰징 신호를 판정해 검증 반영 여부를 결정한다(§8.3).
+     * 세션 종료. 한 번에 많이 읽거나 빨리 읽어도 그대로 인정한다 — 어뷰징 감지는 없앴다(2026-10-05, 사용자 결정).
      *
      * @param endedAt          종료 시각
      * @param endPage          종료 시점 페이지
@@ -112,10 +100,9 @@ public class ReadingSession {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "끝난 시간이 시작 시간보다 빨라요.");
         }
         if (elapsed.compareTo(MAX_SESSION) > 0) {
-            // 4시간 초과 세션은 자동 종료 취급 + 의심 플래그 (§F3)
+            // 4시간 초과 세션은 자동 종료 취급 (§F3)
             elapsed = MAX_SESSION;
             actualEnd = startedAt.plus(MAX_SESSION);
-            addFlag("suspect_idle");
         }
         this.endedAt = actualEnd;
         this.durationSec = (int) elapsed.getSeconds();
@@ -123,7 +110,6 @@ public class ReadingSession {
         this.foregroundRatio = foregroundRatio == null ? null : BigDecimal.valueOf(foregroundRatio);
         this.interactionCount = interactionCount == null ? 0 : interactionCount;
         this.memo = memo;
-        evaluateAbuse();
     }
 
     /** 수동 기록은 사후 입력이므로 생성과 동시에 종료 상태로 만든다. */
@@ -133,39 +119,6 @@ public class ReadingSession {
         this.endPage = endPage;
         this.memo = memo;
         this.source = SessionSource.MANUAL;
-        evaluateAbuse();
-    }
-
-    private void evaluateAbuse() {
-        // 타이머 방치: 포그라운드 비율 < 0.3 이고 상호작용 0회 → 시간 미인정
-        if (source == SessionSource.TIMER
-                && foregroundRatio != null
-                && foregroundRatio.doubleValue() < 0.3
-                && interactionCount == 0) {
-            addFlag("idle_timer");
-            this.countedForVerification = false;
-        }
-        // 비정상 속도: 분당 5쪽 초과 → 검증 제외
-        Integer pages = readPages();
-        if (pages != null && durationSec > 0) {
-            double minutes = durationSec / 60.0;
-            if (minutes > 0 && pages / minutes > 5.0) {
-                addFlag("abnormal_speed");
-                this.countedForVerification = false;
-            }
-        }
-        if (abuseFlags.contains("suspect_idle")) {
-            this.countedForVerification = false;
-        }
-    }
-
-    private void addFlag(String flag) {
-        if (abuseFlags == null) {
-            abuseFlags = new ArrayList<>();
-        }
-        if (!abuseFlags.contains(flag)) {
-            abuseFlags.add(flag);
-        }
     }
 
     /** 이 세션에서 읽은 페이지 수. */
@@ -178,9 +131,6 @@ public class ReadingSession {
     }
 
     public int verifiedDurationSec() {
-        if (!countedForVerification) {
-            return 0;
-        }
         return (int) Math.round(durationSec * source.verificationWeight());
     }
 }

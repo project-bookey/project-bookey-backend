@@ -52,7 +52,7 @@ public class ReviewService {
         Book book = bookRepository.findById(record.getBookId()).orElse(null);
         var result = verificationService.evaluate(record, book);
         return new VerificationPreview(result.level(), result.coverage(), result.timerSessionCount(),
-                result.verifiedMinutes(), result.requiredMinutes(), result.flags(),
+                result.verifiedMinutes(), result.requiredMinutes(), List.of(),
                 record.getStatus() == ReadingStatus.FINISHED);
     }
 

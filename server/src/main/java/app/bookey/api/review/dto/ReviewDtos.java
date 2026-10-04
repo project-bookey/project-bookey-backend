@@ -61,6 +61,7 @@ public final class ReviewDtos {
             int timerSessionCount,
             long verifiedMinutes,
             long requiredMinutes,
+            /** 옛 앱 빌드용 — 어뷰징 감지를 없애 늘 빈 목록이다(2026-10-05). */
             List<String> flags,
             boolean canRate
     ) {}

@@ -11,7 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 
-/** 4시간 초과 열린 세션 자동 종료 (§F3). suspect_idle 플래그가 붙어 검증에서 제외된다. */
+/** 4시간 초과 열린 세션 자동 종료 (§F3). 시간은 4시간까지만 센다. */
 @Slf4j
 @Component
 @RequiredArgsConstructor

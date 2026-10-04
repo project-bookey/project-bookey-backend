@@ -62,13 +62,6 @@ public interface ReadingRecordRepository extends JpaRepository<ReadingRecord, Lo
             """)
     List<ReadingRecord> findLagCandidates(@Param("threshold") Instant threshold, Pageable pageable);
 
-    /** 24시간 내 완독 수 — 대량 등록 후 일괄 완독 탐지(§8.3). */
-    @Query("""
-            SELECT COUNT(r) FROM ReadingRecord r
-            WHERE r.userId = :userId AND r.finishedAt >= :since
-            """)
-    long countFinishedSince(@Param("userId") Long userId, @Param("since") Instant since);
-
     /** 관리자 대시보드 — 전체 사용자 기준 기간 내 완독 수. */
     @Query("SELECT COUNT(r) FROM ReadingRecord r WHERE r.finishedAt >= :since")
     long countAllFinishedSince(@Param("since") Instant since);
