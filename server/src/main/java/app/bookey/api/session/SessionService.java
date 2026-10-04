@@ -79,11 +79,7 @@ public class SessionService {
 
     @Transactional
     public SessionEndResult end(Long userId, Long sessionId, EndRequest request) {
-        ReadingSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> ApiException.of(ErrorCode.SESSION_NOT_FOUND));
-        if (!session.getUserId().equals(userId)) {
-            throw ApiException.of(ErrorCode.FORBIDDEN);
-        }
+        ReadingSession session = ownedSession(userId, sessionId);
         ReadingRecord record = ownedRecord(userId, session.getReadingRecordId());
         Book book = bookRepository.findById(record.getBookId()).orElse(null);
         int totalPages = record.effectiveTotalPages(book == null ? null : book.getTotalPages());
@@ -94,6 +90,22 @@ public class SessionService {
                 request.interactionCount(), request.memo());
 
         return finalizeSession(userId, session, record, totalPages);
+    }
+
+    /** 타이머 잠깐 쉬기. 이미 쉬는 중이면 그대로 돌려준다. */
+    @Transactional
+    public SessionView pause(Long userId, Long sessionId) {
+        ReadingSession session = ownedSession(userId, sessionId);
+        session.pause(Instant.now());
+        return toView(session);
+    }
+
+    /** 타이머 이어서 — 쉰 시간은 독서 시간에서 빠진다. 쉬는 중이 아니면 그대로 돌려준다. */
+    @Transactional
+    public SessionView resume(Long userId, Long sessionId) {
+        ReadingSession session = ownedSession(userId, sessionId);
+        session.resume(Instant.now());
+        return toView(session);
     }
 
     /** 수동 기록 (§F3). 검증 등급 산정에서 가중치가 낮다. */
@@ -238,6 +250,15 @@ public class SessionService {
         }
     }
 
+    private ReadingSession ownedSession(Long userId, Long sessionId) {
+        ReadingSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.SESSION_NOT_FOUND));
+        if (!session.getUserId().equals(userId)) {
+            throw ApiException.of(ErrorCode.FORBIDDEN);
+        }
+        return session;
+    }
+
     private ReadingRecord ownedRecord(Long userId, Long recordId) {
         ReadingRecord record = recordRepository.findById(recordId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.RECORD_NOT_FOUND));
@@ -259,6 +280,8 @@ public class SessionService {
                 session.readPages(),
                 session.getSource(),
                 session.getMemo(),
+                session.getPausedAt(),
+                session.getPausedSec(),
                 // 어뷰징 감지를 없앴다(2026-10-05) — 옛 앱 빌드가 읽는 자리라 '문제없음' 값으로 채운다.
                 List.of(),
                 true);

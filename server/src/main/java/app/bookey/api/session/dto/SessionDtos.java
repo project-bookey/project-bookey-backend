@@ -48,6 +48,10 @@ public final class SessionDtos {
             Integer readPages,
             @NotNull SessionSource source,
             String memo,
+            /** 잠깐 쉬기 시작한 시각 — 쉬는 중일 때만 있다. */
+            Instant pausedAt,
+            /** 지금까지 쉰 시간(초). 지금 쉬는 몫은 들어 있지 않다 — 독서 시간 = 지금 − 시작 − pausedSec − (지금 − pausedAt). */
+            int pausedSec,
             /** 옛 앱 빌드용 — 어뷰징 감지를 없애 늘 빈 목록이다. */
             List<String> abuseFlags,
             /** 옛 앱 빌드용 — 늘 true. */

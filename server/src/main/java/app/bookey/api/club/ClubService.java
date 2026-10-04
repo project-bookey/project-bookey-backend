@@ -611,16 +611,16 @@ public class ClubService {
                 .toList();
     }
 
-    /** 열린 읽기 세션이 있는 기록 id — ClubLogService.readingNow 와 같은 규칙(4시간 넘은 세션은 제외). */
+    /** 열린 읽기 세션이 있는 기록 id — ClubLogService.readingNow 와 같은 규칙(쉬는 세션·4시간 넘은 세션은 제외). */
     private Set<Long> openSessionRecordIds(List<ClubMember> members) {
         List<Long> recordIds = members.stream()
                 .map(ClubMember::getReadingRecordId).filter(Objects::nonNull).distinct().toList();
         if (recordIds.isEmpty()) {
             return Set.of();
         }
-        Instant staleBefore = Instant.now().minus(ReadingSession.MAX_SESSION);
+        Instant now = Instant.now();
         return sessionRepository.findAllByReadingRecordIdInAndEndedAtIsNull(recordIds).stream()
-                .filter(s -> s.getStartedAt().isAfter(staleBefore))
+                .filter(s -> s.isReadingNow(now))
                 .map(ReadingSession::getReadingRecordId)
                 .collect(Collectors.toSet());
     }

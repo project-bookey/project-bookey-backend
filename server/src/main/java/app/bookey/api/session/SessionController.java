@@ -42,6 +42,18 @@ public class SessionController {
         return sessionService.end(user.id(), sessionId, request);
     }
 
+    @Operation(summary = "타이머 잠깐 쉬기 — 쉰 시간은 독서 시간에서 빠진다")
+    @PostMapping("/{sessionId}/pause")
+    public SessionView pause(@AuthenticationPrincipal AuthUser user, @PathVariable Long sessionId) {
+        return sessionService.pause(user.id(), sessionId);
+    }
+
+    @Operation(summary = "타이머 이어서")
+    @PostMapping("/{sessionId}/resume")
+    public SessionView resume(@AuthenticationPrincipal AuthUser user, @PathVariable Long sessionId) {
+        return sessionService.resume(user.id(), sessionId);
+    }
+
     @Operation(summary = "수동 기록 — 사후 입력 (검증 가중치 낮음)")
     @PostMapping("/manual")
     public SessionEndResult manual(@AuthenticationPrincipal AuthUser user,
