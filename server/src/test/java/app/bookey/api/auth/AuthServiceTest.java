@@ -7,7 +7,10 @@ import app.bookey.api.auth.dto.AuthDtos.EmailLoginRequest;
 import app.bookey.api.auth.dto.AuthDtos.EmailSignupRequest;
 import app.bookey.api.auth.dto.AuthDtos.MeResponse;
 import app.bookey.api.auth.dto.AuthDtos.PasswordResetRequest;
+import app.bookey.api.auth.dto.AuthDtos.SignupConsent;
 import app.bookey.api.auth.dto.AuthDtos.SocialLoginRequest;
+import app.bookey.api.legal.ConsentService;
+import app.bookey.api.notification.NotificationService;
 import app.bookey.api.auth.dto.AuthDtos.TokenResponse;
 import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
@@ -15,6 +18,10 @@ import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
 import app.bookey.domain.inquiry.InquiryRepository;
+import app.bookey.domain.legal.ConsentKind;
+import app.bookey.domain.legal.LegalDocument;
+import app.bookey.domain.legal.UserConsent;
+import app.bookey.domain.legal.UserConsentRepository;
 import app.bookey.domain.user.AuthProvider;
 import app.bookey.domain.user.EmailCodePurpose;
 import app.bookey.domain.user.EmailVerification;
@@ -53,7 +60,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * 로그인·가입 경로 단위 테스트 — 이메일 가입은 인증 코드를 요구하고, 소셜 로그인은 미가입 계정을 바로 만든다.
+ * 로그인·가입 경로 단위 테스트 — 이메일 가입은 인증 코드를 요구하고, 소셜 로그인은 가입 동의가 오면 미가입 계정을 만든다.
  * 저장소만 Mockito 로 대신하고 토큰 발급은 실제 {@link JwtTokenProvider} 를 쓴다(Spring 컨텍스트 없음).
  */
 class AuthServiceTest {
@@ -92,6 +99,11 @@ class AuthServiceTest {
     private final IdentityVerifier identityVerifier = mock(IdentityVerifier.class);
     private final InquiryRepository inquiryRepository = mock(InquiryRepository.class);
     private final DeletedEmailHashRepository deletedEmailHashRepository = mock(DeletedEmailHashRepository.class);
+    private final UserConsentRepository consentRepository = mock(UserConsentRepository.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
+    /** 동의 검증은 실제 규칙으로 — 저장소·알림만 가짜. */
+    private final ConsentService consentService = new ConsentService(consentRepository, userRepository, notificationService);
+    private final AccountEraser accountEraser = mock(AccountEraser.class);
     private final HandleGenerator handleGenerator = mock(HandleGenerator.class);
     private final app.bookey.domain.admin.OpsFlagRepository opsFlagRepository =
             mock(app.bookey.domain.admin.OpsFlagRepository.class);
@@ -105,7 +117,7 @@ class AuthServiceTest {
         return new AuthService(userRepository, identityRepository, deviceRepository, refreshTokenRepository,
                 opsFlagRepository, emailVerificationRepository, tokenProvider, handleGenerator,
                 properties, verifiers, PLAIN, emailCodeSender, identityVerifier, inquiryRepository,
-                deletedEmailHashRepository);
+                deletedEmailHashRepository, consentService, accountEraser);
     }
 
     /** IDENTITY 모드 서비스 — 가입이 휴대폰 본인인증을 요구한다. */
@@ -118,7 +130,7 @@ class AuthServiceTest {
                 opsFlagRepository, emailVerificationRepository,
                 new JwtTokenProvider(identityProps), handleGenerator,
                 identityProps, List.of(), PLAIN, emailCodeSender, identityVerifier, inquiryRepository,
-                deletedEmailHashRepository);
+                deletedEmailHashRepository, consentService, accountEraser);
     }
 
     private User user(long id, String email, String password) {
@@ -196,7 +208,7 @@ class AuthServiceTest {
     void socialLoginWithoutVerifierIsRejected() {
         AuthService service = service(List.of());
 
-        assertThatThrownBy(() -> service.socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token")))
+        assertThatThrownBy(() -> service.socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token", null)))
                 .isInstanceOf(ApiException.class)
                 .hasMessage("지원하지 않는 로그인 방식입니다.")
                 .extracting(e -> ((ApiException) e).getErrorCode())
@@ -225,7 +237,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("소셜 로그인 — 연동되지 않은 소셜 계정은 신규 가입되고 newUser=true 로 토큰이 발급된다")
+    @DisplayName("소셜 로그인 — 연동되지 않은 소셜 계정은 가입 동의와 함께 오면 신규 가입되고 newUser=true 로 토큰이 발급된다")
     void socialLoginUnlinkedIdentityCreatesUser() {
         when(identityRepository.findByProviderAndProviderUid(AuthProvider.KAKAO, "kakao-1"))
                 .thenReturn(Optional.empty());
@@ -234,9 +246,10 @@ class AuthServiceTest {
         stubUserSave();
 
         TokenResponse res = service(List.of(kakaoVerifier("kakao-1", "Social@Dev.Local", "소셜")))
-                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token"));
+                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token", requiredConsent()));
 
         assertThat(res.newUser()).isTrue();
+        assertThat(savedConsentKinds()).containsExactly(ConsentKind.TERMS, ConsentKind.PRIVACY, ConsentKind.AGE_14);
         assertThat(res.user().id()).isEqualTo(42L);
         assertThat(res.user().handle()).isEqualTo("social");
         assertThat(res.user().email()).isEqualTo("social@dev.local");
@@ -250,6 +263,26 @@ class AuthServiceTest {
     }
 
     @Test
+    @DisplayName("소셜 로그인 — 처음 보는 소셜 계정인데 가입 동의가 없으면 계정을 만들지 않고 LEGAL_CONSENT_REQUIRED")
+    void socialSignupWithoutConsentCreatesNothing() {
+        when(identityRepository.findByProviderAndProviderUid(AuthProvider.KAKAO, "kakao-1"))
+                .thenReturn(Optional.empty());
+        when(userRepository.existsByEmailIgnoreCase("social@dev.local")).thenReturn(false);
+        AuthService service = service(List.of(kakaoVerifier("kakao-1", "social@dev.local", "소셜")));
+
+        assertApiError(() -> service.socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token", null)),
+                ErrorCode.LEGAL_CONSENT_REQUIRED);
+        SignupConsent noAge = new SignupConsent(true, LegalDocument.TERMS.getVersion(),
+                true, LegalDocument.PRIVACY_CONSENT.getVersion(), false, false, null);
+        assertApiError(() -> service.socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token", noAge)),
+                ErrorCode.LEGAL_CONSENT_REQUIRED);
+        verify(userRepository, never()).save(any());
+        verify(identityRepository, never()).save(any(UserIdentity.class));
+        verify(consentRepository, never()).save(any());
+        verify(refreshTokenRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("소셜 로그인 — provider 이메일이 기존 계정과 같으면 자동 병합하지 않고 EMAIL_ALREADY_EXISTS")
     void socialLoginUnlinkedIdentityWithExistingEmailIsRejected() {
         when(identityRepository.findByProviderAndProviderUid(AuthProvider.KAKAO, "kakao-1"))
@@ -257,7 +290,7 @@ class AuthServiceTest {
         when(userRepository.existsByEmailIgnoreCase("linked@dev.local")).thenReturn(true);
 
         assertApiError(() -> service(List.of(kakaoVerifier("kakao-1", "linked@dev.local", "소셜")))
-                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token")), ErrorCode.EMAIL_ALREADY_EXISTS);
+                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token", null)), ErrorCode.EMAIL_ALREADY_EXISTS);
         verify(userRepository, never()).save(any());
         verify(identityRepository, never()).save(any(UserIdentity.class));
         verify(refreshTokenRepository, never()).save(any());
@@ -272,7 +305,7 @@ class AuthServiceTest {
         when(userRepository.findById(9L)).thenReturn(Optional.of(user));
 
         TokenResponse res = service(List.of(kakaoVerifier("kakao-9")))
-                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token"));
+                .socialLogin(new SocialLoginRequest(AuthProvider.KAKAO, "token", null));
 
         assertThat(res.newUser()).isFalse();
         assertThat(res.user().id()).isEqualTo(9L);
@@ -365,8 +398,13 @@ class AuthServiceTest {
 
     private EmailSignupRequest agreedSignupRequest(String code, String identityVerificationId) {
         return new EmailSignupRequest("new@dev.local", "password1234", "새 독서가", code,
-                identityVerificationId, true, AuthService.TERMS_VERSION,
-                true, AuthService.PRIVACY_VERSION);
+                identityVerificationId, requiredConsent());
+    }
+
+    /** 필수 셋에 지금 버전으로 동의하고 광고 수신은 고르지 않은 가입 동의. */
+    private static SignupConsent requiredConsent() {
+        return new SignupConsent(true, LegalDocument.TERMS.getVersion(),
+                true, LegalDocument.PRIVACY_CONSENT.getVersion(), true, false, null);
     }
 
     @Test
@@ -482,8 +520,7 @@ class AuthServiceTest {
         assertThat(saved.getValue().getRealName()).isEqualTo("홍길동");
         assertThat(saved.getValue().getIdentityVerifiedAt()).isNotNull();
         assertThat(saved.getValue().getEmailVerifiedAt()).isNull();
-        assertThat(saved.getValue().getTermsVersion()).isEqualTo(AuthService.TERMS_VERSION);
-        assertThat(saved.getValue().getPrivacyVersion()).isEqualTo(AuthService.PRIVACY_VERSION);
+        assertThat(savedConsentKinds()).containsExactly(ConsentKind.TERMS, ConsentKind.PRIVACY, ConsentKind.AGE_14);
         verify(emailVerificationRepository, never()).findTopByEmailAndPurposeOrderByIdDesc(any(), any());
     }
 
@@ -514,18 +551,55 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("가입 — 필수 약관 미동의 또는 구버전이면 LEGAL_CONSENT_REQUIRED")
+    @DisplayName("가입 — 필수 동의 누락·구버전·만 14세 미확인, 광고 수신 문서 구버전이면 LEGAL_CONSENT_REQUIRED")
     void emailSignupRequiresCurrentLegalConsent() {
-        EmailSignupRequest missing = new EmailSignupRequest(
-                "new@dev.local", "password1234", "새 독서가", "123456", null,
-                false, AuthService.TERMS_VERSION, true, AuthService.PRIVACY_VERSION);
-        assertApiError(() -> service(List.of()).emailSignup(missing), ErrorCode.LEGAL_CONSENT_REQUIRED);
-
-        EmailSignupRequest stale = new EmailSignupRequest(
-                "new@dev.local", "password1234", "새 독서가", "123456", null,
-                true, "2025-01-01", true, AuthService.PRIVACY_VERSION);
-        assertApiError(() -> service(List.of()).emailSignup(stale), ErrorCode.LEGAL_CONSENT_REQUIRED);
+        String terms = LegalDocument.TERMS.getVersion();
+        String privacy = LegalDocument.PRIVACY_CONSENT.getVersion();
+        List<SignupConsent> rejected = List.of(
+                new SignupConsent(false, terms, true, privacy, true, false, null),
+                new SignupConsent(true, "2025-01-01", true, privacy, true, false, null),
+                new SignupConsent(true, terms, true, privacy, null, false, null),
+                new SignupConsent(true, terms, true, privacy, false, false, null),
+                new SignupConsent(true, terms, true, privacy, true, true, "2025-01-01"));
+        for (SignupConsent consent : rejected) {
+            EmailSignupRequest request = new EmailSignupRequest(
+                    "new@dev.local", "password1234", "새 독서가", "123456", null, consent);
+            assertApiError(() -> service(List.of()).emailSignup(request), ErrorCode.LEGAL_CONSENT_REQUIRED);
+        }
         verify(userRepository, never()).save(any());
+        verify(consentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("가입 — 광고 수신까지 동의하면 네 가지 동의를 같은 시각으로 남기고 처리 결과 알림을 보낸다")
+    void emailSignupRecordsMarketingConsentAndNotifies() {
+        when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
+        when(handleGenerator.generate("new")).thenReturn("newbie");
+        stubUserSave();
+        when(emailVerificationRepository.findTopByEmailAndPurposeOrderByIdDesc("new@dev.local", EmailCodePurpose.SIGNUP))
+                .thenReturn(Optional.of(verification("new@dev.local", "123456",
+                        Instant.now().plus(Duration.ofMinutes(10)))));
+        SignupConsent consent = new SignupConsent(true, LegalDocument.TERMS.getVersion(),
+                true, LegalDocument.PRIVACY_CONSENT.getVersion(), true, true, LegalDocument.MARKETING.getVersion());
+
+        service(List.of()).emailSignup(new EmailSignupRequest(
+                "new@dev.local", "password1234", "새 독서가", "123456", null, consent));
+
+        ArgumentCaptor<UserConsent> saved = ArgumentCaptor.forClass(UserConsent.class);
+        verify(consentRepository, times(4)).save(saved.capture());
+        assertThat(saved.getAllValues()).extracting(UserConsent::getKind)
+                .containsExactly(ConsentKind.TERMS, ConsentKind.PRIVACY, ConsentKind.AGE_14, ConsentKind.MARKETING);
+        assertThat(saved.getAllValues()).allMatch(c -> c.isAgreed() && c.getUserId().equals(42L));
+        assertThat(saved.getAllValues()).extracting(UserConsent::getCreatedAt).containsOnly(saved.getValue().getCreatedAt());
+        assertThat(saved.getAllValues().get(3).getVersion()).isEqualTo(LegalDocument.MARKETING.getVersion());
+        verify(notificationService).inApp(any());
+    }
+
+    /** 저장된 동의 행의 종류(저장 순서대로). */
+    private List<ConsentKind> savedConsentKinds() {
+        ArgumentCaptor<UserConsent> captor = ArgumentCaptor.forClass(UserConsent.class);
+        verify(consentRepository, org.mockito.Mockito.atLeastOnce()).save(captor.capture());
+        return captor.getAllValues().stream().map(UserConsent::getKind).toList();
     }
 
     // ───────────── 비밀번호 재설정 ─────────────
@@ -756,7 +830,7 @@ class AuthServiceTest {
     }
 
     @Test
-    @DisplayName("계정 삭제 — 개인정보를 익명화하고 소셜 연동·푸시 토큰·리프레시 토큰·고객문의를 제거한다")
+    @DisplayName("계정 삭제 — 개인정보를 익명화하고 소셜 연동·푸시 토큰·리프레시 토큰·알림·방문 기록·사진을 바로 지우며, 재가입 차단용 이메일 해시를 남긴다(나머지는 30일 뒤 배치)")
     void deleteAccountAnonymizesAndRevokesCredentials() {
         User user = user(42L, "delete-me@dev.local", "password1234");
         when(userRepository.findById(42L)).thenReturn(Optional.of(user));
@@ -772,8 +846,12 @@ class AuthServiceTest {
         assertThat(user.getPreferredCategories()).isEmpty();
         verify(identityRepository).deleteAllByUserId(42L);
         verify(deviceRepository).deleteAllByUserId(42L);
-        verify(refreshTokenRepository).revokeAllByUserId(org.mockito.ArgumentMatchers.eq(42L), any(Instant.class));
-        verify(inquiryRepository).deleteAllByUserId(42L);
+        verify(refreshTokenRepository).deleteAllByUserId(42L);
+        verify(deletedEmailHashRepository).save(any());
+        verify(emailVerificationRepository).deleteAllByEmail("delete-me@dev.local");
+        verify(accountEraser).erase(user);
+        // 문의·게시물 등 나머지 기록은 30일 유예기간 뒤 AccountDeletionJob 이 지운다.
+        verify(inquiryRepository, never()).deleteAllByUserId(any());
     }
 
     // ───────────── 소셜 연동 상태 · 해제 ─────────────

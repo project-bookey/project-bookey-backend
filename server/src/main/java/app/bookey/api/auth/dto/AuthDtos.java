@@ -2,6 +2,7 @@ package app.bookey.api.auth.dto;
 
 import app.bookey.domain.user.AuthProvider;
 import app.bookey.domain.user.DevicePlatform;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -11,10 +12,29 @@ public final class AuthDtos {
 
     private AuthDtos() {}
 
-    /** 소셜 로그인·연동. token 은 provider 가 발급한 idToken/accessToken. */
+    /**
+     * 소셜 로그인·연동. token 은 provider 가 발급한 idToken/accessToken.
+     * consent 는 처음 보는 소셜 계정이 가입될 때만 본다 — 없으면 계정을 만들기 전에 LEGAL_CONSENT_REQUIRED 로 거절하고,
+     * 앱은 동의를 받은 뒤 같은 token 으로 다시 보낸다. 로그인·연동에서는 무시한다.
+     */
     public record SocialLoginRequest(
             @NotNull AuthProvider provider,
-            @NotBlank String token
+            @NotBlank String token,
+            @Valid SignupConsent consent
+    ) {}
+
+    /**
+     * 가입 동의 — 필수(약관·개인정보 수집·이용·만 14세 이상)와 선택(광고성 정보 수신).
+     * version 은 앱이 화면에 보여 준 문서(GET /api/v1/public/legal/{key})의 version 이고, 지금 버전과 같아야 한다.
+     */
+    public record SignupConsent(
+            Boolean termsAgreed,
+            @Size(max = 20) String termsVersion,
+            Boolean privacyAgreed,
+            @Size(max = 20) String privacyVersion,
+            Boolean ageConfirmed,
+            Boolean marketingAgreed,
+            @Size(max = 20) String marketingVersion
     ) {}
 
     public record RefreshRequest(@NotBlank String refreshToken) {}
@@ -44,10 +64,8 @@ public final class AuthDtos {
             @Size(min = 6, max = 6) String code,
             /** IDENTITY 모드 — 포트원 본인인증 완료 id. */
             @Size(max = 100) String identityVerificationId,
-            @NotNull Boolean termsAgreed,
-            @NotBlank @Size(max = 20) String termsVersion,
-            @NotNull Boolean privacyAgreed,
-            @NotBlank @Size(max = 20) String privacyVersion
+            /** 없으면(옛 앱) 형식 오류가 아니라 LEGAL_CONSENT_REQUIRED 로 거절한다 — 무엇이 빠졌는지 알 수 있게. */
+            @Valid SignupConsent consent
     ) {}
 
     /** 가입 화면 구성용 — 어떤 인증을 요구하는지, 포트원 SDK 키, 개발 스텁 여부. */
@@ -99,7 +117,17 @@ public final class AuthDtos {
             /** 이 계정에 연동된 소셜 로그인(enum 순서) — 앱 설정의 연동 카드가 상태를 그린다. */
             java.util.List<AuthProvider> linkedProviders,
             /** 비밀번호가 있는지 — 없으면(소셜 전용 계정) 마지막 소셜 연동은 해제할 수 없다. */
-            boolean hasPassword
+            boolean hasPassword,
+            /** 종류별 지금 동의 상태 — 한 번이라도 기록이 있는 종류만 담긴다. */
+            @NotNull java.util.List<ConsentStateView> consents
+    ) {}
+
+    /** 동의 상태 한 종류 — at 은 마지막으로 동의·철회한 시각(광고 수신 처리 결과 안내에 쓴다). */
+    public record ConsentStateView(
+            @NotNull app.bookey.domain.legal.ConsentKind kind,
+            boolean agreed,
+            String version,
+            @NotNull java.time.Instant at
     ) {}
 
     public record DeviceRegisterRequest(

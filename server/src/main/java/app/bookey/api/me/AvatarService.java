@@ -8,6 +8,7 @@ import app.bookey.common.error.ErrorCode;
 import app.bookey.common.storage.ImageSniffer;
 import app.bookey.common.storage.StorageKeys;
 import app.bookey.common.storage.StorageService;
+import app.bookey.common.support.AfterCommit;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
@@ -22,9 +23,9 @@ import java.io.InputStream;
 import java.time.Duration;
 
 /**
- * 프로필 사진 업로드 (온보딩 필수 단계).
+ * 프로필 사진 업로드.
  * PostImageService 와 같은 저장 규칙 — 재인코딩 없이 매직넘버로 형식만 판별한다.
- * 이전 아바타 파일은 남는다(URL 만 교체) — 정리는 후속 배치 과제.
+ * 사진을 바꾸면 이전 파일은 커밋 뒤에 지운다(우리 저장소에 올린 사진일 때만).
  */
 @Slf4j
 @Service
@@ -70,8 +71,20 @@ public class AvatarService {
             log.warn("아바타 파일을 읽지 못했습니다: userId={}", userId, e);
             throw ApiException.of(ErrorCode.STORAGE_ERROR);
         }
+        String previousKey = StorageKeys.avatarKeyOf(userId, user.getAvatarUrl());
         user.updateProfile(null, url);
+        if (previousKey != null && !previousKey.equals(key)) {
+            AfterCommit.run(() -> deleteQuietly(previousKey));
+        }
         return authService.toMe(user);
+    }
+
+    private void deleteQuietly(String key) {
+        try {
+            storage.delete(key);
+        } catch (Exception e) {
+            log.warn("이전 프로필 사진 삭제 실패(손으로 회수): key={}", key, e);
+        }
     }
 
     private static byte[] readHead(MultipartFile file) {

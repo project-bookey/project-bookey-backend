@@ -13,4 +13,10 @@ public interface ProfileVisitRepository extends JpaRepository<ProfileVisit, Long
     long countByHostId(Long hostId);
 
     Page<ProfileVisit> findAllByHostIdOrderByIdDesc(Long hostId, Pageable pageable);
+
+    /** 탈퇴 — 내가 다녀간 기록과 나를 찾은 기록을 함께 지운다. */
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query(
+            "DELETE FROM ProfileVisit v WHERE v.visitorId = :userId OR v.hostId = :userId")
+    int deleteAllInvolving(@org.springframework.data.repository.query.Param("userId") Long userId);
 }
