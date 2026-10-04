@@ -427,6 +427,12 @@ public class ClubService {
                 .findAllById(clubBooks.values().stream().map(ClubBook::getBookId).toList()).stream()
                 .collect(Collectors.toMap(Book::getId, Function.identity()));
 
+        // 내가 참여한 다가오는 만남 — 클럽마다 가장 가까운 것 하나(이른 순으로 오므로 처음 본 것).
+        Map<Long, ClubMeeting> myNext = new HashMap<>();
+        for (ClubMeeting meeting : meetingRepository.findAttendingUpcoming(userId, clubIds, Instant.now())) {
+            myNext.putIfAbsent(meeting.getClubId(), meeting);
+        }
+
         LocalDate today = LocalDate.now(KST);
         return PageResponse.of(memberships, membership -> {
             Club club = clubs.get(membership.getClubId());
@@ -440,6 +446,7 @@ public class ClubService {
             Double average = averageCompletion(peers, records, book);
             List<ClubMemberBrief> briefs = memberBriefs(peers, records, book, userId);
             Optional<ClubMeeting> next = nextMeeting(club.getId());
+            Optional<ClubMeeting> mineNext = Optional.ofNullable(myNext.get(club.getId()));
 
             return new ClubSummaryView(
                     club.getId(), club.getName(), club.getCoverUrl(),
@@ -447,6 +454,7 @@ public class ClubService {
                     club.getStatus(), club.getMemberCount(), club.daysLeft(today),
                     mine, average, 0, membership.getRole(), briefs,
                     next.map(ClubMeeting::getStartsAt).orElse(null), next.map(ClubMeeting::getTitle).orElse(null),
+                    mineNext.map(ClubMeeting::getStartsAt).orElse(null), mineNext.map(ClubMeeting::getTitle).orElse(null),
                     club.getDescription(), club.getBackgroundUrl());
         });
     }

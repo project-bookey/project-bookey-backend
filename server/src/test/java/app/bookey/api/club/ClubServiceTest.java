@@ -1,6 +1,7 @@
 package app.bookey.api.club;
 
 import app.bookey.api.club.dto.ClubDtos.ClubHomeView;
+import app.bookey.api.club.dto.ClubDtos.ClubSummaryView;
 import app.bookey.api.club.dto.ClubDtos.CreateClubRequest;
 import app.bookey.api.club.dto.ClubDtos.JoinPublicRequest;
 import app.bookey.api.club.dto.ClubDtos.JoinRequest;
@@ -8,6 +9,7 @@ import app.bookey.api.library.ProgressService;
 import app.bookey.common.config.BookeyProperties;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
+import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.admin.OpsFlagRepository;
 import app.bookey.domain.book.BookRepository;
@@ -17,8 +19,13 @@ import app.bookey.domain.reading.ReadingSessionRepository;
 import app.bookey.domain.user.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
+import java.lang.reflect.Field;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -26,12 +33,13 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-/** 모임 생성 정원 제한, 정원을 건드리는 참가 경로의 행 잠금, 읽을 책이 아직 없는 모임의 홈. */
+/** 모임 생성 정원 제한, 정원을 건드리는 참가 경로의 행 잠금, 읽을 책이 아직 없는 모임의 홈, 목록 카드의 내 다음 모임. */
 class ClubServiceTest {
 
     private static final BookeyProperties.Club CLUB_POLICY =
@@ -40,11 +48,12 @@ class ClubServiceTest {
     private final ClubRepository clubRepository = mock(ClubRepository.class);
     private final ClubMemberRepository memberRepository = mock(ClubMemberRepository.class);
     private final BookRepository bookRepository = mock(BookRepository.class);
+    private final ClubMeetingRepository meetingRepository = mock(ClubMeetingRepository.class);
     private final ClubService service = new ClubService(
             clubRepository,
             mock(ClubBookRepository.class),
             memberRepository,
-            mock(ClubMeetingRepository.class),
+            meetingRepository,
             mock(ClubPostRepository.class),
             mock(ClubEventRepository.class),
             bookRepository,
@@ -128,5 +137,40 @@ class ClubServiceTest {
         assertThat(home.checkpoints()).isEmpty();
         assertThat(home.members()).singleElement()
                 .satisfies(m -> assertThat(m.completionRate()).isNull());
+    }
+
+    @Test
+    @DisplayName("목록 카드의 내 다음 모임은 클럽마다 내가 참여한 가장 가까운 모임 — 없으면 null")
+    void myClubsCarriesMyNearestAttendingMeeting() throws ReflectiveOperationException {
+        Club withMeetings = club(10L);
+        Club withoutMeetings = club(20L);
+        ClubMember first = ClubMember.builder().clubId(10L).userId(1L).role(ClubRole.MEMBER).build();
+        ClubMember second = ClubMember.builder().clubId(20L).userId(1L).role(ClubRole.MEMBER).build();
+        Pageable page = PageRequest.of(0, 20);
+        when(memberRepository.findMyClubs(1L, page)).thenReturn(new PageImpl<>(List.of(first, second), page, 2));
+        when(clubRepository.findAllById(List.of(10L, 20L))).thenReturn(List.of(withMeetings, withoutMeetings));
+        Instant near = Instant.parse("2026-10-12T10:00:00Z");
+        // 저장소가 이른 순으로 준다 — 같은 클럽의 더 늦은 모임은 버린다.
+        when(meetingRepository.findAttendingUpcoming(eq(1L), eq(List.of(10L, 20L)), any())).thenReturn(List.of(
+                new ClubMeeting(10L, 2L, "10월 모임", null, near, null, "북카페", "서울", null, null, null, null, null, null),
+                new ClubMeeting(10L, 2L, "11월 모임", null, near.plus(Duration.ofDays(30)), null, "북카페", "서울",
+                        null, null, null, null, null, null)));
+
+        PageResponse<ClubSummaryView> clubs = service.myClubs(1L, page);
+
+        assertThat(clubs.content()).hasSize(2);
+        assertThat(clubs.content().get(0).myNextMeetingAt()).isEqualTo(near);
+        assertThat(clubs.content().get(0).myNextMeetingTitle()).isEqualTo("10월 모임");
+        assertThat(clubs.content().get(1).myNextMeetingAt()).isNull();
+        assertThat(clubs.content().get(1).myNextMeetingTitle()).isNull();
+    }
+
+    private static Club club(Long id) throws ReflectiveOperationException {
+        Club club = Club.builder().ownerId(2L).name("모임 " + id).joinCode("ABC" + id)
+                .memberLimit((short) 3).startsAt(LocalDate.of(2026, 10, 3)).allowNudge(true).build();
+        Field f = Club.class.getDeclaredField("id");
+        f.setAccessible(true);
+        f.set(club, id);
+        return club;
     }
 }
