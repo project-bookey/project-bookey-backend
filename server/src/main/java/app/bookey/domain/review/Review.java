@@ -93,6 +93,11 @@ public class Review extends BaseTimeEntity {
         }
     }
 
+    /** 별점 지우기 — 별점은 선택 사항이다. */
+    public void clearRating() {
+        this.rating = null;
+    }
+
     /** 관리자 재심사 (§F13 검증 심사). */
     public void overrideVerification(VerificationLevel level) {
         this.verificationLevel = level;

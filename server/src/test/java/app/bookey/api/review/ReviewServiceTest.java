@@ -42,7 +42,7 @@ class ReviewServiceTest {
     @Test
     @DisplayName("배치로 모은 댓글 수를 그대로 싣는다")
     void toViewMapsCommentCount() {
-        ReviewView view = ReviewService.toView(review(1L, 10L), user(10L, "작가"), 7L);
+        ReviewView view = ReviewService.toView(review(1L, 10L), user(10L, "작가"), 7L, false);
 
         assertThat(view.id()).isEqualTo(1L);
         assertThat(view.bookId()).isEqualTo(3L);
@@ -55,7 +55,7 @@ class ReviewServiceTest {
     @Test
     @DisplayName("탈퇴한 작성자는 '알 수 없음'으로 대체한다")
     void toViewFallsBackToUnknownAuthor() {
-        ReviewView view = ReviewService.toView(review(1L, 99L), null, 0L);
+        ReviewView view = ReviewService.toView(review(1L, 99L), null, 0L, false);
 
         assertThat(view.authorNickname()).isEqualTo("알 수 없음");
         assertThat(view.authorHandle()).isNull();
@@ -65,8 +65,28 @@ class ReviewServiceTest {
     @Test
     @DisplayName("태그가 없으면 빈 배열이 아니라 빈 목록으로 내려간다")
     void toViewKeepsEmptyTagsAsEmptyList() {
-        ReviewView view = ReviewService.toView(review(1L, 10L), user(10L, "작가"), 0L);
+        ReviewView view = ReviewService.toView(review(1L, 10L), user(10L, "작가"), 0L, false);
 
         assertThat(view.tags()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("작성자가 그 책을 완독했으면 '완독' 표시를 싣는다")
+    void toViewCarriesAuthorFinished() {
+        assertThat(ReviewService.toView(review(1L, 10L), user(10L, "작가"), 0L, true).authorFinished()).isTrue();
+        assertThat(ReviewService.toView(review(1L, 10L), user(10L, "작가"), 0L, false).authorFinished()).isFalse();
+    }
+
+    @Test
+    @DisplayName("고칠 때 별점을 지울 수 있다")
+    void clearRating() {
+        Review review = review(1L, 10L);
+        review.edit("고친 글", null, null, null);
+        assertThat(review.getRating()).isEqualTo((short) 4);
+
+        review.clearRating();
+
+        assertThat(review.getRating()).isNull();
+        assertThat(review.getBody()).isEqualTo("고친 글");
     }
 }

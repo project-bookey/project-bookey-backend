@@ -25,7 +25,9 @@ public final class ReviewDtos {
             @Min(1) @Max(5) Short rating,
             @Size(max = 5000) String body,
             List<String> tags,
-            Boolean hasSpoiler
+            Boolean hasSpoiler,
+            /** true 면 별점을 지운다(rating 은 무시). 별점은 선택이라 고칠 때 비울 수도 있다. */
+            Boolean removeRating
     ) {}
 
     public record ReviewView(
@@ -43,7 +45,9 @@ public final class ReviewDtos {
             int helpfulCount,
             /** 답글 포함 전체 댓글 수. */
             long commentCount,
-            @NotNull Instant createdAt
+            @NotNull Instant createdAt,
+            /** 작성자가 이 책을 완독했는지 — 회차와 상관없이 완독한 읽기 기록이 하나라도 있으면 true. 리뷰의 '완독' 표시. */
+            boolean authorFinished
     ) {}
 
     /** parentId 가 있으면 그 댓글의 답글이 된다. 답글에는 답글을 달 수 없다(1단계). */
