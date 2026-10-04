@@ -47,6 +47,7 @@ jobs:
       GOOGLE_PLAY_PACKAGE_NAME: ${{ secrets.GOOGLE_PLAY_PACKAGE_NAME }}
       GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL }}
       GOOGLE_PLAY_PRIVATE_KEY: ${{ secrets.GOOGLE_PLAY_PRIVATE_KEY }}
+      GOOGLE_PLAY_RTDN_TOKEN: ${{ secrets.GOOGLE_PLAY_RTDN_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -70,7 +71,7 @@ jobs:
           required_secrets=(
             KAKAO_REST_KEY ALADIN_TTB_KEY GOOGLE_BOOKS_KEY YES24_API_KEY
             SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD MAIL_FROM
-            GOOGLE_PLAY_PACKAGE_NAME GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL GOOGLE_PLAY_PRIVATE_KEY
+            GOOGLE_PLAY_PACKAGE_NAME GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL GOOGLE_PLAY_PRIVATE_KEY GOOGLE_PLAY_RTDN_TOKEN
           )
           for key in "${required_secrets[@]}"; do
             if [[ -z "${!key:-}" ]]; then
@@ -117,6 +118,13 @@ jobs:
           sudo install -m 644 \
             "${APP_DIR}/project-bookey-backend/infra/docker-compose.ec2.yml" \
             "${APP_DIR}/docker-compose.yml"
+
+          # 공유 노트 WebSocket의 Upgrade 헤더를 포함한 운영 프록시 설정을 저장소와 맞춘다.
+          sudo install -m 644 \
+            "${APP_DIR}/project-bookey-backend/infra/nginx/bookey-api.conf" \
+            "/etc/nginx/conf.d/bookey-api.conf"
+          sudo nginx -t
+          sudo systemctl reload nginx
 
           cd "${APP_DIR}"
           docker compose build backend
