@@ -54,6 +54,20 @@ public interface ReadingRecordRepository extends JpaRepository<ReadingRecord, Lo
 
     long countByUserIdAndStatus(Long userId, ReadingStatus status);
 
+    /** 완독한 (사람, 책) 쌍 — 리뷰의 '완독' 표시. 회차와 상관없이 완독한 기록이 하나라도 있으면 든다. */
+    @Query("""
+            SELECT DISTINCT r.userId AS userId, r.bookId AS bookId FROM ReadingRecord r
+            WHERE r.status = 'FINISHED' AND r.userId IN :userIds AND r.bookId IN :bookIds
+            """)
+    List<UserBook> findFinishedPairs(@Param("userIds") Collection<Long> userIds,
+                                     @Param("bookIds") Collection<Long> bookIds);
+
+    interface UserBook {
+        Long getUserId();
+
+        Long getBookId();
+    }
+
     /** 재촉 후보 조회 — 매일 새벽 배치(§F5). */
     @Query("""
             SELECT r FROM ReadingRecord r

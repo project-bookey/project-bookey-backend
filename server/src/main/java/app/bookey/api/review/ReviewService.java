@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -80,7 +81,8 @@ public class ReviewService {
                 .verificationSnapshot(verification.toSnapshot())
                 .build());
 
-        return toView(review, userRepository.findById(userId).orElse(null), 0L);
+        return toView(review, userRepository.findById(userId).orElse(null), 0L,
+                isAuthorFinished(loadFinished(List.of(review)), review));
     }
 
     @Transactional
@@ -93,8 +95,12 @@ public class ReviewService {
         review.edit(request.body(), request.rating(),
                 request.tags() == null ? null : request.tags().toArray(String[]::new),
                 request.hasSpoiler());
+        if (Boolean.TRUE.equals(request.removeRating())) {
+            review.clearRating();
+        }
         return toView(review, userRepository.findById(userId).orElse(null),
-                loadCommentCounts(List.of(review)).getOrDefault(review.getId(), 0L));
+                loadCommentCounts(List.of(review)).getOrDefault(review.getId(), 0L),
+                isAuthorFinished(loadFinished(List.of(review)), review));
     }
 
     @Transactional
@@ -114,7 +120,8 @@ public class ReviewService {
                 .filter(Review::isVisible)
                 .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
         return toView(review, userRepository.findById(review.getUserId()).orElse(null),
-                loadCommentCounts(List.of(review)).getOrDefault(reviewId, 0L));
+                loadCommentCounts(List.of(review)).getOrDefault(reviewId, 0L),
+                isAuthorFinished(loadFinished(List.of(review)), review));
     }
 
     @Transactional(readOnly = true)
@@ -122,8 +129,9 @@ public class ReviewService {
         Page<Review> page = reviewRepository.findByBook(bookId, verifiedOnly, pageable);
         Map<Long, User> authors = loadAuthors(page.getContent());
         Map<Long, Long> commentCounts = loadCommentCounts(page.getContent());
+        Set<UserBook> finished = loadFinished(page.getContent());
         return PageResponse.of(page, review -> toView(review, authors.get(review.getUserId()),
-                commentCounts.getOrDefault(review.getId(), 0L)));
+                commentCounts.getOrDefault(review.getId(), 0L), isAuthorFinished(finished, review)));
     }
 
     @Transactional(readOnly = true)
@@ -132,8 +140,9 @@ public class ReviewService {
                 .findAllByUserIdAndStatusOrderByCreatedAtDesc(userId, "VISIBLE", pageable);
         User user = userRepository.findById(userId).orElse(null);
         Map<Long, Long> commentCounts = loadCommentCounts(page.getContent());
+        Set<UserBook> finished = loadFinished(page.getContent());
         return PageResponse.of(page, review -> toView(review, user,
-                commentCounts.getOrDefault(review.getId(), 0L)));
+                commentCounts.getOrDefault(review.getId(), 0L), isAuthorFinished(finished, review)));
     }
 
     @Transactional
@@ -198,8 +207,26 @@ public class ReviewService {
                 .collect(Collectors.toMap(CommentCount::getReviewId, CommentCount::getCommentCount));
     }
 
+    /** 작성자가 그 책을 완독했는지 — 리뷰 묶음의 (작성자, 책) 쌍을 한 번에 모은다. */
+    private Set<UserBook> loadFinished(List<Review> reviews) {
+        if (reviews.isEmpty()) {
+            return Set.of();
+        }
+        Set<Long> userIds = reviews.stream().map(Review::getUserId).collect(Collectors.toSet());
+        Set<Long> bookIds = reviews.stream().map(Review::getBookId).collect(Collectors.toSet());
+        return recordRepository.findFinishedPairs(userIds, bookIds).stream()
+                .map(pair -> new UserBook(pair.getUserId(), pair.getBookId()))
+                .collect(Collectors.toSet());
+    }
+
+    private static boolean isAuthorFinished(Set<UserBook> finished, Review review) {
+        return finished.contains(new UserBook(review.getUserId(), review.getBookId()));
+    }
+
+    private record UserBook(Long userId, Long bookId) {}
+
     /** 탈퇴한 작성자는 "알 수 없음", 댓글 수는 배치 맵에서 결측 시 0으로 채워 넣는다. */
-    public static ReviewView toView(Review review, User author, long commentCount) {
+    public static ReviewView toView(Review review, User author, long commentCount, boolean authorFinished) {
         return new ReviewView(
                 review.getId(), review.getBookId(), review.getUserId(),
                 author == null ? "알 수 없음" : author.getNickname(),
@@ -207,6 +234,6 @@ public class ReviewService {
                 review.getRating(), review.getBody(),
                 Arrays.asList(review.getTags()), review.isHasSpoiler(),
                 review.getVerificationLevel(), review.getVerificationSnapshot(),
-                review.getHelpfulCount(), commentCount, review.getCreatedAt());
+                review.getHelpfulCount(), commentCount, review.getCreatedAt(), authorFinished);
     }
 }
