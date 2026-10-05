@@ -5,6 +5,7 @@ import app.bookey.common.config.BookeyProperties;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -17,6 +18,8 @@ import static org.springframework.test.web.client.ExpectedCount.manyTimes;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /** 모임 장소 주소 검색 — 도로명주소 검색 결과에 카카오 좌표를 붙이고, 덜 적은 검색어 오류는 빈 결과로 둔다. */
@@ -68,6 +71,32 @@ class ClubPlaceServiceTest {
         assertThat(found.get(0).buildingName()).isEqualTo("메세나폴리스");
         assertThat(found.get(0).latitude()).isEqualTo(37.5494);
         assertThat(found.get(1).longitude()).isEqualTo(126.9150);
+    }
+
+    @Test
+    @DisplayName("카카오가 막혀 있으면(카카오맵 미활성 403) 주소는 좌표 없이 내고, 한동안 카카오를 다시 부르지 않는다")
+    void kakaoForbiddenStillReturnsAddresses() {
+        String juso = """
+                {"results":{"common":{"errorCode":"0","errorMessage":"정상","totalCount":"1"},
+                  "juso":[{"roadAddrPart1":"서울특별시 마포구 양화로 45","jibunAddr":"서울특별시 마포구 서교동 395-166",
+                           "bdNm":"메세나폴리스","zipNo":"04036"}]}}
+                """;
+        server.expect(manyTimes(), requestTo(org.hamcrest.Matchers.startsWith(JUSO)))
+                .andRespond(withSuccess(juso, MediaType.APPLICATION_JSON));
+        server.expect(once(), requestTo(org.hamcrest.Matchers.startsWith(KAKAO_ADDRESS)))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"errorType\":\"NotAuthorizedError\",\"message\":\"App(bookey) disabled OPEN_MAP_AND_LOCAL service.\"}"));
+        ClubPlaceService service = service("juso-key");
+
+        List<AddressView> first = service.searchAddresses(1L, 10L, "양화로 45");
+        List<AddressView> second = service.searchAddresses(1L, 10L, "양화로 45");
+
+        assertThat(first).singleElement().satisfies(a -> {
+            assertThat(a.roadAddress()).isEqualTo("서울특별시 마포구 양화로 45");
+            assertThat(a.latitude()).isNull();
+        });
+        assertThat(second).hasSize(1);
+        server.verify(); // 카카오는 한 번만 불렸다
     }
 
     @Test
