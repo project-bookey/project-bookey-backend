@@ -121,7 +121,7 @@ class AuthServiceTest {
     /** 코드 발급 상한은 따로 시험한다 — 나머지 시험에서는 늘 통과시킨다. */
     @BeforeEach
     void allowEmailCodes() {
-        when(rateLimiter.tryAcquire(anyString(), anyInt(), any())).thenReturn(true);
+        when(rateLimiter.acquire(anyString(), anyInt(), any())).thenReturn(new RateLimiter.Permit(true, 9));
     }
 
     private AuthService service(List<SocialTokenVerifier> verifiers) {
@@ -337,6 +337,7 @@ class AuthServiceTest {
 
         assertThat(res.expiresInSec()).isEqualTo(600L);
         assertThat(res.devCode()).hasSize(6).containsOnlyDigits();
+        assertThat(res.resendsLeft()).isEqualTo(9);
 
         ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
         verify(emailVerificationRepository).save(saved.capture());
@@ -367,14 +368,15 @@ class AuthServiceTest {
         service(List.of()).requestEmailCode(new EmailCodeRequest("new@dev.local"));
 
         verify(emailVerificationRepository).save(any());
-        verify(rateLimiter).tryAcquire("email-code:SIGNUP:new@dev.local", 10, Duration.ofHours(1));
+        verify(rateLimiter).acquire("email-code:SIGNUP:new@dev.local", 10, Duration.ofHours(1));
     }
 
     @Test
     @DisplayName("코드 발급 — 같은 이메일로 1시간 상한을 넘기면 RATE_LIMITED, 발송하지 않는다")
     void requestEmailCodeOverHourlyLimit() {
         when(userRepository.existsByEmailIgnoreCase("new@dev.local")).thenReturn(false);
-        when(rateLimiter.tryAcquire("email-code:SIGNUP:new@dev.local", 10, Duration.ofHours(1))).thenReturn(false);
+        when(rateLimiter.acquire("email-code:SIGNUP:new@dev.local", 10, Duration.ofHours(1)))
+                .thenReturn(new RateLimiter.Permit(false, 0));
 
         assertApiError(() -> service(List.of())
                 .requestEmailCode(new EmailCodeRequest("new@dev.local")), ErrorCode.RATE_LIMITED);
@@ -689,8 +691,8 @@ class AuthServiceTest {
     void requestPasswordResetCodeOverHourlyLimit() {
         when(userRepository.findByEmailIgnoreCase("tester1@dev.local"))
                 .thenReturn(Optional.of(user(7L, "tester1@dev.local", "password1234")));
-        when(rateLimiter.tryAcquire("email-code:PASSWORD_RESET:tester1@dev.local", 10, Duration.ofHours(1)))
-                .thenReturn(false);
+        when(rateLimiter.acquire("email-code:PASSWORD_RESET:tester1@dev.local", 10, Duration.ofHours(1)))
+                .thenReturn(new RateLimiter.Permit(false, 0));
 
         assertApiError(() -> service(List.of())
                 .requestPasswordResetCode(new EmailCodeRequest("tester1@dev.local")), ErrorCode.RATE_LIMITED);
