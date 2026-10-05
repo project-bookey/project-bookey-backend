@@ -45,18 +45,6 @@ public class PostcardController {
         return postcardService.sent(user.id(), PageRequest.of(page, size));
     }
 
-    @Operation(summary = "엽서 한 장 — 보낸 사람 또는 받은 사람만")
-    @GetMapping("/{postcardId}")
-    public PostcardView get(@AuthenticationPrincipal AuthUser user, @PathVariable Long postcardId) {
-        return postcardService.get(user.id(), postcardId);
-    }
-
-    @Operation(summary = "엽서 열기 — 받은 사람만, 처음 연 시각을 남긴다(멱등). 보낸 사람에게는 알리지 않는다")
-    @PostMapping("/{postcardId}/open")
-    public PostcardView open(@AuthenticationPrincipal AuthUser user, @PathVariable Long postcardId) {
-        return postcardService.open(user.id(), postcardId);
-    }
-
     @Operation(summary = "답장 — 우표 1개 소모(동봉 엽서는 무료). 성립하면 자동 맞팔로우")
     @PostMapping("/{postcardId}/reply")
     public PostcardView reply(@AuthenticationPrincipal AuthUser user,

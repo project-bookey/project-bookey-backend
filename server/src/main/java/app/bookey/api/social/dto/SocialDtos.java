@@ -59,9 +59,7 @@ public final class SocialDtos {
             String replyBody, Instant repliedAt,
             /** 내가 보낸 엽서인가 */
             boolean mine,
-            @NotNull Instant createdAt,
-            /** 받은 사람이 처음 연 시각 — 받은 사람에게만 준다. 비어 있으면 아직 열지 않았다. 보낸 사람에게는 늘 비어 있다(읽음 표시 없음). */
-            Instant openedAt
+            @NotNull Instant createdAt
     ) {}
 
     // ── 팔로우 ───────────────────────────────────────────
