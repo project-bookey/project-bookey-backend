@@ -124,6 +124,23 @@ public class PostcardService {
         return toPage(postcardRepository.findAllByFromUserIdOrderByIdDesc(userId, pageable), userId);
     }
 
+    /** 엽서 한 장 — 보낸 사람이나 받은 사람만, 목록에서 빠지는 엽서(탈퇴한 상대·내가 막은 상대)는 없는 것처럼 답한다. */
+    @Transactional(readOnly = true)
+    public PostcardView get(Long userId, Long postcardId) {
+        return toView(requireVisible(userId, postcardId), userId);
+    }
+
+    /** 받은 사람이 엽서를 연다 — 처음 연 시각만 남는다(멱등). 보낸 사람에게는 알리지 않는다. */
+    @Transactional
+    public PostcardView open(Long userId, Long postcardId) {
+        Postcard postcard = requireVisible(userId, postcardId);
+        if (!postcard.isRecipient(userId)) {
+            throw ApiException.of(ErrorCode.POSTCARD_NOT_FOUND);
+        }
+        postcard.open(Instant.now(clock));
+        return toView(postcard, userId);
+    }
+
     /** 보낸 사람 또는 받은 사람만 지울 수 있다 — 남의 엽서는 존재도 드러내지 않는다. */
     @Transactional
     public void delete(Long userId, Long postcardId) {
@@ -133,6 +150,20 @@ public class PostcardService {
             throw ApiException.of(ErrorCode.POSTCARD_NOT_FOUND);
         }
         postcardRepository.delete(postcard);
+    }
+
+    /** 내가 보낸 사람이나 받은 사람이고, 받은·보낸 목록에도 보이는 엽서 — 아니면 POSTCARD_NOT_FOUND. */
+    private Postcard requireVisible(Long userId, Long postcardId) {
+        Postcard postcard = postcardRepository.findById(postcardId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.POSTCARD_NOT_FOUND));
+        if (!postcard.isParticipant(userId)) {
+            throw ApiException.of(ErrorCode.POSTCARD_NOT_FOUND);
+        }
+        Long counterpart = postcard.isRecipient(userId) ? postcard.getFromUserId() : postcard.getToUserId();
+        if (userRepository.isTerminated(counterpart) || blockService.hasBlocked(userId, counterpart)) {
+            throw ApiException.of(ErrorCode.POSTCARD_NOT_FOUND);
+        }
+        return postcard;
     }
 
     /** 16글자(grapheme) 검사 — §14.9 확정: 한글 완성형 글자 기준. */
@@ -218,6 +249,8 @@ public class PostcardService {
                 card.getReplyBody(),
                 card.getRepliedAt(),
                 card.getFromUserId().equals(viewerId),
-                card.getCreatedAt() == null ? Instant.now(clock) : card.getCreatedAt());
+                card.getCreatedAt() == null ? Instant.now(clock) : card.getCreatedAt(),
+                // 연 시각은 받은 사람에게만 — 보낸 사람이 '열었는데 답이 없다'를 알게 되면 거절 통보가 된다.
+                card.isRecipient(viewerId) ? card.getOpenedAt() : null);
     }
 }

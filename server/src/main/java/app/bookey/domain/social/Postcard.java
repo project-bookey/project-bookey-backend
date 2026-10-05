@@ -50,6 +50,10 @@ public class Postcard extends BaseTimeEntity {
     @Column(name = "replied_at")
     private Instant repliedAt;
 
+    /** 받은 사람이 처음 연 시각 — 비어 있으면 아직 열지 않은 엽서(앱 목록의 닫힌 봉투). 보낸 사람에게는 알리지 않는다. */
+    @Column(name = "opened_at")
+    private Instant openedAt;
+
     @Builder
     private Postcard(Long fromUserId, Long toUserId, Long postId, String body, boolean stampAttached) {
         this.fromUserId = fromUserId;
@@ -72,9 +76,18 @@ public class Postcard extends BaseTimeEntity {
         return status == PostcardStatus.REPLIED;
     }
 
+    /** 받은 사람이 엽서를 연다 — 처음 연 시각만 남긴다(다시 열어도 그대로). */
+    public void open(Instant now) {
+        if (openedAt == null) {
+            openedAt = now;
+        }
+    }
+
     public void reply(String body, Instant now) {
         this.replyBody = body;
         this.repliedAt = now;
         this.status = PostcardStatus.REPLIED;
+        // 답장은 연 뒤에만 쓸 수 있다 — 예전 앱처럼 목록에서 바로 답장해도 연 것으로 남긴다.
+        open(now);
     }
 }

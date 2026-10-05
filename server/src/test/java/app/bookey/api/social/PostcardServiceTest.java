@@ -239,6 +239,69 @@ class PostcardServiceTest {
     }
 
     @Test
+    @DisplayName("답장 — 답장한 엽서는 연 것으로 남는다 (예전 앱은 목록에서 바로 답장했다)")
+    void replyMarksOpened() {
+        stubBasics();
+        Postcard card = sentCard(true);
+
+        service.reply(2L, 100L, new ReplyPostcardRequest("반가워요"));
+
+        assertThat(card.getOpenedAt()).isEqualTo(Instant.parse("2026-09-06T03:00:00Z"));
+    }
+
+    // ───────────── 열람 ─────────────
+
+    @Test
+    @DisplayName("열기 — 받은 사람만, 처음 연 시각만 남는다(다시 열어도 그대로). 보낸 사람·남은 POSTCARD_NOT_FOUND")
+    void openOnlyRecipientOnce() {
+        stubBasics();
+        Postcard card = sentCard(false);
+
+        PostcardView first = service.open(2L, 100L);
+        assertThat(first.openedAt()).isEqualTo(Instant.parse("2026-09-06T03:00:00Z"));
+
+        when(clock.instant()).thenReturn(Instant.parse("2026-09-07T03:00:00Z"));
+        service.open(2L, 100L);
+        assertThat(card.getOpenedAt()).isEqualTo(Instant.parse("2026-09-06T03:00:00Z"));
+
+        assertApiError(() -> service.open(1L, 100L), ErrorCode.POSTCARD_NOT_FOUND);
+        assertApiError(() -> service.open(9L, 100L), ErrorCode.POSTCARD_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("한 장 — 연 시각은 받은 사람에게만 보이고, 보낸 사람에게는 늘 비어 있다(읽음 표시 없음)")
+    void openedAtOnlyForRecipient() {
+        stubBasics();
+        sentCard(false);
+        assertThat(service.get(2L, 100L).openedAt()).isNull();
+
+        service.open(2L, 100L);
+
+        assertThat(service.get(2L, 100L).openedAt()).isEqualTo(Instant.parse("2026-09-06T03:00:00Z"));
+        assertThat(service.get(1L, 100L).openedAt()).isNull();
+        assertThat(service.get(1L, 100L).mine()).isTrue();
+    }
+
+    @Test
+    @DisplayName("한 장 — 남의 엽서, 내가 막은 상대·탈퇴한 상대와의 엽서는 목록처럼 없는 것으로 답한다")
+    void getHidesWhatListsHide() {
+        stubBasics();
+        sentCard(false);
+
+        assertApiError(() -> service.get(9L, 100L), ErrorCode.POSTCARD_NOT_FOUND);
+
+        when(blockRepository.existsByBlockerIdAndBlockedId(2L, 1L)).thenReturn(true);
+        assertApiError(() -> service.get(2L, 100L), ErrorCode.POSTCARD_NOT_FOUND);
+        assertApiError(() -> service.open(2L, 100L), ErrorCode.POSTCARD_NOT_FOUND);
+        // 막힌 쪽(보낸 사람)에게는 그대로 보인다 — 막았다는 것을 알리지 않는다.
+        assertThat(service.get(1L, 100L).id()).isEqualTo(100L);
+
+        when(blockRepository.existsByBlockerIdAndBlockedId(2L, 1L)).thenReturn(false);
+        when(userRepository.isTerminated(1L)).thenReturn(true);
+        assertApiError(() -> service.get(2L, 100L), ErrorCode.POSTCARD_NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("삭제 — 보낸 사람 또는 받은 사람만 삭제할 수 있고, 남의 엽서는 없는 것처럼 보인다")
     void deleteOnlyParticipant() {
         Postcard card = sentCard(false);
