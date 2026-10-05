@@ -56,6 +56,7 @@ public class ChatService {
     private final UserRepository userRepository;
     private final PostcardRepository postcardRepository;
     private final NotificationService notificationService;
+    private final BlockService blockService;
     private final RateLimiter rateLimiter;
     private final Clock clock;
 
@@ -68,6 +69,8 @@ public class ChatService {
         User other = userRepository.findById(otherUserId)
                 .filter(found -> found.getStatus() != UserStatus.TERMINATED)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        // 차단이 있으면 방을 열지 않는다 — 이미 있는 방이라도(막은 쪽 목록에서는 빠져 있다).
+        blockService.requireReachable(userId, otherUserId);
         Chat chat = findPair(userId, otherUserId).orElseGet(() -> {
             if (!postcardRepository.existsRepliedBetween(userId, otherUserId)) {
                 throw ApiException.of(ErrorCode.CHAT_NOT_ALLOWED);
@@ -121,6 +124,8 @@ public class ChatService {
     @Transactional
     public ChatMessageView send(Long userId, Long chatId, SendMessageRequest request) {
         Chat chat = participantChat(userId, chatId);
+        // 나를 막은 사람에게는 보내지 못한다(막았다는 말은 하지 않는다).
+        blockService.requireReachable(userId, chat.counterpartOf(userId));
         rateLimiter.require("chat:send:" + userId, MESSAGE_RATE_LIMIT, Duration.ofMinutes(1));
         MessagePayload payload = messagePayload(request);
 
@@ -148,11 +153,13 @@ public class ChatService {
     /**
      * 없는 방과 남의 방은 똑같이 CHAT_NOT_FOUND — 방의 존재를 드러내지 않는다.
      * 상대가 탈퇴한 방도 없는 것으로 본다 — 그 사람의 메시지가 남아 있다(30일 뒤 계정과 함께 지워진다).
+     * 내가 차단한 사람과의 방도 내게는 없는 것으로 본다(목록에서도 빠진다) — 풀면 다시 열린다.
      */
     private Chat participantChat(Long userId, Long chatId) {
         Chat chat = chatRepository.findById(chatId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CHAT_NOT_FOUND));
-        if (!chat.isParticipant(userId) || userRepository.isTerminated(chat.counterpartOf(userId))) {
+        if (!chat.isParticipant(userId) || userRepository.isTerminated(chat.counterpartOf(userId))
+                || blockService.hasBlocked(userId, chat.counterpartOf(userId))) {
             throw ApiException.of(ErrorCode.CHAT_NOT_FOUND);
         }
         return chat;
@@ -161,7 +168,8 @@ public class ChatService {
     /** 채팅을 열 수 있는가 — 이미 방이 있거나 엽서 답장이 오간 사이. 프로필의 채팅 버튼이 쓴다. */
     @Transactional(readOnly = true)
     public boolean canChat(Long userId, Long otherUserId) {
-        if (userId.equals(otherUserId) || userRepository.isTerminated(otherUserId)) {
+        if (userId.equals(otherUserId) || userRepository.isTerminated(otherUserId)
+                || blockService.blockedEitherWay(userId, otherUserId)) {
             return false;
         }
         return findPair(userId, otherUserId).isPresent()

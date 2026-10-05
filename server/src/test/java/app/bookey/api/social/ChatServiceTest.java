@@ -14,6 +14,7 @@ import app.bookey.domain.social.ChatMessageRepository;
 import app.bookey.domain.social.ChatMessageType;
 import app.bookey.domain.social.ChatRepository;
 import app.bookey.domain.social.PostcardRepository;
+import app.bookey.domain.social.UserBlockRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import app.bookey.domain.user.UserStatus;
@@ -47,8 +48,11 @@ class ChatServiceTest {
     private final NotificationService notificationService = mock(NotificationService.class);
     private final RateLimiter rateLimiter = mock(RateLimiter.class);
     private final Clock clock = mock(Clock.class);
+    private final UserBlockRepository blockRepository = mock(UserBlockRepository.class);
+    private final BlockService blockService = new BlockService(blockRepository, userRepository, clock);
     private final ChatService service = new ChatService(
-            chatRepository, messageRepository, userRepository, postcardRepository, notificationService, rateLimiter, clock);
+            chatRepository, messageRepository, userRepository, postcardRepository, notificationService, blockService,
+            rateLimiter, clock);
 
     private static void set(Object target, String field, Object value) {
         Class<?> type = target.getClass();
@@ -117,6 +121,28 @@ class ChatServiceTest {
         assertApiError(() -> service.open(1L, 2L), ErrorCode.NOT_FOUND);
         assertThat(service.canChat(1L, 2L)).isFalse();
         verify(messageRepository, never()).findAllByChatIdOrderByIdDesc(any(), any());
+    }
+
+    @Test
+    @DisplayName("차단 — 내가 막은 사람과의 방은 내게 없는 방이고, 나를 막은 사람에게는 보내지 못한다(USER_UNREACHABLE)")
+    void blockedChat() {
+        Chat chat = Chat.of(1L, 2L);
+        set(chat, "id", 10L);
+        when(chatRepository.findById(10L)).thenReturn(Optional.of(chat));
+        when(postcardRepository.existsRepliedBetween(1L, 2L)).thenReturn(true);
+        when(chatRepository.findPair(1L, 2L)).thenReturn(Optional.of(chat));
+        other(2L);
+
+        // 1 이 2 를 막았다 — 1 에게는 방이 없고, 새로 열 수도 없다.
+        when(blockRepository.existsByBlockerIdAndBlockedId(1L, 2L)).thenReturn(true);
+        assertApiError(() -> service.messages(1L, 10L, null), ErrorCode.CHAT_NOT_FOUND);
+        assertApiError(() -> service.open(1L, 2L), ErrorCode.USER_BLOCKED);
+        assertThat(service.canChat(1L, 2L)).isFalse();
+
+        // 막힌 2 는 방을 읽을 수는 있어도 보낼 수 없고, 채팅 버튼도 사라진다.
+        assertThat(service.canChat(2L, 1L)).isFalse();
+        assertApiError(() -> service.send(2L, 10L, new SendMessageRequest("안녕")), ErrorCode.USER_UNREACHABLE);
+        verify(messageRepository, never()).save(any());
     }
 
     @Test

@@ -49,6 +49,7 @@ public class PostcardService {
     private final PostRepository postRepository;
     private final WalletService walletService;
     private final NotificationService notificationService;
+    private final BlockService blockService;
     private final BookeyProperties properties;
     private final Clock clock;
 
@@ -61,6 +62,7 @@ public class PostcardService {
         User to = userRepository.findById(request.toUserId())
                 .filter(found -> found.getStatus() != UserStatus.TERMINATED)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        blockService.requireReachable(fromUserId, to.getId());
         // 글 컨텍스트는 수신자의 글이어야 한다 — "이 글을 보고 보냈다"가 성립하도록.
         if (request.postId() != null) {
             Post post = postRepository.findById(request.postId())
@@ -101,6 +103,7 @@ public class PostcardService {
         if (postcard.isReplied()) {
             throw ApiException.of(ErrorCode.POSTCARD_ALREADY_REPLIED);
         }
+        blockService.requireReachable(userId, postcard.getFromUserId());
         String body = requireBody(request.body());
         if (!postcard.isStampAttached()) {
             Wallet wallet = walletService.prepared(userId);
