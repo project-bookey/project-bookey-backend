@@ -93,6 +93,7 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 | `KAKAO_REST_KEY` | 카카오 책 검색 (1차 검색) |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI (페이지 수 보강) |
 | `GOOGLE_BOOKS_KEY` | Google Books (해외서 폴백, 선택) |
+| `JUSO_API_KEY` | 도로명주소 검색 API(business.juso.go.kr) 승인키 — 모임 장소 찾기에서 한 자씩 적을 때 관련 주소를 낸다(좌표는 카카오로 붙임). 없으면 카카오 주소 검색만(다 적은 주소만 찾는다), 선택 |
 | `SIGNUP_VERIFICATION` | 가입 인증 방식 — 운영은 `EMAIL_CODE` |
 | `MAIL_ENABLED` | `true`면 인증 코드를 SMTP로 발송. `false`면 로그 발송기 사용 |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` | 인증 코드 메일 발송용 SMTP 접속 정보 |
@@ -154,6 +155,7 @@ GitHub Repository Secrets:
 | `KAKAO_REST_KEY` | 카카오 책 검색 API 키 |
 | `ALADIN_TTB_KEY` | 알라딘 OpenAPI 키 |
 | `GOOGLE_BOOKS_KEY` | Google Books API 키 |
+| `JUSO_API_KEY` | 도로명주소 검색 API 승인키(선택 — 없으면 배포가 건너뛰고 카카오 주소 검색만 쓴다) |
 | `SMTP_HOST` | 인증 코드 메일 SMTP 호스트 |
 | `SMTP_PORT` | 인증 코드 메일 SMTP 포트. STARTTLS 기준 보통 `587` |
 | `SMTP_USERNAME` | SMTP 사용자 |

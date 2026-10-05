@@ -39,6 +39,7 @@ jobs:
       ALADIN_TTB_KEY: ${{ secrets.ALADIN_TTB_KEY }}
       GOOGLE_BOOKS_KEY: ${{ secrets.GOOGLE_BOOKS_KEY }}
       YES24_API_KEY: ${{ secrets.YES24_API_KEY }}
+      JUSO_API_KEY: ${{ secrets.JUSO_API_KEY }}
       SMTP_HOST: ${{ secrets.SMTP_HOST }}
       SMTP_PORT: ${{ secrets.SMTP_PORT }}
       SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
@@ -112,6 +113,14 @@ jobs:
 
           for key in "${required_secrets[@]}"; do
             update_env "${key}" "${!key}"
+          done
+
+          # 없어도 서버가 뜨는 키 — 있을 때만 갱신한다(도로명주소 검색: 없으면 카카오 주소 검색만).
+          optional_secrets=(JUSO_API_KEY)
+          for key in "${optional_secrets[@]}"; do
+            if [[ -n "${!key:-}" ]]; then
+              update_env "${key}" "${!key}"
+            fi
           done
 
           # EC2 운영 Compose도 저장소를 단일 원천으로 사용한다.

@@ -93,6 +93,7 @@ bookey:
     yes24-key: ${YES24_API_KEY:}            # 예스24 오픈API (X-Api-Key) — 없으면 YES24 경로 전체 건너뜀
     cache-ttl: PT24H
     yes24-curation-ttl: PT1H
+    juso-key: ${JUSO_API_KEY:}              # 도로명주소 검색 API(business.juso.go.kr) — 모임 장소 주소 자동완성. 없으면 카카오 주소 검색만
   oauth:
     google-client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:}
     apple-audiences: ${APPLE_OAUTH_AUDIENCES:app.bookey.mobile}
