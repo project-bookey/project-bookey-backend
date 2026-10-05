@@ -102,7 +102,7 @@ bookey:
     max-member-limit: 50                  # 책갈피로 늘릴 수 있는 상한 (clubs.member_limit CHECK 상한과 같다)
     free-member-limit: 10                 # 무료 정원 (호스트 포함) — 새 클럽은 늘 이 정원으로 연다
     seat-step: 10                         # 자리는 이 단위로만 늘린다 — 정원이 20 · 30 · 40 · 50
-    seat-cost-bookmarks: 2                # 자리 1개당 책갈피 — 10자리 한 번에 20개
+    seat-cost-bookmarks: 1                # 자리 1개당 책갈피 — 10자리 한 번에 10개
     nudge-cooldown: PT24H
     nudge-daily-limit: 3
     join-code-lookup-rate-limit: 10        # 분당
