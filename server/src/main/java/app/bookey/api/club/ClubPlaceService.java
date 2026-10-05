@@ -5,11 +5,14 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import tools.jackson.databind.JsonNode;
 
 import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -33,6 +36,8 @@ public class ClubPlaceService {
     private static final int ADDRESS_LIMIT = 10;
     /** 주소 → 좌표 캐시 크기. 한 자씩 적을 때 앞 글자 결과와 겹치는 주소가 많아 카카오 호출이 크게 준다. */
     private static final int COORDINATE_CACHE_SIZE = 5_000;
+    /** 카카오가 키·권한 오류(401/403 — 카카오맵 미활성 등)를 주면 이만큼 좌표 붙이기를 쉰다 — 한 자마다 실패 호출 10번을 막는다. */
+    private static final Duration KAKAO_BACKOFF = Duration.ofMinutes(5);
     private static final String GEOCODE_URL = "https://nominatim.openstreetmap.org/search";
 
     private final ClubService clubService;
@@ -47,27 +52,31 @@ public class ClubPlaceService {
                     return size() > COORDINATE_CACHE_SIZE;
                 }
             });
+    private volatile Instant kakaoBlockedUntil = Instant.MIN;
 
     public record PlaceView(String id, String name, String address, String roadAddress,
                             double latitude, double longitude, String phone, String mapUrl) {}
     public record Coordinates(double latitude, double longitude) {}
+    /** 좌표는 못 붙일 수 있다(null) — 도로명주소 검색은 좌표를 주지 않고, 카카오가 막히면 붙이지 못한다. 앱은 고를 때 geocode 로 다시 묻는다. */
     public record AddressView(String address, String roadAddress, String buildingName, String zonecode,
-                              double latitude, double longitude) {}
+                              Double latitude, Double longitude) {}
 
     /**
      * 주소 검색 — 앱이 장소 이름 검색과 함께 한 자씩 적을 때마다(짧은 디바운스) 부른다. 그래서 자동완성을 금하는 공개
      * Nominatim 은 쓰지 않는다. 도로명주소 검색(행정안전부, JUSO_API_KEY)이 있으면 그것으로 '양화로 4'처럼 덜 적은 주소에도
-     * 관련 주소를 내주고, 좌표는 결과마다 카카오 주소 검색으로 붙인다. 키가 없으면 카카오 주소 검색만 — 다 적은 주소만 찾는다.
+     * 관련 주소를 내주고, 좌표는 결과마다 카카오 주소 검색으로 붙인다 — 카카오가 막혀도 주소는 좌표 없이 낸다.
+     * 도로명주소 키가 없으면 카카오 주소 검색만 — 다 적은 주소만 찾는다.
      */
     public List<AddressView> searchAddresses(Long userId, Long clubId, String query) {
         clubService.activeMember(clubId, userId);
-        if (query == null || query.trim().length() < 2 || properties.bookApi().kakaoKey().isBlank()) {
-            return List.of();
-        }
+        if (query == null || query.trim().length() < 2) return List.of();
         String jusoKey = properties.bookApi().jusoKey();
-        return jusoKey != null && !jusoKey.isBlank()
-                ? searchJuso(jusoKey, query.trim())
-                : searchKakaoAddress(query.trim(), 5);
+        if (jusoKey != null && !jusoKey.isBlank()) return searchJuso(jusoKey, query.trim());
+        return kakaoReady() ? searchKakaoAddress(query.trim(), 5) : List.of();
+    }
+
+    private boolean kakaoReady() {
+        return !properties.bookApi().kakaoKey().isBlank() && Instant.now().isAfter(kakaoBlockedUntil);
     }
 
     private List<AddressView> searchJuso(String key, String query) {
@@ -97,11 +106,11 @@ public class ClubPlaceService {
                 String zip = juso.path("zipNo").asText("");
                 located.add(CompletableFuture.supplyAsync(() -> {
                     Coordinates at = coordinatesOf(road);
-                    return at == null ? null : new AddressView(jibun, road, building, zip, at.latitude(), at.longitude());
+                    return new AddressView(jibun, road, building, zip,
+                            at == null ? null : at.latitude(), at == null ? null : at.longitude());
                 }, geocodeExecutor));
             }
-            // 좌표를 못 붙인 주소는 지도에 찍을 수도, 모임 장소로 고를 수도 없으니 뺀다.
-            return located.stream().map(CompletableFuture::join).filter(Objects::nonNull).toList();
+            return located.stream().map(CompletableFuture::join).toList();
         } catch (Exception e) {
             log.warn("도로명주소 검색 실패: {}", e.getMessage());
             return List.of();
@@ -110,7 +119,7 @@ public class ClubPlaceService {
 
     /** 도로명주소 한 줄의 좌표 — 다 적은 주소라 카카오 주소 검색 첫 결과가 곧 그 건물이다. */
     private Coordinates coordinatesOf(String roadAddress) {
-        if (roadAddress.isBlank()) return null;
+        if (roadAddress.isBlank() || !kakaoReady()) return null;
         Coordinates cached = coordinateCache.get(roadAddress);
         if (cached != null) return cached;
         List<AddressView> found = searchKakaoAddress(roadAddress, 1);
@@ -140,16 +149,26 @@ public class ClubPlaceService {
                         item.path("y").asDouble(), item.path("x").asDouble()));
             }
             return result;
+        } catch (HttpClientErrorException.Unauthorized | HttpClientErrorException.Forbidden e) {
+            // 키가 틀렸거나 앱에 카카오맵이 꺼져 있다(disabled OPEN_MAP_AND_LOCAL service) — 한동안 부르지 않는다.
+            kakaoBlockedUntil = Instant.now().plus(KAKAO_BACKOFF);
+            log.warn("카카오 주소 검색 권한 오류 — {} 동안 쉼: {}", KAKAO_BACKOFF, e.getMessage());
+            return List.of();
         } catch (Exception e) {
             log.warn("주소 검색 실패: {}", e.getMessage());
             return List.of();
         }
     }
 
-    /** 우편번호 검색에서 사용자가 확정한 주소만 1회 좌표로 바꾼다. 자동완성 용도로 호출하지 않는다. */
+    /**
+     * 사용자가 고른 주소 하나를 좌표로 — 목록에서 좌표를 못 붙인 주소를 고를 때 앱이 한 번 부른다. 카카오가 먼저,
+     * 안 되면 Nominatim(확정한 주소 1회 조회라 정책에 맞다). 자동완성 용도로 호출하지 않는다.
+     */
     public Coordinates geocode(Long userId, Long clubId, String address) {
         clubService.activeMember(clubId, userId);
         if (address == null || address.isBlank()) return null;
+        Coordinates kakao = coordinatesOf(address.trim());
+        if (kakao != null) return kakao;
         try {
             URI uri = UriComponentsBuilder.fromUriString(GEOCODE_URL)
                     .queryParam("q", address.trim()).queryParam("format", "jsonv2")
