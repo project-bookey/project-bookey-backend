@@ -174,17 +174,20 @@ public class AuthService {
     /**
      * 코드 발급 공통 — 해시만 저장한 뒤 발송한다. 다시 받기는 기다림 없이 바로 되고(새 코드가 앞 코드를 대신한다),
      * 같은 이메일·용도로 1시간에 hourlyLimit 번을 넘기면 막는다 — 메일 폭탄과 코드를 바꿔 가며 맞혀 보는 대입을 막는 유일한 장치다.
+     * 응답의 resendsLeft 는 그 1시간 안에 더 받을 수 있는 횟수다 — 앱이 '다시 받기' 옆에 보여 준다.
      */
     private EmailCodeResponse issueEmailCode(String email, EmailCodePurpose purpose) {
         BookeyProperties.Auth.EmailCode policy = properties.auth().emailCode();
-        if (!rateLimiter.tryAcquire("email-code:" + purpose + ":" + email, policy.hourlyLimit(), Duration.ofHours(1))) {
+        RateLimiter.Permit permit = rateLimiter.acquire(
+                "email-code:" + purpose + ":" + email, policy.hourlyLimit(), Duration.ofHours(1));
+        if (!permit.allowed()) {
             throw new ApiException(ErrorCode.RATE_LIMITED, "인증 코드를 너무 여러 번 받았어요. 잠시 후 다시 받아 주세요.");
         }
         Instant now = Instant.now();
         String code = "%06d".formatted(secureRandom.nextInt(1_000_000));
         emailVerificationRepository.save(new EmailVerification(email, purpose, sha256(code), now.plus(policy.ttl())));
         emailCodeSender.send(email, code, policy.ttl(), purpose);
-        return new EmailCodeResponse(policy.ttl().toSeconds(), policy.expose() ? code : null);
+        return new EmailCodeResponse(policy.ttl().toSeconds(), policy.expose() ? code : null, permit.remaining());
     }
 
     /**
