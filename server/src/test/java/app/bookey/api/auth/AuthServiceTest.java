@@ -338,6 +338,7 @@ class AuthServiceTest {
         assertThat(res.expiresInSec()).isEqualTo(600L);
         assertThat(res.devCode()).hasSize(6).containsOnlyDigits();
         assertThat(res.resendsLeft()).isEqualTo(9);
+        assertThat(res.sendLimit()).isEqualTo(10);
 
         ArgumentCaptor<EmailVerification> saved = ArgumentCaptor.forClass(EmailVerification.class);
         verify(emailVerificationRepository).save(saved.capture());

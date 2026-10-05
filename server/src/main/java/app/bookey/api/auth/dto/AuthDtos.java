@@ -53,11 +53,13 @@ public final class AuthDtos {
     /**
      * expiresInSec 은 코드를 쓸 수 있는 시간(초) — 앱이 남은 시간을 센다. devCode 는 bookey.auth.email-code.expose=true(로컬)일 때만 담긴다.
      * resendsLeft 는 같은 이메일·용도로 1시간 안에 더 받을 수 있는 코드 수 — 횟수를 세지 못했으면(Redis 장애) 비운다.
+     * sendLimit 은 그 1시간에 받을 수 있는 코드 수(hourly-limit) — 앱이 '다시 받기'에 받은 수/sendLimit 으로 보여 준다.
      */
     public record EmailCodeResponse(
             long expiresInSec,
             String devCode,
-            Integer resendsLeft
+            Integer resendsLeft,
+            int sendLimit
     ) {}
 
     public record EmailSignupRequest(
