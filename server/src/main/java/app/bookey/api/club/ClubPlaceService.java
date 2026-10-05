@@ -11,7 +11,14 @@ import tools.jackson.databind.JsonNode;
 
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Slf4j
 @Service
@@ -20,11 +27,26 @@ public class ClubPlaceService {
 
     private static final String SEARCH_URL = "https://dapi.kakao.com/v2/local/search/keyword.json";
     private static final String ADDRESS_URL = "https://dapi.kakao.com/v2/local/search/address.json";
+    private static final String JUSO_URL = "https://business.juso.go.kr/addrlink/addrLinkApi.do";
+    /** 도로명주소 검색이 막는 글자(특수문자) — 보내면 오류가 오니 빈칸으로 바꿔 보낸다. */
+    private static final String JUSO_BLOCKED = "[%=><\\[\\]]";
+    private static final int ADDRESS_LIMIT = 10;
+    /** 주소 → 좌표 캐시 크기. 한 자씩 적을 때 앞 글자 결과와 겹치는 주소가 많아 카카오 호출이 크게 준다. */
+    private static final int COORDINATE_CACHE_SIZE = 5_000;
     private static final String GEOCODE_URL = "https://nominatim.openstreetmap.org/search";
 
     private final ClubService clubService;
     private final RestClient bookApiRestClient;
     private final BookeyProperties properties;
+    /** 도로명주소 결과마다 좌표를 붙이는 카카오 호출 — 기다리기만 하는 일이라 가상 스레드로 한꺼번에 보낸다. */
+    private final ExecutorService geocodeExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    private final Map<String, Coordinates> coordinateCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(256, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, Coordinates> eldest) {
+                    return size() > COORDINATE_CACHE_SIZE;
+                }
+            });
 
     public record PlaceView(String id, String name, String address, String roadAddress,
                             double latitude, double longitude, String phone, String mapUrl) {}
@@ -33,18 +55,76 @@ public class ClubPlaceService {
                               double latitude, double longitude) {}
 
     /**
-     * 주소 검색 — 앱이 장소 이름 검색과 함께 적는 대로(디바운스) 부른다. 그래서 자동완성을 금하는 공개 Nominatim 이 아니라
-     * 카카오 주소 검색을 쓴다(장소 검색과 같은 키). 키가 없으면 장소 검색처럼 빈 목록.
+     * 주소 검색 — 앱이 장소 이름 검색과 함께 한 자씩 적을 때마다(짧은 디바운스) 부른다. 그래서 자동완성을 금하는 공개
+     * Nominatim 은 쓰지 않는다. 도로명주소 검색(행정안전부, JUSO_API_KEY)이 있으면 그것으로 '양화로 4'처럼 덜 적은 주소에도
+     * 관련 주소를 내주고, 좌표는 결과마다 카카오 주소 검색으로 붙인다. 키가 없으면 카카오 주소 검색만 — 다 적은 주소만 찾는다.
      */
     public List<AddressView> searchAddresses(Long userId, Long clubId, String query) {
         clubService.activeMember(clubId, userId);
         if (query == null || query.trim().length() < 2 || properties.bookApi().kakaoKey().isBlank()) {
             return List.of();
         }
+        String jusoKey = properties.bookApi().jusoKey();
+        return jusoKey != null && !jusoKey.isBlank()
+                ? searchJuso(jusoKey, query.trim())
+                : searchKakaoAddress(query.trim(), 5);
+    }
+
+    private List<AddressView> searchJuso(String key, String query) {
+        try {
+            URI uri = UriComponentsBuilder.fromUriString(JUSO_URL)
+                    .queryParam("confmKey", key)
+                    .queryParam("currentPage", 1)
+                    .queryParam("countPerPage", ADDRESS_LIMIT)
+                    .queryParam("keyword", query.replaceAll(JUSO_BLOCKED, " ").trim())
+                    .queryParam("resultType", "json")
+                    .build().encode().toUri();
+            JsonNode results = Objects.requireNonNull(bookApiRestClient.get().uri(uri).retrieve().body(JsonNode.class))
+                    .path("results");
+            // 너무 넓은 검색어('서울')·한 글자 같은 것은 오류 코드로 온다 — 덜 적은 상태일 뿐이니 빈 결과로 둔다.
+            String errorCode = results.path("common").path("errorCode").asText("");
+            if (!"0".equals(errorCode)) {
+                if (errorCode.equals("E0001") || errorCode.equals("E0014")) {
+                    log.warn("도로명주소 검색 키 오류: {} {}", errorCode, results.path("common").path("errorMessage").asText(""));
+                }
+                return List.of();
+            }
+            List<CompletableFuture<AddressView>> located = new ArrayList<>();
+            for (JsonNode juso : results.path("juso")) {
+                String road = juso.path("roadAddrPart1").asText("");
+                String jibun = juso.path("jibunAddr").asText("");
+                String building = juso.path("bdNm").asText("");
+                String zip = juso.path("zipNo").asText("");
+                located.add(CompletableFuture.supplyAsync(() -> {
+                    Coordinates at = coordinatesOf(road);
+                    return at == null ? null : new AddressView(jibun, road, building, zip, at.latitude(), at.longitude());
+                }, geocodeExecutor));
+            }
+            // 좌표를 못 붙인 주소는 지도에 찍을 수도, 모임 장소로 고를 수도 없으니 뺀다.
+            return located.stream().map(CompletableFuture::join).filter(Objects::nonNull).toList();
+        } catch (Exception e) {
+            log.warn("도로명주소 검색 실패: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /** 도로명주소 한 줄의 좌표 — 다 적은 주소라 카카오 주소 검색 첫 결과가 곧 그 건물이다. */
+    private Coordinates coordinatesOf(String roadAddress) {
+        if (roadAddress.isBlank()) return null;
+        Coordinates cached = coordinateCache.get(roadAddress);
+        if (cached != null) return cached;
+        List<AddressView> found = searchKakaoAddress(roadAddress, 1);
+        if (found.isEmpty()) return null;
+        Coordinates at = new Coordinates(found.get(0).latitude(), found.get(0).longitude());
+        coordinateCache.put(roadAddress, at);
+        return at;
+    }
+
+    private List<AddressView> searchKakaoAddress(String query, int size) {
         try {
             URI uri = UriComponentsBuilder.fromUriString(ADDRESS_URL)
-                    .queryParam("query", query.trim())
-                    .queryParam("size", 5)
+                    .queryParam("query", query)
+                    .queryParam("size", size)
                     .build().encode().toUri();
             JsonNode response = bookApiRestClient.get().uri(uri)
                     .header(HttpHeaders.AUTHORIZATION, "KakaoAK " + properties.bookApi().kakaoKey())

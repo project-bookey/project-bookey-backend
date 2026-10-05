@@ -70,7 +70,9 @@ public record BookeyProperties(
             String yes24Key,
             Duration cacheTtl,
             /** YES24 큐레이션(베스트셀러 등) 목록 캐시 TTL — 순위는 자주 바뀌므로 검색 캐시보다 짧게. */
-            Duration yes24CurationTtl
+            Duration yes24CurationTtl,
+            /** 도로명주소 검색(행정안전부) 승인키 — 모임 장소 찾기의 주소 자동완성. 없으면 카카오 주소 검색만 쓴다. */
+            String jusoKey
     ) {}
 
     public record OAuth(
