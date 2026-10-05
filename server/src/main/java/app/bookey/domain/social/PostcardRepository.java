@@ -11,20 +11,22 @@ public interface PostcardRepository extends JpaRepository<Postcard, Long> {
     /** 같은 상대에게 답장 대기 중인 엽서가 이미 있는가 — 도배 방지. */
     boolean existsByFromUserIdAndToUserIdAndStatus(Long fromUserId, Long toUserId, PostcardStatus status);
 
-    /** 받은 엽서 — 탈퇴한(계정이 종료된) 사람이 보낸 것은 뺀다. */
+    /** 받은 엽서 — 탈퇴한(계정이 종료된) 사람과 내가 차단한 사람이 보낸 것은 뺀다. */
     @Query("""
             SELECT p FROM Postcard p
             WHERE p.toUserId = :toUserId
               AND p.fromUserId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+              AND NOT EXISTS (SELECT b FROM UserBlock b WHERE b.blockerId = :toUserId AND b.blockedId = p.fromUserId)
             ORDER BY p.id DESC
             """)
     Page<Postcard> findAllByToUserIdOrderByIdDesc(@Param("toUserId") Long toUserId, Pageable pageable);
 
-    /** 보낸 엽서 — 받은 사람이 탈퇴했으면 뺀다(그 사람의 답장이 담겨 있다). */
+    /** 보낸 엽서 — 받은 사람이 탈퇴했거나 내가 그 사람을 차단했으면 뺀다(그 사람의 답장이 담겨 있다). */
     @Query("""
             SELECT p FROM Postcard p
             WHERE p.fromUserId = :fromUserId
               AND p.toUserId NOT IN (SELECT t.id FROM User t WHERE t.status = 'TERMINATED')
+              AND NOT EXISTS (SELECT b FROM UserBlock b WHERE b.blockerId = :fromUserId AND b.blockedId = p.toUserId)
             ORDER BY p.id DESC
             """)
     Page<Postcard> findAllByFromUserIdOrderByIdDesc(@Param("fromUserId") Long fromUserId, Pageable pageable);

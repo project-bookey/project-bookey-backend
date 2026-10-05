@@ -75,6 +75,15 @@ public final class SocialDtos {
             @NotNull Instant followedAt
     ) {}
 
+    // ── 차단 ───────────────────────────────────────────
+
+    public record BlockedUserView(
+            @NotNull Long userId,
+            @NotNull String nickname,
+            String avatarUrl,
+            @NotNull Instant blockedAt
+    ) {}
+
     // ── 프로필 ───────────────────────────────────────────
 
     public record UserProfileView(

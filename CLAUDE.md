@@ -101,6 +101,15 @@ common/             보안 · 에러 · 설정 · 공용 유틸
 - 탈퇴하는 순간(`AccountEraser`) 참가한 클럽을 모두 나가고(`ClubService.leaveAllOnWithdrawal` — 호스트면 탈퇴하지 않은 활성 멤버 중 운영진 → 먼저 들어온 사람에게 넘기고, 남은 사람이 없으면 클럽을 끝낸다), 그 사람이 한 일로 남에게 간 알림(본문에 닉네임이 굳어 있는 좋아요·댓글·팔로우·엽서·채팅·찌르기 알림, payload 의 `fromUserId`·`commenterId`·팔로우의 `userId`)을 지운다. 이 처리 전에 탈퇴한 사람과 실패한 경우는 매일 04:00·04:05 배치가 다시 한다.
 - 새 조회를 만들 때 남의 기록을 내려준다면 같은 조건을 건다. 테스트의 `mock(UserRepository.class)` 는 `isTerminated` 가 false 다.
 
+### 차단 (2026-10-05, 사용자 결정, V55)
+
+한 방향(`user_blocks`: blocker → blocked), 상대에게 알리지 않는다. 막는 범위는 **엽서·채팅만** — 광장의 독후감·댓글·팔로우는 그대로다. `BlockService` 가 규칙을 모은다.
+
+- 보내기 전 `requireReachable(보내는 사람, 받는 사람)`: 엽서 보내기·답장, 채팅 열기·메시지. 내가 막았으면 `USER_BLOCKED`(설정의 '차단한 사람'에서 풀라는 안내), 상대가 날 막았으면 `USER_UNREACHABLE`(막았다는 말은 하지 않는다).
+- 막은 사람에게서만 숨긴다: 받은·보낸 엽서 목록과 채팅 목록 쿼리가 `NOT EXISTS (SELECT b FROM UserBlock b WHERE b.blockerId = :me AND ...)` 를 건다. 막은 사람이 그 방을 열면 `CHAT_NOT_FOUND`. 막힌 사람에게는 방이 그대로 보이고 읽을 수 있다(보내기만 막힌다). `canChat` 은 어느 쪽이든 막혔으면 false.
+- 데이터는 지우지 않는다 — 풀면(`DELETE /blocks/{userId}`) 엽서·채팅방이 다시 보인다. 차단·해제는 모두 멱등이고, 나 자신은 막을 수 없다(`INVALID_REQUEST`), 탈퇴한 사람은 `NOT_FOUND`. 목록(`GET /blocks`)에서 탈퇴한 사람은 뺀다.
+- 막는 범위를 넓히려면(광장 숨김 등) 이 절을 먼저 고치고 같은 `NOT EXISTS` 조건을 그 목록 쿼리에 건다.
+
 ### 어뷰징 감지 없음 (2026-10-05, 사용자 결정)
 
 한 번에 많이 읽거나 빨리 완독해도 의심하지 않는다. 세션의 비정상 속도(분당 5쪽 초과)·타이머 방치·4시간 초과 플래그와 리뷰의 순간 완독·하루 대량 완독(`FLAGGED`) 판정을 걷어냈다 — 관리자에게 완독을 증명하게 만들던 장치다. 4시간 초과 세션을 4시간으로 잘라 닫는 것은 그대로다. 예전에 '의심'으로 묶인 리뷰는 V52 가 풀었다. `reading_sessions.abuse_flags`·`counted_for_verification` 컬럼은 예전 값과 함께 남겨 두되 읽지 않고, 응답의 `SessionView.abuseFlags`(빈 목록)·`countedForVerification`(true)·`VerificationPreview.flags`(빈 목록)는 예전 앱 호환용이다. 감지를 다시 넣지 않는다.

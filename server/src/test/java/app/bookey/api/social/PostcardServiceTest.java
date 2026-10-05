@@ -11,6 +11,7 @@ import app.bookey.domain.post.PostRepository;
 import app.bookey.domain.social.Postcard;
 import app.bookey.domain.social.PostcardRepository;
 import app.bookey.domain.social.PostcardStatus;
+import app.bookey.domain.social.UserBlockRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import app.bookey.domain.wallet.Wallet;
@@ -53,8 +54,11 @@ class PostcardServiceTest {
     private final Clock clock = mock(Clock.class);
     private final BookeyProperties properties =
             new BookeyProperties(null, null, null, null, null, null, SOCIAL, null, null, null);
+    private final UserBlockRepository blockRepository = mock(UserBlockRepository.class);
+    private final BlockService blockService = new BlockService(blockRepository, userRepository, clock);
     private final PostcardService service = new PostcardService(
-            postcardRepository, userRepository, postRepository, walletService, notificationService, properties, clock);
+            postcardRepository, userRepository, postRepository, walletService, notificationService, blockService,
+            properties, clock);
 
     private final Wallet wallet = new Wallet(1L, LocalDate.of(2026, 9, 6));
 
@@ -111,6 +115,23 @@ class PostcardServiceTest {
         assertThat(view.mine()).isTrue();
         verify(walletService).payPostcardSend(eq(1L), eq(wallet), eq(100L));
         verify(walletService, never()).payStamp(anyLong(), any(), any(), anyLong());
+    }
+
+    @Test
+    @DisplayName("발송 — 내가 차단한 사람에게는 USER_BLOCKED, 나를 차단한 사람에게는 USER_UNREACHABLE. 엽서·지갑은 쓰지 않는다")
+    void sendBlocked() {
+        stubBasics();
+        when(blockRepository.existsByBlockerIdAndBlockedId(1L, 2L)).thenReturn(true);
+        assertApiError(() -> service.send(1L, new SendPostcardRequest(2L, null, "안녕", false)),
+                ErrorCode.USER_BLOCKED);
+
+        when(blockRepository.existsByBlockerIdAndBlockedId(1L, 2L)).thenReturn(false);
+        when(blockRepository.existsByBlockerIdAndBlockedId(2L, 1L)).thenReturn(true);
+        assertApiError(() -> service.send(1L, new SendPostcardRequest(2L, null, "안녕", false)),
+                ErrorCode.USER_UNREACHABLE);
+
+        verify(postcardRepository, never()).save(any());
+        verify(walletService, never()).payPostcardSend(anyLong(), any(), anyLong());
     }
 
     @Test

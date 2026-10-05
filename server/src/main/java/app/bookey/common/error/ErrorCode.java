@@ -52,6 +52,8 @@ public enum ErrorCode {
     PAYMENT_NOT_CONFIGURED(HttpStatus.BAD_REQUEST, "지금은 결제할 수 없어요. 잠시 후 다시 시도해 주세요."),
     CHAT_NOT_FOUND(HttpStatus.NOT_FOUND, "채팅방을 찾을 수 없어요."),
     CHAT_NOT_ALLOWED(HttpStatus.FORBIDDEN, "엽서와 답장을 주고받은 사람과만 채팅할 수 있어요."),
+    USER_BLOCKED(HttpStatus.FORBIDDEN, "차단한 사람이에요. 설정의 '차단한 사람'에서 풀 수 있어요."),
+    USER_UNREACHABLE(HttpStatus.FORBIDDEN, "지금은 이 사람에게 보낼 수 없어요."),
 
     // 도서 / 서재
     BOOK_NOT_FOUND(HttpStatus.NOT_FOUND, "책을 찾을 수 없어요."),
