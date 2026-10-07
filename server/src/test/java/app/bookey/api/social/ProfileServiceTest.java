@@ -118,6 +118,44 @@ class ProfileServiceTest {
     }
 
     @Test
+    @DisplayName("비회원 공개 프로필 — 방문을 남기지 않고 채팅 가능 여부도 묻지 않으며, 열람자에 매인 값은 모두 false")
+    void publicProfileLeavesNoTrace() {
+        host();
+        when(followRepository.countByFolloweeId(2L)).thenReturn(3L);
+        when(followRepository.countByFollowerId(2L)).thenReturn(4L);
+        when(visitRepository.countByHostId(2L)).thenReturn(7L);
+        when(postRepository.countByUserIdAndVisibility(2L, PostVisibility.PUBLIC)).thenReturn(5L);
+
+        var view = service.publicProfile(2L);
+
+        assertThat(view.userId()).isEqualTo(2L);
+        assertThat(view.nickname()).isEqualTo("호스트");
+        assertThat(view.handle()).isEqualTo("host");
+        assertThat(view.followerCount()).isEqualTo(3L);
+        assertThat(view.followingCount()).isEqualTo(4L);
+        assertThat(view.visitCount()).isEqualTo(7L);
+        assertThat(view.publicPostCount()).isEqualTo(5L);
+        assertThat(view.iFollow()).isFalse();
+        assertThat(view.followsMe()).isFalse();
+        assertThat(view.mutual()).isFalse();
+        assertThat(view.canChat()).isFalse();
+        assertThat(view.me()).isFalse();
+        verify(visitRepository, never()).save(any());
+        verify(chatService, never()).canChat(any(), any());
+    }
+
+    @Test
+    @DisplayName("비회원 공개 프로필 — 탈퇴한 사람은 NOT_FOUND")
+    void publicProfileOfTerminatedUserIsNotFound() {
+        host().changeStatus(UserStatus.TERMINATED);
+
+        assertThatThrownBy(() -> service.publicProfile(2L))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getErrorCode())
+                .isEqualTo(ErrorCode.NOT_FOUND);
+    }
+
+    @Test
     @DisplayName("방문자 목록 — 구독 회원이 아니면 SUBSCRIPTION_REQUIRED")
     void visitorsRequireSubscription() {
         when(subscriptionService.isActive(1L)).thenReturn(false);
