@@ -110,7 +110,9 @@ public class SecurityConfig {
 
     private CorsConfigurationSource apiCorsSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("http://localhost:*", "https://*.bookey.app"));
+        // 공개 웹(www.bookey.site)은 서버에서 호출하지만, 브라우저에서 바로 부를 때를 대비해 열어 둔다.
+        config.setAllowedOriginPatterns(List.of(
+                "http://localhost:*", "https://*.bookey.app", "https://bookey.site", "https://*.bookey.site"));
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

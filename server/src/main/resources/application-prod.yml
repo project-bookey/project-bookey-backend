@@ -27,6 +27,10 @@ logging:
     app.bookey: INFO
     org.hibernate.SQL: WARN
 server:
+  # nginx(·공개 웹 서버) 뒤에서 X-Forwarded-For/Proto 를 Tomcat RemoteIpValve 가 풀어 getRemoteAddr() 가
+  # 실제 방문자 IP 가 되게 한다 — 비회원 검색 제한·조회수 중복 제거(ClientKeys)가 IP 를 키로 쓴다.
+  # 신뢰 프록시는 Tomcat 기본값(사설망·루프백)이라 바깥에서 들어온 헤더는 무시한다.
+  forward-headers-strategy: native
   error:
     include-message: never
     include-stacktrace: never
