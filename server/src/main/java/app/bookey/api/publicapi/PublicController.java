@@ -1,42 +1,40 @@
 package app.bookey.api.publicapi;
 
 import app.bookey.api.book.BookService;
-import app.bookey.api.book.dto.BookDtos.BookDetail;
 import app.bookey.api.post.PostService;
 import app.bookey.api.post.dto.PostDtos.PostView;
-import app.bookey.api.review.ReviewService;
-import app.bookey.api.review.dto.ReviewDtos.ReviewView;
 import app.bookey.common.support.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 비회원 공개 API (§F7 SEO 유입).
- * Next.js 공개 웹이 SSR 로 호출한다. 인증 없이 읽기만 가능하다.
+ * 비회원 공개 API — 블로그·온보딩 (§F7 SEO 유입).
+ * 공개 웹(www.bookey.site, Next.js)과 앱 온보딩이 로그인 없이 호출한다.
+ * 책·독후감·사용자 조회는 {@link PublicBookController}·{@link PublicPostController}·{@link PublicUserController}.
  */
-@Tag(name = "Public", description = "공개 웹 — 독후감 · 검증 리뷰 (비회원)")
+@Tag(name = "Public", description = "공개 웹(www.bookey.site) — 비회원 조회")
+@SecurityRequirements
 @RestController
 @RequestMapping("/api/v1/public")
 @RequiredArgsConstructor
 public class PublicController {
 
     private final PostService postService;
-    private final ReviewService reviewService;
     private final BookService bookService;
     private final app.bookey.api.book.Yes24CurationService yes24CurationService;
 
-    @Operation(summary = "사용자 공개 블로그 — bookey.app/@{handle}")
+    @Operation(summary = "사용자 공개 블로그 — @{handle} 의 공개 독후감")
     @GetMapping("/blogs/{handle}/posts")
     public PageResponse<PostView> blogPosts(@PathVariable String handle,
                                             @RequestParam(defaultValue = "0") int page,
                                             @RequestParam(defaultValue = "20") int size) {
-        return postService.listPublicByHandle(handle, PageRequest.of(page, size));
+        return postService.listPublicByHandle(handle, PublicPaging.of(page, size));
     }
 
-    @Operation(summary = "공개 독후감 상세")
+    @Operation(summary = "공개 독후감 상세 — @{handle}/{slug}")
     @GetMapping("/blogs/{handle}/posts/{slug}")
     public PostView blogPost(@PathVariable String handle, @PathVariable String slug) {
         return postService.readPublic(handle, slug);
@@ -69,29 +67,5 @@ public class PublicController {
     @GetMapping("/onboarding/categories")
     public java.util.List<String> onboardingCategories() {
         return bookService.onboardingCategories();
-    }
-
-    @Operation(summary = "도서 공개 정보 — 검증 평점 포함")
-    @GetMapping("/books/{bookId}")
-    public BookDetail book(@PathVariable Long bookId) {
-        // 비회원 공개 API — 로그인 사용자가 없으므로 liked 는 항상 false.
-        return bookService.detail(null, bookId);
-    }
-
-    @Operation(summary = "도서의 검증 리뷰")
-    @GetMapping("/books/{bookId}/reviews")
-    public PageResponse<ReviewView> reviews(@PathVariable Long bookId,
-                                            @RequestParam(defaultValue = "true") boolean verifiedOnly,
-                                            @RequestParam(defaultValue = "0") int page,
-                                            @RequestParam(defaultValue = "20") int size) {
-        return reviewService.listByBook(bookId, verifiedOnly, PageRequest.of(page, size));
-    }
-
-    @Operation(summary = "도서에 달린 공개 독후감")
-    @GetMapping("/books/{bookId}/posts")
-    public PageResponse<PostView> bookPosts(@PathVariable Long bookId,
-                                            @RequestParam(defaultValue = "0") int page,
-                                            @RequestParam(defaultValue = "10") int size) {
-        return postService.listPublicByBook(bookId, PageRequest.of(page, size));
     }
 }
