@@ -3,6 +3,7 @@ package app.bookey.api.banner;
 import app.bookey.admin.support.AdminAuditService;
 import app.bookey.admin.support.AuditSnapshot;
 import app.bookey.api.banner.dto.BannerDtos.BannerAdminView;
+import app.bookey.api.banner.dto.BannerDtos.BannerImageView;
 import app.bookey.api.banner.dto.BannerDtos.BannerUpsertRequest;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
@@ -12,9 +13,11 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -25,6 +28,7 @@ import java.util.List;
 public class BannerAdminController {
 
     private final BannerService bannerService;
+    private final BannerImageService imageService;
     private final AdminAuditService auditService;
     private final AuditSnapshot snapshot;
 
@@ -34,6 +38,14 @@ public class BannerAdminController {
                                       @RequestParam(required = false) BannerKind kind) {
         requireContent(admin);
         return kind == null ? bannerService.adminList() : bannerService.adminList(kind);
+    }
+
+    @Operation(summary = "배너·공지 이미지 업로드 — 돌려준 url 을 배너의 imageUrl 로 쓴다. 저장소가 꺼져 있으면 503")
+    @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public BannerImageView uploadImage(@AuthenticationPrincipal AuthAdmin admin,
+                                       @RequestPart("file") MultipartFile file) {
+        requireContent(admin);
+        return imageService.upload(admin, file);
     }
 
     @Operation(summary = "배너 생성")
