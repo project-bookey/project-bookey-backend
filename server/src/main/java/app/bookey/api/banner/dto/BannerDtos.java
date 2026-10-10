@@ -28,6 +28,9 @@ public final class BannerDtos {
         }
     }
 
+    /** 관리자가 올린 배너 이미지. 크기는 파일 헤더에서 읽히면 채운다. */
+    public record BannerImageView(@jakarta.validation.constraints.NotNull String url, Integer width, Integer height) {}
+
     /** 어드민 조회용 — 기간·활성 여부 포함. */
     public record BannerAdminView(
             @NotNull Long id,

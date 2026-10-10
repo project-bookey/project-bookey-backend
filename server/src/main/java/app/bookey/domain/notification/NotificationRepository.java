@@ -13,13 +13,38 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     Page<Notification> findAllByUserIdOrderByCreatedAtDesc(Long userId, Pageable pageable);
 
-    @Query("SELECT n FROM Notification n WHERE n.sentAt IS NULL AND n.scheduledAt <= :now")
+    /** 개인 알림 디스패처 대상 — 캠페인 알림은 캠페인 잡이 묶어서 보내므로 뺀다. */
+    @Query("SELECT n FROM Notification n WHERE n.sentAt IS NULL AND n.scheduledAt <= :now AND n.campaignId IS NULL")
     List<Notification> findDueForSend(@Param("now") Instant now, Pageable pageable);
+
+    /**
+     * 보낼 때가 된 캠페인 알림을 잠그며 가져온다 — 서버가 여러 대여도 같은 알림을 두 번 보내지 않게(SKIP LOCKED).
+     * 호출하는 쪽 트랜잭션 안에서 보내고 sent_at 을 찍어야 잠금이 의미가 있다.
+     */
+    @Query(value = """
+            SELECT * FROM notifications
+            WHERE campaign_id IS NOT NULL AND sent_at IS NULL AND scheduled_at <= :now
+            ORDER BY id
+            LIMIT :limit
+            FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    List<Notification> lockDueCampaignNotifications(@Param("now") Instant now, @Param("limit") int limit);
+
+    long countByCampaignIdAndSentAtIsNull(Long campaignId);
+
+    long countByCampaignIdAndSentAtIsNotNull(Long campaignId);
+
+    long countByCampaignIdAndOpenedAtIsNotNull(Long campaignId);
+
+    /** 캠페인 취소 — 아직 안 나간 알림은 지운다(앱 알림 목록에도 남지 않게). */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM Notification n WHERE n.campaignId = :campaignId AND n.sentAt IS NULL")
+    int deleteUnsentByCampaign(@Param("campaignId") Long campaignId);
 
     /** 개인 알림 일일 한도 검사 (§F5 총량 제한). */
     @Query("""
             SELECT COUNT(n) FROM Notification n
-            WHERE n.userId = :userId AND n.clubId IS NULL
+            WHERE n.userId = :userId AND n.clubId IS NULL AND n.campaignId IS NULL
               AND n.scheduledAt >= :from AND n.scheduledAt < :to
             """)
     long countPersonalScheduled(@Param("userId") Long userId,
@@ -66,11 +91,12 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     @Query("""
             SELECT COUNT(n) FROM Notification n
-            WHERE n.sentAt >= :since AND n.convertedAt IS NOT NULL
+            WHERE n.sentAt >= :since AND n.convertedAt IS NOT NULL AND n.campaignId IS NULL
             """)
     long countConvertedSince(@Param("since") Instant since);
 
-    @Query("SELECT COUNT(n) FROM Notification n WHERE n.sentAt >= :since")
+    /** 개인 알림 발송 수 — 전환율의 분모라 캠페인(전체 푸시)은 뺀다. */
+    @Query("SELECT COUNT(n) FROM Notification n WHERE n.sentAt >= :since AND n.campaignId IS NULL")
     long countSentSince(@Param("since") Instant since);
 
     /** 탈퇴 — 그 회원의 알림을 모두 지운다(푸시 발송 기록은 FK CASCADE 로 함께). */

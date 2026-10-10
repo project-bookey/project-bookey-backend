@@ -74,6 +74,34 @@ public final class StorageKeys {
         return AVATAR_KEY.matcher(key).matches() ? key : null;
     }
 
+    /** banners/{yyyy}/{MM}/{uuid}.{ext} — 홈 광고 배너·공지 팝업 이미지(관리자 업로드). */
+    public static String forBannerImage(Instant now, String extension) {
+        return "banners/" + YEAR_MONTH.format(now) + "/" + UUID.randomUUID() + "." + safeExtension(extension);
+    }
+
+    private static final java.util.regex.Pattern BANNER_KEY =
+            java.util.regex.Pattern.compile("banners/\\d{4}/\\d{2}/[A-Za-z0-9-]+\\.[A-Za-z0-9]+");
+
+    /**
+     * 배너 이미지 URL → 저장소 키. 관리자 화면에서 올린 이미지(banners/…)가 아니면 null —
+     * 손으로 넣은 외부 URL 로 우리 파일을 지우지 않게 모양을 엄격히 본다.
+     */
+    public static String bannerKeyOf(String url) {
+        if (url == null) {
+            return null;
+        }
+        int at = url.indexOf("banners/");
+        if (at < 0) {
+            return null;
+        }
+        String key = url.substring(at);
+        int query = key.indexOf('?');
+        if (query >= 0) {
+            key = key.substring(0, query);
+        }
+        return BANNER_KEY.matcher(key).matches() ? key : null;
+    }
+
     /** 확장자는 스니퍼가 준 값만 오지만, 경로가 될 수 있는 문자는 여기서 한 번 더 막는다. */
     private static String safeExtension(String extension) {
         if (extension == null || extension.isBlank()

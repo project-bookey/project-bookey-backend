@@ -222,12 +222,6 @@ public class User extends BaseTimeEntity {
 
     /** 조용 시간 여부 (§F5 설계 원칙 3). 자정을 넘는 구간도 처리한다. */
     public boolean isQuietHour(int hour) {
-        if (quietHoursStart == quietHoursEnd) {
-            return false;
-        }
-        if (quietHoursStart < quietHoursEnd) {
-            return hour >= quietHoursStart && hour < quietHoursEnd;
-        }
-        return hour >= quietHoursStart || hour < quietHoursEnd;
+        return app.bookey.domain.notification.SendTimeResolver.isQuietHour(hour, quietHoursStart, quietHoursEnd);
     }
 }

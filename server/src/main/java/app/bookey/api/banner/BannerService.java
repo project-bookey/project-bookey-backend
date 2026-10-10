@@ -4,6 +4,7 @@ import app.bookey.api.banner.dto.BannerDtos;
 import app.bookey.api.banner.dto.BannerDtos.BannerView;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
+import app.bookey.common.support.AfterCommit;
 import app.bookey.domain.banner.Banner;
 import app.bookey.domain.banner.BannerKind;
 import app.bookey.domain.banner.BannerRepository;
@@ -19,6 +20,7 @@ import java.util.List;
 public class BannerService {
 
     private final BannerRepository bannerRepository;
+    private final BannerImageService imageService;
 
     @Transactional(readOnly = true)
     public List<BannerView> activeBanners() {
@@ -65,8 +67,12 @@ public class BannerService {
     public BannerDtos.BannerAdminView update(Long id, BannerDtos.BannerUpsertRequest req) {
         Banner banner = bannerRepository.findById(id)
                 .orElseThrow(() -> ApiException.of(ErrorCode.BANNER_NOT_FOUND));
+        String previousImage = banner.getImageUrl();
         banner.update(req.title(), req.kind(), req.subtitle(), req.imageUrl(), req.bgColor(),
                 req.linkUrl(), req.sortOrder(), req.enabled(), req.startsAt(), req.endsAt());
+        if (previousImage != null && !previousImage.equals(req.imageUrl())) {
+            releaseImage(previousImage);
+        }
         return BannerDtos.BannerAdminView.from(banner);
     }
 
@@ -74,6 +80,18 @@ public class BannerService {
     public void delete(Long id) {
         Banner banner = bannerRepository.findById(id)
                 .orElseThrow(() -> ApiException.of(ErrorCode.BANNER_NOT_FOUND));
+        String image = banner.getImageUrl();
         bannerRepository.delete(banner);
+        if (image != null) {
+            releaseImage(image);
+        }
+    }
+
+    /** 이미지를 바꾸거나 배너를 지우면, 다른 배너가 같은 이미지를 쓰지 않을 때만 커밋 뒤에 파일을 지운다. */
+    private void releaseImage(String imageUrl) {
+        bannerRepository.flush();
+        if (!bannerRepository.existsByImageUrl(imageUrl)) {
+            AfterCommit.run(() -> imageService.deleteQuietly(imageUrl));
+        }
     }
 }

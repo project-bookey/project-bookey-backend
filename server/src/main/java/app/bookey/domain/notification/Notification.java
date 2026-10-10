@@ -66,10 +66,14 @@ public class Notification {
     @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
     private Instant createdAt;
 
+    /** 관리자 캠페인이 만든 알림이면 그 캠페인 — 개인 알림 디스패처·한도·전환율 집계에서 뺀다. */
+    @Column(name = "campaign_id")
+    private Long campaignId;
+
     @Builder
     private Notification(Long userId, NotificationType type, Short lagLevel, Long readingRecordId,
                          Long clubId, String title, String body, Map<String, Object> payload,
-                         Instant scheduledAt, String experimentVariant) {
+                         Instant scheduledAt, String experimentVariant, Long campaignId) {
         this.userId = userId;
         this.type = type;
         this.lagLevel = lagLevel;
@@ -80,6 +84,7 @@ public class Notification {
         this.payload = payload == null ? Map.of() : payload;
         this.scheduledAt = scheduledAt == null ? Instant.now() : scheduledAt;
         this.experimentVariant = experimentVariant;
+        this.campaignId = campaignId;
     }
 
     public void markSent() {

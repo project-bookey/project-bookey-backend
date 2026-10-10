@@ -10,6 +10,7 @@ import app.bookey.domain.admin.OpsFlagRepository;
 import app.bookey.domain.notification.Notification;
 import app.bookey.domain.notification.NotificationRepository;
 import app.bookey.domain.notification.NotificationType;
+import app.bookey.domain.notification.SendTimeResolver;
 import app.bookey.domain.user.NotifyTone;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
@@ -171,23 +172,11 @@ public class NotificationService {
 
     /** 조용 시간이면 종료 시각으로, 아니면 즉시 발송. */
     private Instant resolveSendTime(User user, ZonedDateTime now, ZoneId zone) {
-        if (!user.isQuietHour(now.getHour())) {
-            return now.toInstant();
-        }
-        ZonedDateTime candidate = now.withHour(user.getQuietHoursEnd())
-                .withMinute(0).withSecond(0).withNano(0);
-        if (!candidate.isAfter(now)) {
-            candidate = candidate.plusDays(1);
-        }
-        return candidate.toInstant();
+        return SendTimeResolver.afterQuietHours(now, user.getQuietHoursStart(), user.getQuietHoursEnd()).toInstant();
     }
 
     private ZoneId zoneOf(User user) {
-        try {
-            return ZoneId.of(user.getTimezone());
-        } catch (Exception e) {
-            return ZoneId.of("Asia/Seoul");
-        }
+        return SendTimeResolver.zoneOf(user.getTimezone());
     }
 
     @Transactional(readOnly = true)

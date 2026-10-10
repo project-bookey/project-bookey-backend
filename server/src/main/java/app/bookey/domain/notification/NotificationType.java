@@ -30,6 +30,8 @@ public enum NotificationType {
     CONSENT_RESULT(false),
     /** 운영 정책에 따른 경고·이용 제한 안내 — 사유와 기간을 알린다(이용약관 제10조 ②) */
     SANCTION_NOTICE(false),
+    /** 관리자 전체 공지·광고 푸시(캠페인) — 개인 한도와 무관하게 캠페인 잡이 보낸다 */
+    ANNOUNCEMENT(false),
 
     // 모임 (모임당 일 1건 / 전체 일 3건 — 개인 한도와 별도)
     CLUB_CHECKPOINT_DUE(true),
