@@ -144,6 +144,7 @@ public class SecurityConfig {
         config.setAllowedOriginPatterns(List.of(
                 "http://localhost:3100",
                 "https://admin.bookey.app",
+                "https://admin.bookey.site",
                 "https://bookey-admin-ubr5x3mthq-du.a.run.app"));
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
