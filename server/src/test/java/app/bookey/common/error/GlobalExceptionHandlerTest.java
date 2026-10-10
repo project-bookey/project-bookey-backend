@@ -64,4 +64,18 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getBody().code()).isEqualTo("INVALID_REQUEST");
         assertThat(response.getBody().message()).isEqualTo("처리할 수 없는 형식이에요.");
     }
+
+    @Test
+    void 빠지거나_타입이_틀린_쿼리_파라미터는_400_INVALID_REQUEST_로_매핑된다() {
+        ResponseEntity<ErrorResponse> missing = handler.handleBadParameter(
+                new org.springframework.web.bind.MissingServletRequestParameterException("reason", "String"));
+        ResponseEntity<ErrorResponse> mismatch = handler.handleBadParameter(
+                new org.springframework.web.method.annotation.MethodArgumentTypeMismatchException(
+                        "abc", Long.class, "userId", null, new NumberFormatException()));
+
+        assertThat(missing.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(missing.getBody().message()).isEqualTo("요청 값(reason)을 확인해 주세요.");
+        assertThat(mismatch.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(mismatch.getBody().message()).contains("userId");
+    }
 }

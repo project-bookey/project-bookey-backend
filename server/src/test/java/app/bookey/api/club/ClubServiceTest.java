@@ -325,4 +325,65 @@ class ClubServiceTest {
         f.set(club, id);
         return club;
     }
+
+    private Club clubOwnedBy(long ownerId) {
+        Club club = Club.builder().ownerId(ownerId).name("월요일의 데미안").joinCode("ABC234")
+                .memberLimit((short) 5).startsAt(LocalDate.of(2026, 10, 3)).allowNudge(true).build();
+        when(clubRepository.findById(10L)).thenReturn(Optional.of(club));
+        return club;
+    }
+
+    @Test
+    @DisplayName("관리자 강퇴 — 호스트는 내보낼 수 없다(먼저 넘긴다)")
+    void adminKickRejectsHost() {
+        clubOwnedBy(1L);
+        assertThatThrownBy(() -> service.adminKick(10L, 1L, "사유"))
+                .extracting(ClubServiceTest::codeOf).isEqualTo(ErrorCode.INVALID_REQUEST);
+    }
+
+    @Test
+    @DisplayName("관리자 강퇴 — 멤버를 내보내고 정원을 줄인다")
+    void adminKickMember() {
+        Club club = clubOwnedBy(1L);
+        club.joinMember();
+        ClubMember member = ClubMember.builder().clubId(10L).userId(2L).role(ClubRole.MEMBER).build();
+        when(memberRepository.findByClubIdAndUserId(10L, 2L)).thenReturn(Optional.of(member));
+        int before = club.getMemberCount();
+
+        service.adminKick(10L, 2L, "광고 도배");
+
+        assertThat(member.getStatus()).isEqualTo(ClubMemberStatus.KICKED);
+        assertThat(member.getKickReason()).isEqualTo("광고 도배");
+        assertThat((int) club.getMemberCount()).isEqualTo(before - 1);
+    }
+
+    @Test
+    @DisplayName("관리자 호스트 승계 — 정지된 회원에게는 넘기지 않고, 활성 회원이면 역할을 바꾼다")
+    void adminTransferHost() {
+        Club club = clubOwnedBy(1L);
+        ClubMember oldHost = ClubMember.builder().clubId(10L).userId(1L).role(ClubRole.HOST).build();
+        ClubMember next = ClubMember.builder().clubId(10L).userId(2L).role(ClubRole.MEMBER).build();
+        when(memberRepository.findByClubIdAndUserId(10L, 1L)).thenReturn(Optional.of(oldHost));
+        when(memberRepository.findByClubIdAndUserId(10L, 2L)).thenReturn(Optional.of(next));
+
+        when(userRepository.findStatusById(2L)).thenReturn(Optional.of(app.bookey.domain.user.UserStatus.SUSPENDED));
+        assertThatThrownBy(() -> service.adminTransferHost(10L, 2L))
+                .extracting(ClubServiceTest::codeOf).isEqualTo(ErrorCode.INVALID_REQUEST);
+
+        when(userRepository.findStatusById(2L)).thenReturn(Optional.of(app.bookey.domain.user.UserStatus.ACTIVE));
+        service.adminTransferHost(10L, 2L);
+        assertThat(club.getOwnerId()).isEqualTo(2L);
+        assertThat(next.getRole()).isEqualTo(ClubRole.HOST);
+        assertThat(oldHost.getRole()).isEqualTo(ClubRole.MEMBER);
+    }
+
+    @Test
+    @DisplayName("관리자 강제 종료 — 이미 끝난 모임이면 CONFLICT")
+    void adminEndTwice() {
+        Club club = clubOwnedBy(1L);
+        service.adminEnd(10L);
+        assertThat(club.getStatus().isOver()).isTrue();
+        assertThatThrownBy(() -> service.adminEnd(10L))
+                .extracting(ClubServiceTest::codeOf).isEqualTo(ErrorCode.CONFLICT);
+    }
 }

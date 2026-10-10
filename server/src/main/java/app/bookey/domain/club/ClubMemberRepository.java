@@ -35,4 +35,7 @@ public interface ClubMemberRepository extends JpaRepository<ClubMember, Long> {
 
     /** 특정 독서 기록에 연결된 모임 멤버십 — 세션 종료 시 모임 진척 동기화용. */
     List<ClubMember> findAllByReadingRecordIdAndStatus(Long readingRecordId, ClubMemberStatus status);
+
+    /** 관리자 모임 상세 — 나간·내보내진 멤버까지 모두. */
+    List<ClubMember> findAllByClubIdOrderByJoinedAtAsc(Long clubId);
 }

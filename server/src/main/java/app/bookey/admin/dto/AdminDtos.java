@@ -140,7 +140,8 @@ public final class AdminDtos {
 
     // ── 도서 ────────────────────────────────────────────────
     public record BookRow(@NotNull Long id, String isbn13, @NotNull String title, String author, String publisher,
-                          Integer totalPages, @NotNull String source, boolean userCreated, @NotNull Instant createdAt) {}
+                          Integer totalPages, @NotNull String source, boolean userCreated, @NotNull Instant createdAt,
+                          String coverUrl, String category) {}
 
     /** 구독 수동 지급 (§14.2) — 스토어 IAP 검증이 붙기 전의 운영 경로. */
     public record SubscriptionGrantRequest(
