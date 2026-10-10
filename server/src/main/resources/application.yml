@@ -97,7 +97,12 @@ bookey:
   oauth:
     google-client-ids: ${GOOGLE_OAUTH_CLIENT_IDS:}
     apple-audiences: ${APPLE_OAUTH_AUDIENCES:app.bookey.mobile}
-    kakao-app-id: ${KAKAO_APP_ID:}
+    kakao-app-id: ${KAKAO_APP_ID:}       # 카카오 앱 ID — 카카오 토큰이 우리 앱 것인지 확인한다. 없으면 카카오 로그인을 받지 않는다
+    kakao-login:                            # 카카오 로그인 — 카카오는 리다이렉트 URI 로 http(s)만 받고 새 REST 키는 클라이언트 시크릿이 켜져 있어 서버가 코드를 토큰으로 바꾼다
+      rest-key: ${KAKAO_LOGIN_REST_KEY:}    # 카카오 로그인용 REST API 키(콘솔에 리다이렉트 URI 를 등록한 키). 없으면 카카오 로그인을 '쓸 수 없음'으로 돌려보낸다
+      client-secret: ${KAKAO_LOGIN_CLIENT_SECRET:}   # 그 키의 클라이언트 시크릿 — 콘솔에서 끈 키면 비운다
+      redirect-uri: ${KAKAO_LOGIN_REDIRECT_URI:https://api.bookey.site/api/v1/auth/kakao/callback}   # 콘솔 '카카오 로그인 리다이렉트 URI'와 글자까지 같아야 한다
+      app-redirects: ${KAKAO_LOGIN_APP_REDIRECTS:bookey://auth/kakao}   # 결과를 돌려보낼 수 있는 앱 주소(정확히 일치, 쉼표 구분) — 앱은 bookey://auth/kakao 를 보낸다
   club:
     max-member-limit: 50                  # 책갈피로 늘릴 수 있는 상한 (clubs.member_limit CHECK 상한과 같다)
     free-member-limit: 10                 # 무료 정원 (호스트 포함) — 새 클럽은 늘 이 정원으로 연다

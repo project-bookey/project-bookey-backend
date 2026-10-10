@@ -66,8 +66,9 @@ public class KakaoTokenVerifier implements SocialTokenVerifier {
     private void validateApp(String accessToken) {
         Long expectedAppId = properties.oauth().kakaoAppId();
         if (expectedAppId == null) {
-            log.warn("Kakao OAuth app_id validation is not configured");
-            return;
+            // 앱 ID 를 모르면 다른 카카오 앱에서 받은 토큰도 통과하므로 받지 않는다.
+            log.warn("Kakao OAuth app_id validation is not configured; rejecting Kakao token");
+            throw ApiException.of(ErrorCode.INVALID_TOKEN);
         }
         Map<?, ?> body = bookApiRestClient.get()
                 .uri(TOKEN_INFO)

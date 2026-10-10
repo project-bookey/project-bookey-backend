@@ -78,8 +78,15 @@ public record BookeyProperties(
     public record OAuth(
             List<String> googleClientIds,
             List<String> appleAudiences,
-            Long kakaoAppId
-    ) {}
+            Long kakaoAppId,
+            KakaoLogin kakaoLogin
+    ) {
+        /**
+         * 카카오 로그인 중계(KakaoLoginService). restKey 가 비면 카카오 로그인은 '쓸 수 없음'으로 앱에 돌려보낸다.
+         * redirectUri 는 카카오 콘솔에 등록한 리다이렉트 URI 와 글자까지 같아야 하고, appRedirects 는 결과를 돌려보낼 수 있는 앱 주소(정확히 일치)다.
+         */
+        public record KakaoLogin(String restKey, String clientSecret, String redirectUri, List<String> appRedirects) {}
+    }
 
     public record Club(
             /** 책갈피로 늘릴 수 있는 최대 정원. */
