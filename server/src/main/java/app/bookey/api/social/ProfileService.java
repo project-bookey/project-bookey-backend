@@ -75,6 +75,24 @@ public class ProfileService {
                 !me && chatService.canChat(viewerId, userId), me);
     }
 
+    /**
+     * 비회원 공개 프로필 — 공개 웹(www.bookey.site). 방문을 남기지 않고(방문자가 없다),
+     * 열람자에 매인 값(iFollow·followsMe·mutual·canChat·me)은 모두 false 다. 탈퇴한 사람은 없는 사람이다.
+     */
+    @Transactional(readOnly = true)
+    public UserProfileView publicProfile(Long userId) {
+        User user = userRepository.findById(userId)
+                .filter(found -> found.getStatus() != UserStatus.TERMINATED)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        return new UserProfileView(
+                user.getId(), user.getNickname(), user.getAvatarUrl(), user.getHandle(),
+                followRepository.countByFolloweeId(userId),
+                followRepository.countByFollowerId(userId),
+                visitRepository.countByHostId(userId),
+                postRepository.countByUserIdAndVisibility(userId, PostVisibility.PUBLIC),
+                false, false, false, false, false);
+    }
+
     /** 없는 유저면 404 — 남의 독후감·서재·통계를 열 때 빈 목록 대신 '없는 사람'으로 답하게 한다. 탈퇴한 사람도 같다. */
     @Transactional(readOnly = true)
     public void requireUser(Long userId) {

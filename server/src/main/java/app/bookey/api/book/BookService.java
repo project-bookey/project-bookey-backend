@@ -3,6 +3,7 @@ package app.bookey.api.book;
 import app.bookey.api.book.dto.BookDtos.*;
 import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
+import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.book.*;
 import app.bookey.domain.curation.EditorPick;
 import app.bookey.domain.curation.EditorPickRepository;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -35,6 +37,9 @@ public class BookService {
     private static final List<String> DEFAULT_ONBOARDING_CATEGORIES = List.of(
             "소설", "에세이", "시", "인문학", "역사", "과학",
             "자기계발", "경제/경영", "컴퓨터/IT", "예술", "여행", "만화");
+    /** 비회원 검색 상한 — 카카오·구글 같은 외부 검색 API 를 두드리므로 같은 IP 는 분당 이만큼만(공개 웹). */
+    static final int PUBLIC_SEARCH_PER_MINUTE = 30;
+    static final int PUBLIC_SEARCH_MAX_SIZE = 20;
 
     private final BookRepository bookRepository;
     private final app.bookey.api.book.client.Yes24Client yes24Client;
@@ -45,12 +50,28 @@ public class BookService {
     private final EditorPickRepository editorPickRepository;
     private final BookLikeRepository bookLikeRepository;
     private final UserRepository userRepository;
+    private final RateLimiter rateLimiter;
 
     @Transactional
     public List<BookSummary> search(String keyword, int size) {
         return searchService.search(keyword, size).stream()
                 .map(BookSummary::from)
                 .toList();
+    }
+
+    /**
+     * 비회원 검색 — 공개 웹(www.bookey.site). 빈 검색어는 외부 API 를 부르지 않고 빈 목록이다.
+     * 같은 열람자 키(IP 해시)는 분당 {@value #PUBLIC_SEARCH_PER_MINUTE}회를 넘기면 RATE_LIMITED.
+     */
+    @Transactional
+    public List<BookSummary> searchPublic(String keyword, int size, String clientKey) {
+        if (keyword == null || keyword.isBlank()) {
+            return List.of();
+        }
+        if (!rateLimiter.tryAcquire("public:search:" + clientKey, PUBLIC_SEARCH_PER_MINUTE, Duration.ofMinutes(1))) {
+            throw new ApiException(ErrorCode.RATE_LIMITED, "검색을 너무 자주 했어요. 잠시 후 다시 찾아 주세요.");
+        }
+        return search(keyword.trim(), Math.clamp(size, 1, PUBLIC_SEARCH_MAX_SIZE));
     }
 
     @Transactional

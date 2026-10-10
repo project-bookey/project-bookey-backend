@@ -150,6 +150,21 @@ public class PostService {
         return toView(post, viewerId);
     }
 
+    /**
+     * 비회원 독후감 한 건 — 공개 웹(www.bookey.site). 비공개·모임 글은 없는 것으로 본다(readable 의 규칙).
+     * 조회수는 열람자 키(IP 해시)·글당 1시간에 한 번만 올리고, 검색엔진·링크 미리보기 봇은 세지 않는다.
+     * {@link #get} 에 null 열람자를 넘기면 키가 {@code post:view:{id}:null} 로 뭉쳐 비회원 전체가 1시간에 한 번만 세므로
+     * 열람자 키를 따로 받는다.
+     */
+    @Transactional
+    public PostView getPublic(Long postId, String viewerKey, boolean bot) {
+        Post post = readable(null, postId);
+        if (!bot && rateLimiter.tryAcquire("post:view:" + postId + ":" + viewerKey, 1, VIEW_COUNT_WINDOW)) {
+            post.increaseView();
+        }
+        return toView(post, null);
+    }
+
     /** 광장 독후감 피드 (§14.1) — HOT(기본): 좋아요·시간 감쇠 점수, NEW: 최신순. */
     @Transactional(readOnly = true)
     public PageResponse<PostView> feed(Long viewerId, FeedSort sort, Pageable pageable) {
@@ -227,8 +242,10 @@ public class PostService {
         return toView(post, null);
     }
 
+    /** 책 상세의 공개 독후감 — 비회원용. 없는 책은 빈 목록 대신 BOOK_NOT_FOUND 로 답한다(로그인 경로와 같다). */
     @Transactional(readOnly = true)
     public PageResponse<PostView> listPublicByBook(Long bookId, Pageable pageable) {
+        requireBook(bookId);
         return toPage(postRepository.findAllByBookIdAndVisibilityOrderByPublishedAtDescIdDesc(
                 bookId, PostVisibility.PUBLIC, pageable), null);
     }
