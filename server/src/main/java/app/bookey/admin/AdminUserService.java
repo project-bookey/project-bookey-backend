@@ -106,13 +106,17 @@ public class AdminUserService {
 
     /**
      * 회원 상세. 이메일 전체 보기는 사유를 남겨야 하며, 그 자체가 감사 로그 대상이다(§F13).
+     * 보기 전용(VIEWER)은 이메일 전체를 볼 수 없다 — 사유를 넣어 부르면 403.
      */
     @Transactional
     public UserDetailView detail(AuthAdmin admin, Long userId, String revealReason) {
+        boolean reveal = revealReason != null && !revealReason.isBlank();
+        if (reveal && !admin.role().canViewPii()) {
+            throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
 
-        boolean reveal = revealReason != null && !revealReason.isBlank();
         auditService.log(admin, reveal ? "VIEW_USER_PII" : "VIEW_USER", "USER", userId,
                 reveal ? revealReason : null, null, null);
 

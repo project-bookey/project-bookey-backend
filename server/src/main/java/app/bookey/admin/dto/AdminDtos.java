@@ -103,7 +103,7 @@ public final class AdminDtos {
             @NotNull Long id,
             @NotNull String handle,
             @NotNull String nickname,
-            String email,          // 마스킹 여부는 revealEmail 파라미터로 결정
+            String email,          // 기본은 가린 값 — revealReason 을 넣으면(VIEWER 제외) 전체
             @NotNull UserStatus status,
             @NotNull Instant createdAt,
             long totalSessions,

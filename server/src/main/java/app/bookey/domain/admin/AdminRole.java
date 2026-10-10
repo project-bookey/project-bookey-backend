@@ -59,6 +59,11 @@ public enum AdminRole {
         return this != VIEWER;
     }
 
+    /** 회원 이메일 전체 보기 — 보기 전용(VIEWER)은 가린 값만 본다(2026-10-10 사용자 결정). */
+    public boolean canViewPii() {
+        return this != VIEWER;
+    }
+
     public List<AdminCapability> capabilities() {
         List<AdminCapability> caps = new ArrayList<>();
         if (canModerate()) caps.add(AdminCapability.MODERATE);
@@ -72,6 +77,7 @@ public enum AdminRole {
         if (canManageAdmins()) caps.add(AdminCapability.MANAGE_ADMINS);
         if (canBroadcast()) caps.add(AdminCapability.BROADCAST);
         if (canViewPayments()) caps.add(AdminCapability.VIEW_PAYMENTS);
+        if (canViewPii()) caps.add(AdminCapability.VIEW_PII);
         return caps;
     }
 }

@@ -29,6 +29,15 @@ class AdminRoleTest {
     }
 
     @Test
+    @DisplayName("회원 이메일 전체 보기는 보기 전용(VIEWER)만 못 한다")
+    void canViewPii() {
+        assertThat(AdminRole.SUPER_ADMIN.canViewPii()).isTrue();
+        assertThat(AdminRole.OPERATOR.canViewPii()).isTrue();
+        assertThat(AdminRole.SUPPORT.canViewPii()).isTrue();
+        assertThat(AdminRole.VIEWER.canViewPii()).isFalse();
+    }
+
+    @Test
     @DisplayName("도서 병합은 되돌릴 수 없어 최고 관리자만 — 도서 수정이 되는 운영자도 못 한다")
     void mergeBooks() {
         assertThat(AdminRole.SUPER_ADMIN.canMergeBooks()).isTrue();
@@ -43,7 +52,8 @@ class AdminRoleTest {
     void capabilitiesMatchRole() {
         assertThat(AdminRole.VIEWER.capabilities()).isEmpty();
         assertThat(AdminRole.SUPPORT.capabilities()).containsExactly(
-                AdminCapability.WARN, AdminCapability.HANDLE_SUPPORT, AdminCapability.VIEW_PAYMENTS);
+                AdminCapability.WARN, AdminCapability.HANDLE_SUPPORT, AdminCapability.VIEW_PAYMENTS,
+                AdminCapability.VIEW_PII);
         assertThat(AdminRole.SUPER_ADMIN.capabilities()).containsExactlyInAnyOrder(AdminCapability.values());
     }
 }

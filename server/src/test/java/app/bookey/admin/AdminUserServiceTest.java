@@ -300,6 +300,22 @@ class AdminUserServiceTest {
     }
 
     @Test
+    @DisplayName("이메일 전체 보기 — 보기 전용은 403 이고 열람 기록도 남지 않는다. CS 담당은 사유와 함께 본다")
+    void revealEmailBlocksViewer() {
+        user(10L, UserStatus.ACTIVE);
+        when(reviewRepository.findAllByUserIdAndStatusOrderByCreatedAtDesc(eq(10L), eq("VISIBLE"), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        assertThatThrownBy(() -> service.detail(VIEWER, 10L, "문의 확인"))
+                .extracting("errorCode").isEqualTo(ErrorCode.ADMIN_FORBIDDEN);
+        verify(auditService, never()).log(any(), eq("VIEW_USER_PII"), any(), any(), any(), any(), any());
+        assertThat(service.detail(VIEWER, 10L, null).email()).isNotEqualTo("reader@dev.local");
+
+        assertThat(service.detail(SUPPORT, 10L, "문의 확인").email()).isEqualTo("reader@dev.local");
+        verify(auditService).log(SUPPORT, "VIEW_USER_PII", "USER", 10L, "문의 확인", null, null);
+    }
+
+    @Test
     @DisplayName("세션 끊기 — 리프레시 토큰과 남은 access token 을 모두 끊고 사유를 남긴다. CS 담당은 못 한다")
     void revokeSessions() {
         user(10L, UserStatus.ACTIVE);
