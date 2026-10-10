@@ -99,6 +99,14 @@ public enum ErrorCode {
     ADMIN_TOTP_INVALID(HttpStatus.UNAUTHORIZED, "인증 코드가 올바르지 않습니다."),
     ADMIN_FORBIDDEN(HttpStatus.FORBIDDEN, "이 작업에 필요한 관리자 권한이 없습니다."),
     ADMIN_REASON_REQUIRED(HttpStatus.BAD_REQUEST, "처리 사유를 입력해야 합니다."),
+    ADMIN_USER_WITHDRAWN(HttpStatus.CONFLICT, "탈퇴를 신청한 회원이라 제재를 걸거나 풀 수 없습니다."),
+    ADMIN_SANCTION_ALREADY_RELEASED(HttpStatus.CONFLICT, "이미 해제된 제재입니다."),
+    ADMIN_TOTP_ALREADY_ENABLED(HttpStatus.CONFLICT, "이미 2단계 인증을 쓰고 있습니다. 바꾸려면 최고 관리자에게 초기화를 요청하세요."),
+    ADMIN_TOTP_NOT_PREPARED(HttpStatus.CONFLICT, "2단계 인증 시크릿을 먼저 발급하세요."),
+    /** 로그인 중인 관리자가 등록 코드를 잘못 넣은 것 — 401 이면 관리자 웹이 로그아웃시키므로 400 으로 둔다. */
+    ADMIN_TOTP_CODE_MISMATCH(HttpStatus.BAD_REQUEST, "인증 코드가 맞지 않습니다. 앱에 표시된 6자리를 다시 확인하세요."),
+    ADMIN_SELF_ACTION(HttpStatus.CONFLICT, "자기 계정에는 할 수 없는 작업입니다."),
+    ADMIN_LAST_SUPER(HttpStatus.CONFLICT, "마지막 최고 관리자의 권한은 내릴 수 없습니다."),
 
     // 홈 콘텐츠 (배너 / 에디터 픽)
     BANNER_NOT_FOUND(HttpStatus.NOT_FOUND, "배너를 찾을 수 없습니다."),

@@ -1,5 +1,6 @@
 package app.bookey.api.me;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.auth.AuthService;
 import app.bookey.api.auth.dto.AuthDtos.DeviceRegisterRequest;
 import app.bookey.api.auth.dto.AuthDtos.MeResponse;
@@ -53,6 +54,13 @@ public class MeController {
                              @Valid @RequestBody UpdateProfileRequest request) {
         User entity = userRepository.findById(user.id())
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        // 닉네임·프로필 사진은 남에게 보이므로 쓰기정지 회원은 바꿀 수 없다. 선호 카테고리 같은 나머지는 그대로 둔다.
+        boolean changesNickname = request.nickname() != null && !request.nickname().isBlank()
+                && !request.nickname().trim().equals(entity.getNickname());
+        boolean changesAvatar = request.avatarUrl() != null && !request.avatarUrl().equals(entity.getAvatarUrl());
+        if ((changesNickname || changesAvatar) && !entity.getStatus().canWrite()) {
+            throw ApiException.of(ErrorCode.WRITE_BANNED);
+        }
         if (request.nickname() != null && !request.nickname().isBlank()
                 && userRepository.existsByNicknameIgnoreCaseAndIdNot(request.nickname().trim(), user.id())) {
             throw ApiException.of(ErrorCode.NICKNAME_ALREADY_EXISTS);
@@ -84,6 +92,7 @@ public class MeController {
 
     @Operation(summary = "프로필 사진 업로드")
     @PostMapping(value = "/avatar", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @WriteBanGuarded
     public MeResponse uploadAvatar(@AuthenticationPrincipal AuthUser user,
                                    @RequestPart("file") org.springframework.web.multipart.MultipartFile file) {
         return avatarService.upload(user.id(), file);

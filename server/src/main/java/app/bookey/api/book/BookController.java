@@ -1,5 +1,6 @@
 package app.bookey.api.book;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.book.dto.BookDtos.*;
 import app.bookey.api.post.PostService;
 import app.bookey.api.post.dto.PostDtos.PostView;
@@ -55,6 +56,7 @@ public class BookController {
 
     @Operation(summary = "도서 수동 등록 — 독립출판·해외서 등")
     @PostMapping
+    @WriteBanGuarded
     public BookSummary createManual(@Valid @RequestBody ManualBookRequest request) {
         return bookService.createManual(request);
     }

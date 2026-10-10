@@ -1,5 +1,6 @@
 package app.bookey.api.club;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.club.dto.ClubDtos.*;
 import app.bookey.common.security.AuthUser;
 import app.bookey.common.support.PageResponse;
@@ -40,6 +41,7 @@ public class ClubPostController {
 
     @Operation(summary = "글 · 댓글 작성")
     @PostMapping
+    @WriteBanGuarded
     public ClubPostView create(@AuthenticationPrincipal AuthUser user,
                            @PathVariable Long clubId,
                            @Valid @RequestBody CreateClubPostRequest request) {
@@ -48,6 +50,7 @@ public class ClubPostController {
 
     @Operation(summary = "글 · 조각 수정 — 작성자만, 한 줄과 쪽을 보낸 값으로 바꾼다")
     @PatchMapping("/{postId}")
+    @WriteBanGuarded
     public ClubPostView update(@AuthenticationPrincipal AuthUser user,
                            @PathVariable Long clubId,
                            @PathVariable Long postId,

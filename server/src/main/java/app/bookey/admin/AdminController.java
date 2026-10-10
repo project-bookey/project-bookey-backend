@@ -27,6 +27,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -37,6 +38,7 @@ import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /** 관리자 백오피스 API (§F13). 서비스 JWT 로는 접근할 수 없다. */
 @Tag(name = "Admin", description = "관리자 백오피스 — 대시보드 · 회원 · 도서 · 신고 · 모임 · 운영")
@@ -46,6 +48,8 @@ import java.util.Map;
 public class AdminController {
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    /** 목록 한 쪽 최대 크기 — 실수로 size=100000 을 보내 DB 를 훑지 않게. */
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final AdminUserService adminUserService;
     private final AdminModerationService moderationService;
@@ -62,6 +66,7 @@ public class AdminController {
     private final AdminAuditLogRepository auditLogRepository;
     private final OpsFlagRepository opsFlagRepository;
     private final InquiryRepository inquiryRepository;
+    private final AdminRepository adminRepository;
 
     // ── 대시보드 ─────────────────────────────────────────────
     @Operation(summary = "대시보드 KPI")
@@ -78,7 +83,7 @@ public class AdminController {
         long converted = notificationRepository.countConvertedSince(weekAgo);
 
         return new DashboardView(
-                userRepository.count(),
+                userRepository.countByStatusNot(UserStatus.TERMINATED),
                 sessionRepository.countActiveUsersSince(dayStart),
                 sessionRepository.countSessionsSince(dayStart),
                 recordRepository.countAllFinishedSince(dayStart),
@@ -99,7 +104,7 @@ public class AdminController {
                                        @RequestParam(required = false) UserStatus status,
                                        @RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "20") int size) {
-        return adminUserService.search(admin, keyword, status, page, size);
+        return adminUserService.search(admin, keyword, status, page, pageSize(size));
     }
 
     @Operation(summary = "회원 상세 — revealReason 을 넣으면 이메일 전체가 보이고 열람 로그가 남는다")
@@ -163,7 +168,7 @@ public class AdminController {
                                        @RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "20") int size) {
         return PageResponse.of(
-                bookRepository.searchForAdmin(emptyToNull(keyword), PageRequest.of(page, size)),
+                bookRepository.searchForAdmin(emptyToNull(keyword), PageRequest.of(page, pageSize(size))),
                 book -> new BookRow(book.getId(), book.getIsbn13(), book.getTitle(),
                         book.getAuthor(), book.getPublisher(), book.getTotalPages(),
                         book.getSource().name(), book.isUserCreated(), book.getCreatedAt()));
@@ -200,7 +205,7 @@ public class AdminController {
             @RequestParam(required = false) ModerationSource sourceType,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return moderationService.queue(status, sourceType, page, size);
+        return moderationService.queue(status, sourceType, page, pageSize(size));
     }
 
     @Operation(summary = "신고 담당 지정")
@@ -227,8 +232,8 @@ public class AdminController {
                                            @RequestParam(defaultValue = "0") int page,
                                            @RequestParam(defaultValue = "20") int size) {
         var result = bookId == null
-                ? reviewRepository.findAll(PageRequest.of(page, size))
-                : reviewRepository.findByBook(bookId, false, PageRequest.of(page, size));
+                ? reviewRepository.findAll(PageRequest.of(page, pageSize(size)))
+                : reviewRepository.findByBook(bookId, false, PageRequest.of(page, pageSize(size)));
         return PageResponse.of(result, this::toReviewRow);
     }
 
@@ -259,7 +264,7 @@ public class AdminController {
                                        @RequestParam(defaultValue = "0") int page,
                                        @RequestParam(defaultValue = "20") int size) {
         String normalized = emptyToNull(keyword);
-        var pageable = PageRequest.of(page, size);
+        var pageable = PageRequest.of(page, pageSize(size));
         var clubPage = status == null
                 ? clubRepository.searchForAdmin(normalized, pageable)
                 : clubRepository.searchForAdminByStatus(normalized, status, pageable);
@@ -283,8 +288,11 @@ public class AdminController {
         }
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_FOUND));
+        ClubStatus before = club.getStatus();
         club.end();
-        auditService.log(admin, "FORCE_END_CLUB", "CLUB", clubId, request.reason(), null, null);
+        auditService.log(admin, "FORCE_END_CLUB", "CLUB", clubId, request.reason(),
+                Map.of("status", before.name(), "name", club.getName()),
+                Map.of("status", club.getStatus().name()));
         return ResponseEntity.noContent().build();
     }
 
@@ -298,12 +306,14 @@ public class AdminController {
         }
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_FOUND));
+        String previous = club.getJoinCode();
         String code;
         do {
             code = JoinCodeGenerator.generate();
         } while (clubRepository.existsByJoinCode(code));
         club.rotateJoinCode(code);
-        auditService.log(admin, "ROTATE_CLUB_CODE", "CLUB", clubId, request.reason(), null, null);
+        auditService.log(admin, "ROTATE_CLUB_CODE", "CLUB", clubId, request.reason(),
+                Map.of("joinCode", String.valueOf(previous)), Map.of("joinCode", code));
         return Map.of("joinCode", code);
     }
 
@@ -321,13 +331,14 @@ public class AdminController {
         ClubMember newHost = clubMemberRepository.findByClubIdAndUserId(clubId, newOwnerId)
                 .filter(ClubMember::isActive)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_MEMBER));
-        clubMemberRepository.findByClubIdAndUserId(clubId, club.getOwnerId())
+        Long previousOwnerId = club.getOwnerId();
+        clubMemberRepository.findByClubIdAndUserId(clubId, previousOwnerId)
                 .ifPresent(old -> old.changeRole(ClubRole.MEMBER));
         newHost.changeRole(ClubRole.HOST);
         club.transferHost(newOwnerId);
 
-        auditService.log(admin, "TRANSFER_CLUB_HOST", "CLUB", clubId, request.reason(), null,
-                Map.of("newOwnerId", newOwnerId));
+        auditService.log(admin, "TRANSFER_CLUB_HOST", "CLUB", clubId, request.reason(),
+                Map.of("ownerId", previousOwnerId), Map.of("ownerId", newOwnerId));
         return ResponseEntity.noContent().build();
     }
 
@@ -372,28 +383,29 @@ public class AdminController {
     }
 
     // ── 감사 로그 ───────────────────────────────────────────
-    @Operation(summary = "감사 로그 — 모든 관리자 행위 기록")
+    @Operation(summary = "감사 로그 — 모든 관리자 행위 기록. from 이상 to 미만, 최신순")
     @GetMapping("/audit-logs")
-    public PageResponse<AuditRow> auditLogs(@RequestParam(required = false) Long adminId,
-                                            @RequestParam(required = false) String action,
-                                            @RequestParam(defaultValue = "0") int page,
-                                            @RequestParam(defaultValue = "50") int size) {
-        String normalizedAction = emptyToNull(action);
-        var pageable = PageRequest.of(page, size);
-        var logs = adminId != null && normalizedAction != null
-                ? auditLogRepository.findAllByAdminIdAndActionOrderByCreatedAtDesc(
-                        adminId, normalizedAction, pageable)
-                : adminId != null
-                        ? auditLogRepository.findAllByAdminIdOrderByCreatedAtDesc(adminId, pageable)
-                        : normalizedAction != null
-                                ? auditLogRepository.findAllByActionOrderByCreatedAtDesc(
-                                        normalizedAction, pageable)
-                                : auditLogRepository.findAllByOrderByCreatedAtDesc(pageable);
+    public PageResponse<AuditRow> auditLogs(
+            @RequestParam(required = false) Long adminId,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String targetType,
+            @RequestParam(required = false) Long targetId,
+            @RequestParam(required = false) Instant from,
+            @RequestParam(required = false) Instant to,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        var pageable = PageRequest.of(page, pageSize(size), Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        var logs = auditLogRepository.findAll(AdminAuditLogRepository.matching(
+                adminId, emptyToNull(action), emptyToNull(targetType), targetId, from, to), pageable);
 
+        Map<Long, String> names = adminRepository.findAllById(
+                        logs.getContent().stream().map(AdminAuditLog::getAdminId).distinct().toList())
+                .stream().collect(Collectors.toMap(Admin::getId, Admin::getName));
         return PageResponse.of(logs,
                 log -> new AuditRow(log.getId(), log.getAdminId(), log.getAction(),
                         log.getTargetType(), log.getTargetId(), log.getReason(), log.getIp(),
-                        log.getCreatedAt()));
+                        log.getCreatedAt(), names.get(log.getAdminId()),
+                        log.getBeforeData(), log.getAfterData(), log.getUserAgent()));
     }
 
     private ReviewRow toReviewRow(Review review) {
@@ -404,6 +416,10 @@ public class AdminController {
                 review.getRating(), review.getBody(), review.getVerificationLevel(),
                 review.getVerificationSnapshot(), review.getReportCount(),
                 review.getStatus(), review.getCreatedAt());
+    }
+
+    private static int pageSize(int size) {
+        return Math.clamp(size, 1, MAX_PAGE_SIZE);
     }
 
     private static String emptyToNull(String value) {

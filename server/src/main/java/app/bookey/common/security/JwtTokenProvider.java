@@ -102,4 +102,8 @@ public class JwtTokenProvider {
     public Duration accessTtl() {
         return config.accessTokenTtl();
     }
+
+    public Duration adminTtl() {
+        return config.adminTokenTtl();
+    }
 }

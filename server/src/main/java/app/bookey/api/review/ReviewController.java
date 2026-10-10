@@ -1,5 +1,6 @@
 package app.bookey.api.review;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.club.dto.ClubDtos.ReportRequest;
 import app.bookey.api.review.dto.ReviewDtos.*;
 import app.bookey.common.security.AuthUser;
@@ -30,6 +31,7 @@ public class ReviewController {
 
     @Operation(summary = "리뷰 작성 — 작성 시점 검증 등급이 스냅샷으로 고정된다")
     @PostMapping("/reviews")
+    @WriteBanGuarded
     public ReviewView create(@AuthenticationPrincipal AuthUser user,
                              @Valid @RequestBody CreateReviewRequest request) {
         return reviewService.create(user.id(), request);
@@ -37,6 +39,7 @@ public class ReviewController {
 
     @Operation(summary = "리뷰 수정 — 등급은 재산정하지 않는다")
     @PatchMapping("/reviews/{reviewId}")
+    @WriteBanGuarded
     public ReviewView update(@AuthenticationPrincipal AuthUser user,
                              @PathVariable Long reviewId,
                              @Valid @RequestBody UpdateReviewRequest request) {

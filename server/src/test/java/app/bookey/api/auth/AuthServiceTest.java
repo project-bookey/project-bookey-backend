@@ -1,5 +1,6 @@
 package app.bookey.api.auth;
 
+import app.bookey.common.security.UserAccessRevocations;
 import app.bookey.api.auth.dto.AuthDtos.EmailCodeRequest;
 import app.bookey.api.auth.dto.AuthDtos.EmailCodeResponse;
 import app.bookey.api.auth.dto.AuthDtos.EmailCodeVerifyRequest;
@@ -117,6 +118,7 @@ class AuthServiceTest {
             AUTH, null, null, null, null, null, null, null, null);
     private final JwtTokenProvider tokenProvider = new JwtTokenProvider(properties);
     private final RateLimiter rateLimiter = mock(RateLimiter.class);
+    private final UserAccessRevocations accessRevocations = mock(UserAccessRevocations.class);
 
     /** 코드 발급 상한은 따로 시험한다 — 나머지 시험에서는 늘 통과시킨다. */
     @BeforeEach
@@ -128,7 +130,7 @@ class AuthServiceTest {
         return new AuthService(userRepository, identityRepository, deviceRepository, refreshTokenRepository,
                 opsFlagRepository, emailVerificationRepository, tokenProvider, handleGenerator,
                 properties, verifiers, PLAIN, emailCodeSender, identityVerifier, inquiryRepository,
-                deletedEmailHashRepository, consentService, accountEraser, rateLimiter);
+                deletedEmailHashRepository, consentService, accountEraser, rateLimiter, accessRevocations);
     }
 
     /** IDENTITY 모드 서비스 — 가입이 휴대폰 본인인증을 요구한다. */
@@ -141,7 +143,7 @@ class AuthServiceTest {
                 opsFlagRepository, emailVerificationRepository,
                 new JwtTokenProvider(identityProps), handleGenerator,
                 identityProps, List.of(), PLAIN, emailCodeSender, identityVerifier, inquiryRepository,
-                deletedEmailHashRepository, consentService, accountEraser, rateLimiter);
+                deletedEmailHashRepository, consentService, accountEraser, rateLimiter, accessRevocations);
     }
 
     private User user(long id, String email, String password) {

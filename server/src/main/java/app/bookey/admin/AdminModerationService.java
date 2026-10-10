@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -94,6 +95,11 @@ public class AdminModerationService {
         requireModerator(admin);
         ModerationTicket ticket = ticketRepository.findById(ticketId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("ticketId", ticket.getId());
+        before.put("status", ticket.getStatus().name());
+        before.put("reportCount", ticket.getReportCount());
+        before.put("assignedAdminId", ticket.getAssignedAdminId());
 
         Long authorId = applyResolution(ticket, request.resolution());
 
@@ -109,8 +115,8 @@ public class AdminModerationService {
                 ticket.getSourceType().name(), ticket.getSourceId());
 
         auditService.log(admin, "RESOLVE_MODERATION", ticket.getSourceType().name(),
-                ticket.getSourceId(), request.note(), null,
-                Map.of("resolution", request.resolution().name()));
+                ticket.getSourceId(), request.note(), before,
+                Map.of("resolution", request.resolution().name(), "status", ticket.getStatus().name()));
     }
 
     /** @return 대상 콘텐츠 작성자 id */

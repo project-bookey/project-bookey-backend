@@ -1,5 +1,8 @@
 package app.bookey.domain.admin;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /** 관리자 권한 (§F13). */
 public enum AdminRole {
     SUPER_ADMIN,
@@ -28,7 +31,41 @@ public enum AdminRole {
         return this == SUPER_ADMIN || this == OPERATOR;
     }
 
+    /** 홈 배너·공지 팝업·에디터 픽 — 매일 손보는 운영 콘텐츠라 운영자(OPERATOR)도 다룬다. */
+    public boolean canManageContent() {
+        return this == SUPER_ADMIN || this == OPERATOR;
+    }
+
     public boolean canManageOps() {
         return this == SUPER_ADMIN;
+    }
+
+    public boolean canManageAdmins() {
+        return this == SUPER_ADMIN;
+    }
+
+    /** 전체 회원에게 가는 푸시 — 되돌릴 수 없으니 최고 관리자만. */
+    public boolean canBroadcast() {
+        return this == SUPER_ADMIN;
+    }
+
+    /** 결제·지갑 내역 열람 — 결제 문의에 답해야 하는 CS(SUPPORT)까지. */
+    public boolean canViewPayments() {
+        return this != VIEWER;
+    }
+
+    public List<AdminCapability> capabilities() {
+        List<AdminCapability> caps = new ArrayList<>();
+        if (canModerate()) caps.add(AdminCapability.MODERATE);
+        if (canSanction()) caps.add(AdminCapability.SANCTION);
+        if (canWarn()) caps.add(AdminCapability.WARN);
+        if (canHandleSupport()) caps.add(AdminCapability.HANDLE_SUPPORT);
+        if (canEditBook()) caps.add(AdminCapability.EDIT_BOOK);
+        if (canManageContent()) caps.add(AdminCapability.MANAGE_CONTENT);
+        if (canManageOps()) caps.add(AdminCapability.MANAGE_OPS);
+        if (canManageAdmins()) caps.add(AdminCapability.MANAGE_ADMINS);
+        if (canBroadcast()) caps.add(AdminCapability.BROADCAST);
+        if (canViewPayments()) caps.add(AdminCapability.VIEW_PAYMENTS);
+        return caps;
     }
 }

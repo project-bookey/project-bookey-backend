@@ -7,6 +7,7 @@ import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
+import app.bookey.common.security.UserAccessRevocations;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.admin.OpsFlag;
 import app.bookey.domain.admin.OpsFlagRepository;
@@ -52,6 +53,7 @@ public class AuthService {
     private final ConsentService consentService;
     private final AccountEraser accountEraser;
     private final RateLimiter rateLimiter;
+    private final UserAccessRevocations accessRevocations;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
@@ -71,6 +73,7 @@ public class AuthService {
         identityRepository.deleteAllByUserId(userId);
         deviceRepository.deleteAllByUserId(userId);
         refreshTokenRepository.deleteAllByUserId(userId);
+        accessRevocations.revoke(userId, now);
         // 알림·방문 기록·올린 프로필 사진 파일은 바로 지운다(AccountEraser).
         // 나머지 기록은 30일 유예기간 뒤 AccountDeletionJob이 FK cascade로 삭제한다.
         accountEraser.erase(user);

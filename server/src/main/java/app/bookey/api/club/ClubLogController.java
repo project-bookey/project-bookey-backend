@@ -1,5 +1,6 @@
 package app.bookey.api.club;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.club.ClubLogService.CreateLogCommand;
 import app.bookey.api.club.dto.ClubDtos.*;
 import app.bookey.common.security.AuthUser;
@@ -26,6 +27,7 @@ public class ClubLogController {
 
     @Operation(summary = "조각 남기기 — 사진 한 장(선택) + 한 줄, 쪽에 붙이면 그 쪽까지 읽은 멤버에게만 보인다")
     @PostMapping(value = "/logs", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @WriteBanGuarded
     public ClubPostView create(@AuthenticationPrincipal AuthUser user,
                                @PathVariable Long clubId,
                                @RequestPart(value = "file", required = false) MultipartFile file,
