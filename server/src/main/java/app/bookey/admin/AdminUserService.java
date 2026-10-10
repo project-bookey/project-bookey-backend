@@ -1,5 +1,10 @@
 package app.bookey.admin;
 
+import app.bookey.admin.dto.AdminCsDtos.AdminConsentRow;
+import app.bookey.admin.dto.AdminCsDtos.AdminDeviceRow;
+import app.bookey.admin.dto.AdminCsDtos.AdminIdentityRow;
+import app.bookey.admin.dto.AdminCsDtos.AdminSubscriptionRow;
+import app.bookey.admin.dto.AdminCsDtos.AdminWalletSummary;
 import app.bookey.admin.dto.AdminDtos.*;
 import app.bookey.admin.support.AdminAuditService;
 import app.bookey.admin.support.PrivacyMasker;
@@ -9,7 +14,7 @@ import app.bookey.api.club.ClubService;
 import app.bookey.api.notification.NotificationService;
 import app.bookey.api.notification.NotificationService.NotificationRequest;
 import app.bookey.common.security.AuthAdmin;
-import app.bookey.common.security.UserAccessRevocations;
+import app.bookey.common.security.AccessRevocations;
 import app.bookey.common.support.PageResponse;
 import app.bookey.domain.admin.SanctionPolicy;
 import app.bookey.domain.admin.SanctionType;
@@ -17,6 +22,9 @@ import app.bookey.domain.admin.UserSanction;
 import app.bookey.domain.admin.UserSanctionRepository;
 import app.bookey.domain.club.ClubMemberRepository;
 import app.bookey.domain.club.ClubMemberStatus;
+import app.bookey.domain.legal.ConsentKind;
+import app.bookey.domain.legal.UserConsent;
+import app.bookey.domain.legal.UserConsentRepository;
 import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingSessionRepository;
@@ -26,8 +34,11 @@ import app.bookey.domain.user.RefreshTokenRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserDevice;
 import app.bookey.domain.user.UserDeviceRepository;
+import app.bookey.domain.user.UserIdentityRepository;
 import app.bookey.domain.user.UserRepository;
 import app.bookey.domain.user.UserStatus;
+import app.bookey.domain.wallet.Subscription;
+import app.bookey.domain.wallet.SubscriptionRepository;
 import app.bookey.domain.wallet.Wallet;
 import app.bookey.domain.wallet.WalletRepository;
 import lombok.RequiredArgsConstructor;
@@ -41,9 +52,12 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -67,9 +81,12 @@ public class AdminUserService {
     private final WalletRepository walletRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserDeviceRepository deviceRepository;
-    private final UserAccessRevocations accessRevocations;
+    private final AccessRevocations accessRevocations;
     private final ClubService clubService;
     private final NotificationService notificationService;
+    private final SubscriptionRepository subscriptionRepository;
+    private final UserIdentityRepository identityRepository;
+    private final UserConsentRepository consentRepository;
     private final Clock clock;
 
     @Transactional(readOnly = true)
@@ -105,6 +122,21 @@ public class AdminUserService {
                         s.getEndsAt(), s.getReleasedAt(), s.getAdminId()))
                 .toList();
 
+        var devices = deviceRepository.findAllByUserIdOrderByLastSeenAtDesc(userId);
+        Instant lastSeenAt = devices.stream().map(UserDevice::getLastSeenAt).filter(Objects::nonNull)
+                .max(Comparator.naturalOrder()).orElse(null);
+
+        // 잔액·구독은 결제 열람 권한이 있는 관리자에게만 — 보기 전용(VIEWER)에게는 비워 보낸다.
+        boolean payments = admin.role().canViewPayments();
+        AdminWalletSummary wallet = payments
+                ? walletRepository.findByUserId(userId)
+                        .map(w -> new AdminWalletSummary(w.getBookmarkBalance(), w.getPostcardBalance(), w.getStampBalance()))
+                        .orElse(new AdminWalletSummary(0, 0, 0))
+                : null;
+        AdminSubscriptionRow subscription = payments
+                ? subscriptionRepository.findTopByUserIdOrderByIdDesc(userId).map(AdminUserService::toSubscriptionRow).orElse(null)
+                : null;
+
         return new UserDetailView(
                 user.getId(), user.getHandle(), user.getNickname(),
                 reveal ? user.getEmail() : PrivacyMasker.email(user.getEmail()),
@@ -114,7 +146,58 @@ public class AdminUserService {
                 reviewRepository.findAllByUserIdAndStatusOrderByCreatedAtDesc(userId, "VISIBLE",
                         PageRequest.of(0, 1)).getTotalElements(),
                 clubMemberRepository.findAllByUserIdAndStatus(userId, ClubMemberStatus.ACTIVE).size(),
-                sanctions);
+                sanctions,
+                user.getDeletionRequestedAt(),
+                user.getEmailVerifiedAt(),
+                user.getIdentityVerifiedAt(),
+                user.getPasswordHash() != null,
+                lastSeenAt,
+                wallet,
+                subscription,
+                devices.stream().map(d -> new AdminDeviceRow(d.getPlatform(), d.isPushEnabled(),
+                        tail(d.getPushToken()), d.getLastSeenAt(), d.getCreatedAt())).toList(),
+                identityRepository.findAllByUserId(userId).stream()
+                        .map(i -> new AdminIdentityRow(i.getProvider(), i.getCreatedAt())).toList(),
+                latestConsents(userId));
+    }
+
+    /** 이 회원의 로그인을 모두 끊는다 — 기기 분실·계정 도용 신고 대응. 다음 요청부터 401, 다시 로그인해야 한다. */
+    @Transactional
+    public void revokeSessions(AuthAdmin admin, Long userId, String reason) {
+        if (!admin.canSanction()) {
+            throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
+        }
+        if (reason == null || reason.isBlank()) {
+            throw ApiException.of(ErrorCode.ADMIN_REASON_REQUIRED);
+        }
+        userRepository.findById(userId).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        Instant now = clock.instant();
+        refreshTokenRepository.revokeAllByUserId(userId, now);
+        accessRevocations.revoke(userId, now);
+        auditService.log(admin, "REVOKE_USER_SESSIONS", "USER", userId, reason, null, null);
+    }
+
+    static AdminSubscriptionRow toSubscriptionRow(Subscription s) {
+        return new AdminSubscriptionRow(s.getId(), s.getStore(), s.getProductId(), s.getStatus(),
+                s.getCurrentPeriodStart(), s.getCurrentPeriodEnd(), s.getCreatedAt());
+    }
+
+    /** 동의는 바꿀 때마다 한 줄씩 쌓인다 — 종류별 마지막 줄이 지금 상태다. */
+    private List<AdminConsentRow> latestConsents(Long userId) {
+        Map<ConsentKind, UserConsent> latest = new EnumMap<>(ConsentKind.class);
+        for (UserConsent consent : consentRepository.findAllByUserIdOrderByIdAsc(userId)) {
+            latest.put(consent.getKind(), consent);
+        }
+        return latest.values().stream()
+                .map(c -> new AdminConsentRow(c.getKind(), c.isAgreed(), c.getVersion(), c.getCreatedAt()))
+                .toList();
+    }
+
+    private static String tail(String token) {
+        if (token == null || token.isBlank()) {
+            return null;
+        }
+        return token.length() <= 6 ? token : token.substring(token.length() - 6);
     }
 
     /**

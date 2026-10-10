@@ -1,5 +1,10 @@
 package app.bookey.admin.dto;
 
+import app.bookey.admin.dto.AdminCsDtos.AdminConsentRow;
+import app.bookey.admin.dto.AdminCsDtos.AdminDeviceRow;
+import app.bookey.admin.dto.AdminCsDtos.AdminIdentityRow;
+import app.bookey.admin.dto.AdminCsDtos.AdminSubscriptionRow;
+import app.bookey.admin.dto.AdminCsDtos.AdminWalletSummary;
 import app.bookey.api.inquiry.dto.InquiryDtos.InquiryImageView;
 import app.bookey.domain.admin.*;
 import app.bookey.domain.club.ClubStatus;
@@ -38,6 +43,23 @@ public final class AdminDtos {
     public record AdminProfile(@NotNull Long id, @NotNull String email, @NotNull String name, @NotNull AdminRole role,
                                boolean totpEnabled, Instant lastLoginAt,
                                @NotNull List<AdminCapability> capabilities) {}
+
+    /** 관리자 목록 — 최고 관리자 전용. */
+    public record AdminRow(@NotNull Long id, @NotNull String email, @NotNull String name, @NotNull AdminRole role,
+                           @NotNull AdminStatus status, boolean totpEnabled, Instant lastLoginAt, String lastLoginIp,
+                           @NotNull Instant createdAt) {}
+
+    public record AdminStatusRequest(@NotNull AdminStatus status, @NotBlank @Size(max = 500) String reason) {}
+
+    public record AdminPasswordResetRequest(
+            @NotBlank @Size(min = 12, max = 100, message = "{min}~{max}자로 적어 주세요.") String newPassword,
+            @NotBlank @Size(max = 500) String reason
+    ) {}
+
+    public record AdminPasswordChangeRequest(
+            @NotBlank String currentPassword,
+            @NotBlank @Size(min = 12, max = 100, message = "{min}~{max}자로 적어 주세요.") String newPassword
+    ) {}
 
     /** 2FA 등록용 시크릿. 확인 코드를 보내기 전까지 2FA 는 꺼져 있다. */
     public record TotpSecretView(@NotNull String secret, @NotNull String otpauthUri) {}
@@ -88,7 +110,22 @@ public final class AdminDtos {
             long totalDurationSec,
             long reviewCount,
             long clubCount,
-            List<SanctionRow> sanctions
+            List<SanctionRow> sanctions,
+            /** 탈퇴 신청 시각 — 있으면 30일 뒤 지워질 계정이다. */
+            Instant deletionRequestedAt,
+            Instant emailVerifiedAt,
+            Instant identityVerifiedAt,
+            /** 비밀번호 없이 소셜 로그인만 쓰는 계정이면 false. */
+            boolean hasPassword,
+            /** 기기 중 가장 최근 접속. */
+            Instant lastSeenAt,
+            /** 결제 열람 권한(VIEW_PAYMENTS)이 없으면 null. */
+            AdminWalletSummary wallet,
+            /** 가장 최근 구독. 결제 열람 권한이 없거나 구독한 적 없으면 null. */
+            AdminSubscriptionRow subscription,
+            @NotNull List<AdminDeviceRow> devices,
+            @NotNull List<AdminIdentityRow> identities,
+            @NotNull List<AdminConsentRow> consents
     ) {}
 
     public record SanctionRow(@NotNull Long id, @NotNull SanctionType type, @NotNull String reason, @NotNull Instant startsAt,

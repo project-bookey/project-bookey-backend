@@ -1,6 +1,6 @@
 package app.bookey.api.auth;
 
-import app.bookey.common.security.UserAccessRevocations;
+import app.bookey.common.security.AccessRevocations;
 import app.bookey.api.auth.dto.AuthDtos.EmailCodeRequest;
 import app.bookey.api.auth.dto.AuthDtos.EmailCodeResponse;
 import app.bookey.api.auth.dto.AuthDtos.EmailCodeVerifyRequest;
@@ -118,7 +118,7 @@ class AuthServiceTest {
             AUTH, null, null, null, null, null, null, null, null);
     private final JwtTokenProvider tokenProvider = new JwtTokenProvider(properties);
     private final RateLimiter rateLimiter = mock(RateLimiter.class);
-    private final UserAccessRevocations accessRevocations = mock(UserAccessRevocations.class);
+    private final AccessRevocations accessRevocations = mock(AccessRevocations.class);
 
     /** 코드 발급 상한은 따로 시험한다 — 나머지 시험에서는 늘 통과시킨다. */
     @BeforeEach

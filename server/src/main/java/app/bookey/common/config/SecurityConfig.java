@@ -4,7 +4,7 @@ import app.bookey.common.security.JwtAuthenticationFilter;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.RestAuthenticationEntryPoint;
 import app.bookey.common.security.TokenType;
-import app.bookey.common.security.UserAccessRevocations;
+import app.bookey.common.security.AccessRevocations;
 import app.bookey.domain.admin.AdminRepository;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +37,7 @@ public class SecurityConfig {
 
     private final JwtTokenProvider tokenProvider;
     private final ObjectMapper objectMapper;
-    private final UserAccessRevocations revocations;
+    private final AccessRevocations revocations;
     private final AdminRepository adminRepository;
 
     @Bean

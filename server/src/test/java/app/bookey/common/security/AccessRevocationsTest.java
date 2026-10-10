@@ -14,7 +14,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class UserAccessRevocationsTest {
+class AccessRevocationsTest {
 
     private static final Instant AT = Instant.parse("2026-10-10T03:00:00Z");
 
@@ -22,7 +22,7 @@ class UserAccessRevocationsTest {
     @SuppressWarnings("unchecked")
     private final ValueOperations<String, String> ops = mock(ValueOperations.class);
     private final JwtTokenProvider tokenProvider = mock(JwtTokenProvider.class);
-    private final UserAccessRevocations revocations = new UserAccessRevocations(redis, tokenProvider);
+    private final AccessRevocations revocations = new AccessRevocations(redis, tokenProvider);
 
     @Test
     @DisplayName("폐기 시각을 토큰 수명보다 조금 길게 기록한다")

@@ -5,6 +5,7 @@ import app.bookey.admin.dto.AdminDtos.TotpSecretView;
 import app.bookey.admin.support.AdminAuditService;
 import app.bookey.admin.support.TotpVerifier;
 import app.bookey.common.error.ErrorCode;
+import app.bookey.common.security.AccessRevocations;
 import app.bookey.common.security.AuthAdmin;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.support.RateLimiter;
@@ -36,8 +37,10 @@ class AdminAuthServiceTest {
     private final AdminRepository adminRepository = mock(AdminRepository.class);
     private final TotpVerifier totpVerifier = mock(TotpVerifier.class);
     private final AdminAuditService auditService = mock(AdminAuditService.class);
-    private final AdminAuthService service = new AdminAuthService(adminRepository, mock(PasswordEncoder.class),
-            mock(JwtTokenProvider.class), totpVerifier, auditService, mock(RateLimiter.class));
+    private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
+    private final AccessRevocations revocations = mock(AccessRevocations.class);
+    private final AdminAuthService service = new AdminAuthService(adminRepository, passwordEncoder,
+            mock(JwtTokenProvider.class), totpVerifier, auditService, mock(RateLimiter.class), revocations);
 
     private Admin admin(long id, AdminRole role) {
         Admin admin = new Admin("a" + id + "@bookey.app", "hash", "관리자" + id, role);
@@ -126,5 +129,54 @@ class AdminAuthServiceTest {
         admin(5L, AdminRole.SUPPORT);
         assertThat(service.me(5L).capabilities())
                 .containsExactly(AdminCapability.WARN, AdminCapability.HANDLE_SUPPORT, AdminCapability.VIEW_PAYMENTS);
+    }
+
+    @Test
+    @DisplayName("관리자 정지 — 자기 자신과 마지막 최고 관리자는 정지할 수 없다")
+    void changeStatusGuards() {
+        admin(1L, AdminRole.SUPER_ADMIN);
+        assertThatThrownBy(() -> service.changeStatus(SUPER, 1L, AdminStatus.SUSPENDED, "사유"))
+                .extracting("errorCode").isEqualTo(ErrorCode.ADMIN_SELF_ACTION);
+
+        Admin other = admin(2L, AdminRole.SUPER_ADMIN);
+        when(adminRepository.countByRoleAndStatus(AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE)).thenReturn(1L);
+        assertThatThrownBy(() -> service.changeStatus(SUPER, 2L, AdminStatus.SUSPENDED, "사유"))
+                .extracting("errorCode").isEqualTo(ErrorCode.ADMIN_LAST_SUPER);
+
+        Admin operator = admin(3L, AdminRole.OPERATOR);
+        service.changeStatus(SUPER, 3L, AdminStatus.SUSPENDED, "퇴사");
+        assertThat(operator.isActive()).isFalse();
+        assertThat(other.isActive()).isTrue();
+        verify(auditService).log(eq(SUPER), eq("SUSPEND_ADMIN"), eq("ADMIN"), eq(3L), eq("퇴사"), any(), any());
+    }
+
+    @Test
+    @DisplayName("비밀번호 재설정 — 그 관리자의 기존 로그인을 끊는다. 운영자는 못 한다")
+    void resetPasswordRevokesTokens() {
+        admin(3L, AdminRole.OPERATOR);
+        when(passwordEncoder.encode("new-password-1234")).thenReturn("hashed");
+        AuthAdmin operator = new AuthAdmin(4L, "op@bookey.app", AdminRole.OPERATOR);
+        assertThatThrownBy(() -> service.resetPassword(operator, 3L, "new-password-1234", "분실"))
+                .extracting("errorCode").isEqualTo(ErrorCode.ADMIN_FORBIDDEN);
+
+        service.resetPassword(SUPER, 3L, "new-password-1234", "분실");
+
+        verify(revocations).revokeAdmin(eq(3L), any());
+    }
+
+    @Test
+    @DisplayName("내 비밀번호 변경 — 현재 비밀번호가 틀리면 400(로그아웃되지 않게), 맞으면 바꾸고 지금 로그인도 끊는다")
+    void changeOwnPassword() {
+        Admin me = admin(1L, AdminRole.SUPER_ADMIN);
+        when(passwordEncoder.matches("wrong", "hash")).thenReturn(false);
+        assertThatThrownBy(() -> service.changeOwnPassword(SUPER, "wrong", "new-password-1234"))
+                .extracting("errorCode").isEqualTo(ErrorCode.INVALID_REQUEST);
+
+        when(passwordEncoder.matches("right", "hash")).thenReturn(true);
+        when(passwordEncoder.encode("new-password-1234")).thenReturn("new-hash");
+        service.changeOwnPassword(SUPER, "right", "new-password-1234");
+
+        assertThat(me.getPasswordHash()).isEqualTo("new-hash");
+        verify(revocations).revokeAdmin(eq(1L), any());
     }
 }

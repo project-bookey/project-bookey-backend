@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 
 @Tag(name = "Admin Auth", description = "관리자 인증 — 서비스 계정과 분리")
 @RestController
@@ -60,6 +62,47 @@ public class AdminAuthController {
                                            @PathVariable Long adminId,
                                            @RequestParam AdminRole role) {
         adminAuthService.changeRole(admin, adminId, role);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "관리자 목록 (SUPER_ADMIN)")
+    @GetMapping("/admins")
+    public List<AdminRow> admins(@AuthenticationPrincipal AuthAdmin admin) {
+        return adminAuthService.listAdmins(admin);
+    }
+
+    @Operation(summary = "관리자 정지 · 재활성화 (SUPER_ADMIN) — 자기 자신·마지막 최고 관리자는 불가")
+    @PatchMapping("/admins/{adminId}/status")
+    public ResponseEntity<Void> changeStatus(@AuthenticationPrincipal AuthAdmin admin,
+                                             @PathVariable Long adminId,
+                                             @Valid @RequestBody AdminStatusRequest request) {
+        adminAuthService.changeStatus(admin, adminId, request.status(), request.reason());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "관리자 비밀번호 재설정 (SUPER_ADMIN) — 그 관리자의 기존 로그인은 끊긴다")
+    @PutMapping("/admins/{adminId}/password")
+    public ResponseEntity<Void> resetPassword(@AuthenticationPrincipal AuthAdmin admin,
+                                              @PathVariable Long adminId,
+                                              @Valid @RequestBody AdminPasswordResetRequest request) {
+        adminAuthService.resetPassword(admin, adminId, request.newPassword(), request.reason());
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "관리자 2FA 초기화 (SUPER_ADMIN) — 휴대폰 분실 대응")
+    @DeleteMapping("/admins/{adminId}/totp")
+    public ResponseEntity<Void> resetTotp(@AuthenticationPrincipal AuthAdmin admin,
+                                          @PathVariable Long adminId,
+                                          @RequestParam String reason) {
+        adminAuthService.resetTotp(admin, adminId, reason);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(summary = "내 비밀번호 변경 — 바꾸면 지금 로그인도 끊겨 다시 로그인한다")
+    @PatchMapping("/me/password")
+    public ResponseEntity<Void> changeOwnPassword(@AuthenticationPrincipal AuthAdmin admin,
+                                                  @Valid @RequestBody AdminPasswordChangeRequest request) {
+        adminAuthService.changeOwnPassword(admin, request.currentPassword(), request.newPassword());
         return ResponseEntity.noContent().build();
     }
 

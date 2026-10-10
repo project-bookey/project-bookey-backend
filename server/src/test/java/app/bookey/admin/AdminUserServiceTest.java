@@ -9,12 +9,15 @@ import app.bookey.api.social.SubscriptionService;
 import app.bookey.api.social.WalletService;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.AuthAdmin;
-import app.bookey.common.security.UserAccessRevocations;
+import app.bookey.common.security.AccessRevocations;
 import app.bookey.domain.admin.AdminRole;
 import app.bookey.domain.admin.SanctionType;
 import app.bookey.domain.admin.UserSanction;
 import app.bookey.domain.admin.UserSanctionRepository;
 import app.bookey.domain.club.ClubMemberRepository;
+import app.bookey.domain.legal.ConsentKind;
+import app.bookey.domain.legal.UserConsent;
+import app.bookey.domain.legal.UserConsentRepository;
 import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingSessionRepository;
@@ -24,8 +27,10 @@ import app.bookey.domain.user.RefreshTokenRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserDevice;
 import app.bookey.domain.user.UserDeviceRepository;
+import app.bookey.domain.user.UserIdentityRepository;
 import app.bookey.domain.user.UserRepository;
 import app.bookey.domain.user.UserStatus;
+import app.bookey.domain.wallet.SubscriptionRepository;
 import app.bookey.domain.wallet.WalletRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -62,14 +67,19 @@ class AdminUserServiceTest {
     private final AdminAuditService auditService = mock(AdminAuditService.class);
     private final RefreshTokenRepository refreshTokenRepository = mock(RefreshTokenRepository.class);
     private final UserDeviceRepository deviceRepository = mock(UserDeviceRepository.class);
-    private final UserAccessRevocations revocations = mock(UserAccessRevocations.class);
+    private final AccessRevocations revocations = mock(AccessRevocations.class);
     private final ClubService clubService = mock(ClubService.class);
     private final NotificationService notificationService = mock(NotificationService.class);
+    private final WalletRepository walletRepository = mock(WalletRepository.class);
+    private final SubscriptionRepository subscriptionRepository = mock(SubscriptionRepository.class);
+    private final UserConsentRepository consentRepository = mock(UserConsentRepository.class);
+    private final ReviewRepository reviewRepository = mock(ReviewRepository.class);
     private final AdminUserService service = new AdminUserService(
             userRepository, mock(ReadingRecordRepository.class), mock(ReadingSessionRepository.class),
-            mock(ReviewRepository.class), mock(ClubMemberRepository.class), sanctionRepository, auditService,
-            mock(SubscriptionService.class), mock(WalletService.class), mock(WalletRepository.class),
+            reviewRepository, mock(ClubMemberRepository.class), sanctionRepository, auditService,
+            mock(SubscriptionService.class), mock(WalletService.class), walletRepository,
             refreshTokenRepository, deviceRepository, revocations, clubService, notificationService,
+            subscriptionRepository, mock(UserIdentityRepository.class), consentRepository,
             Clock.fixed(NOW, ZoneOffset.UTC));
 
     /** 저장된 제재 — 서비스가 save 한 것을 그대로 다시 읽어 오도록 흉내 낸다. */
@@ -261,5 +271,63 @@ class AdminUserServiceTest {
         when(sanctionRepository.findAllByUserIdOrderByCreatedAtDesc(11L)).thenReturn(List.of());
         assertThat(service.reconcileStatus(11L)).isFalse();
         assertThat(legacy.getStatus()).isEqualTo(UserStatus.SUSPENDED);
+    }
+
+    @Test
+    @DisplayName("상세 — 보기 전용은 잔액·구독을 받지 않고, 동의는 종류별 마지막 결정만, 푸시 토큰은 끝 6자리만 보인다")
+    void detailMasksPaymentsAndSummarizes() {
+        user(10L, UserStatus.ACTIVE);
+        when(reviewRepository.findAllByUserIdAndStatusOrderByCreatedAtDesc(eq(10L), eq("VISIBLE"), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+        UserDevice device = new UserDevice(10L, DevicePlatform.IOS, "ExponentPushToken[abcdef123456]");
+        when(deviceRepository.findAllByUserIdOrderByLastSeenAtDesc(10L)).thenReturn(List.of(device));
+        UserConsent agreed = consent(ConsentKind.MARKETING, true, 1L);
+        UserConsent withdrawn = consent(ConsentKind.MARKETING, false, 2L);
+        when(consentRepository.findAllByUserIdOrderByIdAsc(10L)).thenReturn(List.of(agreed, withdrawn));
+
+        var viewer = service.detail(VIEWER, 10L, null);
+        assertThat(viewer.wallet()).isNull();
+        assertThat(viewer.subscription()).isNull();
+        assertThat(viewer.devices()).singleElement().extracting(d -> d.tokenTail()).isEqualTo("23456]");
+        assertThat(viewer.consents()).singleElement().satisfies(c -> {
+            assertThat(c.kind()).isEqualTo(ConsentKind.MARKETING);
+            assertThat(c.agreed()).isFalse();
+        });
+
+        var support = service.detail(SUPPORT, 10L, null);
+        assertThat(support.wallet()).isNotNull();
+        assertThat(support.wallet().bookmarks()).isZero();
+    }
+
+    @Test
+    @DisplayName("세션 끊기 — 리프레시 토큰과 남은 access token 을 모두 끊고 사유를 남긴다. CS 담당은 못 한다")
+    void revokeSessions() {
+        user(10L, UserStatus.ACTIVE);
+        assertThatThrownBy(() -> service.revokeSessions(SUPPORT, 10L, "분실"))
+                .extracting("errorCode").isEqualTo(ErrorCode.ADMIN_FORBIDDEN);
+
+        service.revokeSessions(OPERATOR, 10L, "휴대폰 분실 신고");
+
+        verify(refreshTokenRepository).revokeAllByUserId(10L, NOW);
+        verify(revocations).revoke(10L, NOW);
+        verify(auditService).log(eq(OPERATOR), eq("REVOKE_USER_SESSIONS"), eq("USER"), eq(10L), eq("휴대폰 분실 신고"),
+                org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull());
+    }
+
+    private static UserConsent consent(ConsentKind kind, boolean agreed, long id) {
+        try {
+            var constructor = UserConsent.class.getDeclaredConstructor();
+            constructor.setAccessible(true);
+            UserConsent consent = constructor.newInstance();
+            set(consent, "id", id);
+            set(consent, "userId", 10L);
+            set(consent, "kind", kind);
+            set(consent, "agreed", agreed);
+            set(consent, "version", "2026-10-04");
+            set(consent, "createdAt", NOW.minusSeconds(100 - id));
+            return consent;
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

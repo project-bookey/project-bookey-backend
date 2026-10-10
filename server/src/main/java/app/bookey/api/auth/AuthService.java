@@ -7,7 +7,7 @@ import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
-import app.bookey.common.security.UserAccessRevocations;
+import app.bookey.common.security.AccessRevocations;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.admin.OpsFlag;
 import app.bookey.domain.admin.OpsFlagRepository;
@@ -53,7 +53,7 @@ public class AuthService {
     private final ConsentService consentService;
     private final AccountEraser accountEraser;
     private final RateLimiter rateLimiter;
-    private final UserAccessRevocations accessRevocations;
+    private final AccessRevocations accessRevocations;
 
     private final SecureRandom secureRandom = new SecureRandom();
 
