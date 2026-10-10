@@ -1,5 +1,6 @@
 package app.bookey.api.post;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.post.dto.PostDtos.CreatePostCommentRequest;
 import app.bookey.api.post.dto.PostDtos.PostCommentView;
 import app.bookey.common.security.AuthUser;
@@ -32,6 +33,7 @@ public class PostCommentController {
 
     @Operation(summary = "댓글 작성 — parentId 를 주면 답글")
     @PostMapping
+    @WriteBanGuarded
     public PostCommentView create(@AuthenticationPrincipal AuthUser user,
                                   @PathVariable Long postId,
                                   @Valid @RequestBody CreatePostCommentRequest request) {

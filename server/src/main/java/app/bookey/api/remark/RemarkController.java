@@ -1,5 +1,6 @@
 package app.bookey.api.remark;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.remark.dto.RemarkDtos.RemarkRequest;
 import app.bookey.api.remark.dto.RemarkDtos.RemarkView;
 import app.bookey.common.security.AuthUser;
@@ -36,6 +37,7 @@ public class RemarkController {
 
     @Operation(summary = "한 마디 남기기 — 완독·하차한 기록에만, 다시 쓰면 고쳐진다")
     @PutMapping("/library/{recordId}/remark")
+    @WriteBanGuarded
     public RemarkView write(@AuthenticationPrincipal AuthUser user,
                             @PathVariable Long recordId,
                             @Valid @RequestBody RemarkRequest request) {

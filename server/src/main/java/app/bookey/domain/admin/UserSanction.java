@@ -56,6 +56,19 @@ public class UserSanction {
     }
 
     public boolean isActive() {
-        return releasedAt == null && (endsAt == null || endsAt.isAfter(Instant.now()));
+        return isActiveAt(Instant.now());
+    }
+
+    /** 해제되지 않았고 기간이 남았으면 살아 있다. 기간이 없는(null) 제재는 해제할 때까지 이어진다. */
+    public boolean isActiveAt(Instant now) {
+        return releasedAt == null && (endsAt == null || endsAt.isAfter(now));
+    }
+
+    public boolean isReleased() {
+        return releasedAt != null;
+    }
+
+    public boolean belongsTo(Long userId) {
+        return this.userId.equals(userId);
     }
 }

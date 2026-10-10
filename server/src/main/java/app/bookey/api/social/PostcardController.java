@@ -1,5 +1,6 @@
 package app.bookey.api.social;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.social.dto.SocialDtos.PostcardView;
 import app.bookey.api.social.dto.SocialDtos.ReplyPostcardRequest;
 import app.bookey.api.social.dto.SocialDtos.SendPostcardRequest;
@@ -24,6 +25,7 @@ public class PostcardController {
 
     @Operation(summary = "엽서 보내기 — 무료 일 5장(KST 자정 리셋) → 보유 엽서. 우표 동봉 가능")
     @PostMapping
+    @WriteBanGuarded
     public PostcardView send(@AuthenticationPrincipal AuthUser user,
                              @Valid @RequestBody SendPostcardRequest request) {
         return postcardService.send(user.id(), request);
@@ -47,6 +49,7 @@ public class PostcardController {
 
     @Operation(summary = "답장 — 우표 1개 소모(동봉 엽서는 무료). 성립하면 자동 맞팔로우")
     @PostMapping("/{postcardId}/reply")
+    @WriteBanGuarded
     public PostcardView reply(@AuthenticationPrincipal AuthUser user,
                               @PathVariable Long postcardId,
                               @Valid @RequestBody ReplyPostcardRequest request) {

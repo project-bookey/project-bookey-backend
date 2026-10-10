@@ -28,6 +28,8 @@ public enum NotificationType {
     INQUIRY_ANSWERED(false),
     /** 광고성 정보 수신 동의·철회 처리 결과(정보통신망법 제50조 ⑧) */
     CONSENT_RESULT(false),
+    /** 운영 정책에 따른 경고·이용 제한 안내 — 사유와 기간을 알린다(이용약관 제10조 ②) */
+    SANCTION_NOTICE(false),
 
     // 모임 (모임당 일 1건 / 전체 일 3건 — 개인 한도와 별도)
     CLUB_CHECKPOINT_DUE(true),

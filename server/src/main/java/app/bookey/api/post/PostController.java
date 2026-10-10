@@ -1,5 +1,6 @@
 package app.bookey.api.post;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.post.dto.PostDtos.*;
 import app.bookey.common.security.AuthUser;
 import app.bookey.common.support.PageResponse;
@@ -25,6 +26,7 @@ public class PostController {
 
     @Operation(summary = "독후감 작성")
     @PostMapping
+    @WriteBanGuarded
     public PostView create(@AuthenticationPrincipal AuthUser user,
                            @Valid @RequestBody CreatePostRequest request) {
         return postService.create(user.id(), request);
@@ -33,6 +35,7 @@ public class PostController {
     /** 리터럴 {@code images} 는 {@code /{postId}} 보다 먼저 매칭된다. */
     @Operation(summary = "독후감 사진 업로드 — 글에 붙이기 전 임시 저장, 24시간 안에 안 붙이면 삭제")
     @PostMapping(value = "/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @WriteBanGuarded
     public PostImageView upload(@AuthenticationPrincipal AuthUser user,
                                 @RequestPart("file") MultipartFile file) {
         return postImageService.upload(user.id(), file);
@@ -73,6 +76,7 @@ public class PostController {
 
     @Operation(summary = "독후감 수정 · 공개 범위 변경")
     @PatchMapping("/{postId}")
+    @WriteBanGuarded
     public PostView update(@AuthenticationPrincipal AuthUser user,
                            @PathVariable Long postId,
                            @Valid @RequestBody UpdatePostRequest request) {

@@ -34,8 +34,15 @@ public final class AdminDtos {
             AdminProfile admin
     ) {}
 
+    /** capabilities — 관리자 웹이 메뉴·버튼을 가릴 때 쓰는 권한 목록(역할에서 계산). */
     public record AdminProfile(@NotNull Long id, @NotNull String email, @NotNull String name, @NotNull AdminRole role,
-                               boolean totpEnabled, Instant lastLoginAt) {}
+                               boolean totpEnabled, Instant lastLoginAt,
+                               @NotNull List<AdminCapability> capabilities) {}
+
+    /** 2FA 등록용 시크릿. 확인 코드를 보내기 전까지 2FA 는 꺼져 있다. */
+    public record TotpSecretView(@NotNull String secret, @NotNull String otpauthUri) {}
+
+    public record TotpConfirmRequest(@NotBlank @Pattern(regexp = "\\d{6}", message = "6자리 숫자를 입력하세요.") String code) {}
 
     public record CreateAdminRequest(
             @NotBlank @Email String email,
@@ -239,5 +246,10 @@ public final class AdminDtos {
 
     // ── 감사 로그 ───────────────────────────────────────────
     public record AuditRow(@NotNull Long id, @NotNull Long adminId, @NotNull String action, String targetType, Long targetId,
-                           String reason, String ip, @NotNull Instant createdAt) {}
+                           String reason, String ip, @NotNull Instant createdAt,
+                           /** 처리한 관리자 이름 — 계정이 지워졌으면 null. */
+                           String adminName,
+                           Map<String, Object> beforeData,
+                           Map<String, Object> afterData,
+                           String userAgent) {}
 }

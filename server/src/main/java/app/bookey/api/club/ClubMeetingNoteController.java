@@ -1,5 +1,6 @@
 package app.bookey.api.club;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.club.dto.ClubMeetingNoteDtos.*;
 import app.bookey.common.security.AuthUser;
 import app.bookey.common.support.PageResponse;
@@ -43,6 +44,7 @@ public class ClubMeetingNoteController {
 
     @Operation(summary = "모임 노트 연산 적용 — 요소 id 기준 upsert·delete. 실시간 연결이 끊겼을 때 쓴다")
     @PostMapping("/meetings/{meetingId}/note/ops")
+    @WriteBanGuarded
     public MeetingNoteOpsResult applyMeetingNoteOps(@AuthenticationPrincipal AuthUser user,
                                          @PathVariable Long clubId,
                                          @PathVariable Long meetingId,
@@ -60,6 +62,7 @@ public class ClubMeetingNoteController {
 
     @Operation(summary = "모임 노트 사진 올리기 — 응답 id 를 photo 요소의 imageId 로 넣어 보내야 24시간 뒤 정리되지 않는다")
     @PostMapping(value = "/meetings/{meetingId}/note/images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @WriteBanGuarded
     public MeetingNoteImageView uploadMeetingNoteImage(@AuthenticationPrincipal AuthUser user,
                                             @PathVariable Long clubId,
                                             @PathVariable Long meetingId,

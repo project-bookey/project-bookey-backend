@@ -1,5 +1,6 @@
 package app.bookey.api.club;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.club.dto.ClubDtos.*;
 import app.bookey.common.security.AuthUser;
 import app.bookey.common.support.PageResponse;
@@ -31,6 +32,7 @@ public class ClubController {
 
     @Operation(summary = "모임 만들기 — 초대 코드 자동 발급")
     @PostMapping
+    @WriteBanGuarded
     public ClubHomeView create(@AuthenticationPrincipal AuthUser user,
                                @Valid @RequestBody CreateClubRequest request) {
         return clubService.create(user.id(), request);
@@ -91,6 +93,7 @@ public class ClubController {
 
     @Operation(summary = "모임 정보 수정 (호스트)")
     @PatchMapping("/{clubId}")
+    @WriteBanGuarded
     public ClubHomeView update(@AuthenticationPrincipal AuthUser user,
                                @PathVariable Long clubId,
                                @Valid @RequestBody UpdateClubRequest request) {
@@ -107,6 +110,7 @@ public class ClubController {
 
     @Operation(summary = "클럽 배경 사진 올리기 (호스트) — 클럽 머리에 깔린다. 이전 사진은 지운다")
     @PostMapping(value = "/{clubId}/background", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @WriteBanGuarded
     public ClubHomeView uploadBackground(@AuthenticationPrincipal AuthUser user,
                                          @PathVariable Long clubId,
                                          @RequestPart("file") org.springframework.web.multipart.MultipartFile file) {
@@ -195,14 +199,17 @@ public class ClubController {
     @GetMapping("/{clubId}/chat/messages")
     public app.bookey.api.club.dto.ClubCommunityDtos.ChatMessagesView chatMessages(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@RequestParam(required=false) Long beforeId){return communityService.chatMessages(user.id(),clubId,beforeId);}
     @PostMapping("/{clubId}/chat/messages")
+    @WriteBanGuarded
     public app.bookey.api.club.dto.ClubCommunityDtos.ChatMessageView sendChat(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@Valid @RequestBody app.bookey.api.club.dto.ClubCommunityDtos.SendChatRequest request){return communityService.send(user.id(),clubId,request);}
     @GetMapping("/{clubId}/meetings")
     public java.util.List<app.bookey.api.club.dto.ClubCommunityDtos.MeetingView> meetings(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId){return communityService.meetingList(user.id(),clubId);}
     @PostMapping("/{clubId}/meetings")
+    @WriteBanGuarded
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView createMeeting(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@Valid @RequestBody app.bookey.api.club.dto.ClubCommunityDtos.UpsertMeetingRequest request){return communityService.createMeeting(user.id(),clubId,request);}
     @GetMapping("/{clubId}/meetings/{meetingId}")
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView meetingDetail(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){return communityService.meetingDetail(user.id(),clubId,meetingId);}
     @PutMapping("/{clubId}/meetings/{meetingId}")
+    @WriteBanGuarded
     public app.bookey.api.club.dto.ClubCommunityDtos.MeetingView updateMeeting(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId,@Valid @RequestBody app.bookey.api.club.dto.ClubCommunityDtos.UpsertMeetingRequest request){return communityService.updateMeeting(user.id(),clubId,meetingId,request);}
     @DeleteMapping("/{clubId}/meetings/{meetingId}")
     public ResponseEntity<Void> cancelMeeting(@AuthenticationPrincipal AuthUser user,@PathVariable Long clubId,@PathVariable Long meetingId){communityService.cancelMeeting(user.id(),clubId,meetingId);return ResponseEntity.noContent().build();}

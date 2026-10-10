@@ -1,5 +1,6 @@
 package app.bookey.api.review;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.review.dto.ReviewDtos.CreateReviewCommentRequest;
 import app.bookey.api.review.dto.ReviewDtos.ReviewCommentView;
 import app.bookey.common.security.AuthUser;
@@ -49,6 +50,7 @@ public class ReviewCommentController {
 
     @Operation(summary = "댓글 작성 — parentId 를 주면 답글(1단계)")
     @PostMapping
+    @WriteBanGuarded
     public ReviewCommentView create(@AuthenticationPrincipal AuthUser user,
                                     @PathVariable Long reviewId,
                                     @Valid @RequestBody CreateReviewCommentRequest request) {

@@ -1,5 +1,6 @@
 package app.bookey.api.club;
 
+import app.bookey.api.auth.UserWriteGuard;
 import app.bookey.api.club.ClubMeetingNoteService.MeetingNoteAccess;
 import app.bookey.api.club.MeetingNoteRelay.Peer;
 import app.bookey.api.club.dto.ClubMeetingNoteDtos.MeetingNoteOpsResult;
@@ -7,6 +8,7 @@ import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
+import app.bookey.common.security.UserAccessRevocations;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -57,6 +59,8 @@ public class MeetingNoteSocketHandler extends TextWebSocketHandler {
     private static final String ATTR = "meetingNote";
 
     private final ClubMeetingNoteService noteService;
+    private final UserWriteGuard writeGuard;
+    private final UserAccessRevocations revocations;
     private final MeetingNoteRelay relay;
     private final JwtTokenProvider tokenProvider;
     private final ObjectMapper objectMapper;
@@ -164,7 +168,11 @@ public class MeetingNoteSocketHandler extends TextWebSocketHandler {
         Long userId;
         try {
             String token = msg.get("token") instanceof String t ? t : "";
-            userId = tokenProvider.subjectId(tokenProvider.parse(token, TokenType.USER_ACCESS));
+            var claims = tokenProvider.parse(token, TokenType.USER_ACCESS);
+            userId = tokenProvider.subjectId(claims);
+            if (claims.getIssuedAt() != null && revocations.isRevoked(userId, claims.getIssuedAt().toInstant())) {
+                throw ApiException.of(ErrorCode.INVALID_TOKEN);
+            }
             access = noteService.access(userId, state.clubId, state.meetingId);
         } catch (ApiException e) {
             // 만료 토큰이면 앱이 갱신한 뒤 다시 연결한다 — 코드를 먼저 알려 주고 닫는다.
@@ -197,6 +205,7 @@ public class MeetingNoteSocketHandler extends TextWebSocketHandler {
             return;
         }
         try {
+            writeGuard.requireWritable(state.userId);
             MeetingNoteOpsResult result = noteService.applyOps(state.userId, state.clubId, state.meetingId, ops, state.clientId);
             Map<String, Object> ack = new LinkedHashMap<>();
             ack.put("type", "ack");

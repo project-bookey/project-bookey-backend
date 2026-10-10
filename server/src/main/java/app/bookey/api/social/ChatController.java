@@ -1,5 +1,6 @@
 package app.bookey.api.social;
 
+import app.bookey.api.auth.WriteBanGuarded;
 import app.bookey.api.social.dto.ChatDtos.ChatMessageView;
 import app.bookey.api.social.dto.ChatDtos.ChatMessagesView;
 import app.bookey.api.social.dto.ChatDtos.ChatSummaryView;
@@ -26,6 +27,7 @@ public class ChatController {
 
     @Operation(summary = "채팅방 열기 — 맞팔로우인 상대만, 이미 있으면 그 방")
     @PostMapping
+    @WriteBanGuarded
     public ChatSummaryView open(@AuthenticationPrincipal AuthUser user,
                                 @Valid @RequestBody OpenChatRequest request) {
         return chatService.open(user.id(), request.userId());
@@ -49,6 +51,7 @@ public class ChatController {
 
     @Operation(summary = "메시지 보내기 — 언팔로우된 상대에게는 보낼 수 없다")
     @PostMapping("/{chatId}/messages")
+    @WriteBanGuarded
     public ChatMessageView send(@AuthenticationPrincipal AuthUser user,
                                 @PathVariable Long chatId,
                                 @Valid @RequestBody SendMessageRequest request) {

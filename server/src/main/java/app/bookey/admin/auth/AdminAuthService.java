@@ -11,11 +11,14 @@ import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.admin.Admin;
 import app.bookey.domain.admin.AdminRepository;
 import app.bookey.domain.admin.AdminRole;
+import app.bookey.domain.admin.AdminStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
 
@@ -62,7 +65,7 @@ public class AdminAuthService {
         auditService.log(new AuthAdmin(admin.getId(), admin.getEmail(), admin.getRole()),
                 "LOGIN", "ADMIN", admin.getId(), null, null, Map.of("ip", ip));
 
-        return new LoginResponse(token, 30 * 60L, false, toProfile(admin));
+        return new LoginResponse(token, tokenProvider.adminTtl().toSeconds(), false, toProfile(admin));
     }
 
     @Transactional(readOnly = true)
@@ -71,21 +74,46 @@ public class AdminAuthService {
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)));
     }
 
-    /** 2FA 설정 — 시크릿을 발급하고 코드 확인 후 활성화한다. */
+    /**
+     * 2FA 등록 1단계 — 시크릿을 발급한다. 아직 켜지 않으므로 등록을 마치지 못해도 로그인이 막히지 않는다.
+     * 이미 켜진 계정은 시크릿을 바꿀 수 없다 — 탈취한 토큰으로 2FA 를 가로채지 못하게. 바꾸려면 최고 관리자가 초기화한다.
+     */
     @Transactional
-    public Map<String, String> issueTotpSecret(Long adminId) {
-        Admin admin = adminRepository.findById(adminId)
+    public TotpSecretView prepareTotp(AuthAdmin actor) {
+        Admin admin = adminRepository.findById(actor.id())
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        if (admin.isTotpEnabled()) {
+            throw ApiException.of(ErrorCode.ADMIN_TOTP_ALREADY_ENABLED);
+        }
         String secret = totpVerifier.generateSecret();
-        admin.enableTotp(secret);
-        String uri = "otpauth://totp/bookey-admin:" + admin.getEmail()
-                + "?secret=" + secret + "&issuer=bookey";
-        return Map.of("secret", secret, "otpauthUri", uri);
+        admin.prepareTotp(secret);
+        String label = URLEncoder.encode("bookey-admin:" + admin.getEmail(), StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        return new TotpSecretView(secret, "otpauth://totp/" + label + "?secret=" + secret + "&issuer=bookey");
+    }
+
+    /** 2FA 등록 2단계 — 인증 앱의 코드가 맞아야 켠다. */
+    @Transactional
+    public AdminProfile confirmTotp(AuthAdmin actor, String code) {
+        Admin admin = adminRepository.findById(actor.id())
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        if (admin.isTotpEnabled()) {
+            throw ApiException.of(ErrorCode.ADMIN_TOTP_ALREADY_ENABLED);
+        }
+        if (admin.getTotpSecret() == null) {
+            throw ApiException.of(ErrorCode.ADMIN_TOTP_NOT_PREPARED);
+        }
+        if (!totpVerifier.verify(admin.getTotpSecret(), code)) {
+            throw ApiException.of(ErrorCode.ADMIN_TOTP_CODE_MISMATCH);
+        }
+        admin.confirmTotp();
+        auditService.log(actor, "ENABLE_TOTP", "ADMIN", admin.getId(), null, null, null);
+        return toProfile(admin);
     }
 
     @Transactional
     public AdminProfile createAdmin(AuthAdmin actor, CreateAdminRequest request) {
-        if (!actor.isSuper()) {
+        if (!actor.role().canManageAdmins()) {
             throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
         }
         if (adminRepository.existsByEmail(request.email())) {
@@ -103,12 +131,19 @@ public class AdminAuthService {
 
     @Transactional
     public void changeRole(AuthAdmin actor, Long adminId, AdminRole role) {
-        if (!actor.isSuper()) {
+        if (!actor.role().canManageAdmins()) {
             throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
+        }
+        if (actor.id().equals(adminId)) {
+            throw ApiException.of(ErrorCode.ADMIN_SELF_ACTION);
         }
         Admin admin = adminRepository.findById(adminId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         AdminRole before = admin.getRole();
+        if (before == AdminRole.SUPER_ADMIN && role != AdminRole.SUPER_ADMIN && admin.isActive()
+                && adminRepository.countByRoleAndStatus(AdminRole.SUPER_ADMIN, AdminStatus.ACTIVE) <= 1) {
+            throw ApiException.of(ErrorCode.ADMIN_LAST_SUPER);
+        }
         admin.changeRole(role);
         auditService.log(actor, "CHANGE_ADMIN_ROLE", "ADMIN", adminId, null,
                 Map.of("role", before.name()), Map.of("role", role.name()));
@@ -116,6 +151,7 @@ public class AdminAuthService {
 
     private AdminProfile toProfile(Admin admin) {
         return new AdminProfile(admin.getId(), admin.getEmail(), admin.getName(),
-                admin.getRole(), admin.isTotpEnabled(), admin.getLastLoginAt());
+                admin.getRole(), admin.isTotpEnabled(), admin.getLastLoginAt(),
+                admin.getRole().capabilities());
     }
 }

@@ -119,6 +119,27 @@ public class NotificationService {
         return Optional.of(notificationRepository.save(notification));
     }
 
+    /**
+     * 운영 안내 — 로그인이 막힌 회원(정지)에게도 남긴다. 제재 사유를 알려야 하는데,
+     * {@link #inApp} 은 로그인할 수 없는 회원을 건너뛰기 때문이다. 탈퇴를 신청한 회원은 제외한다.
+     */
+    @Transactional
+    public Optional<Notification> notice(NotificationRequest request) {
+        User user = userRepository.findById(request.userId()).orElse(null);
+        if (user == null || user.getDeletionRequestedAt() != null) {
+            return Optional.empty();
+        }
+        Notification notification = Notification.builder()
+                .userId(user.getId())
+                .type(request.type())
+                .title(request.title())
+                .body(request.body())
+                .payload(request.payload())
+                .scheduledAt(Instant.now())
+                .build();
+        return Optional.of(notificationRepository.save(notification));
+    }
+
     private boolean isPushEnabledGlobally() {
         return opsFlagRepository.findById(OpsFlag.PUSH_ENABLED)
                 .map(OpsFlag::isEnabled)

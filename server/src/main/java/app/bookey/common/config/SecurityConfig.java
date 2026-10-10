@@ -4,6 +4,8 @@ import app.bookey.common.security.JwtAuthenticationFilter;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.RestAuthenticationEntryPoint;
 import app.bookey.common.security.TokenType;
+import app.bookey.common.security.UserAccessRevocations;
+import app.bookey.domain.admin.AdminRepository;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -35,6 +37,8 @@ public class SecurityConfig {
 
     private final JwtTokenProvider tokenProvider;
     private final ObjectMapper objectMapper;
+    private final UserAccessRevocations revocations;
+    private final AdminRepository adminRepository;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -51,13 +55,14 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(adminCorsSource()))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/admin/v1/auth/login", "/admin/v1/auth/totp").permitAll()
+                        .requestMatchers("/admin/v1/auth/login").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(e -> e
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler(entryPoint))
                 .addFilterBefore(
-                        new JwtAuthenticationFilter(tokenProvider, objectMapper, TokenType.ADMIN_ACCESS),
+                        new JwtAuthenticationFilter(tokenProvider, objectMapper, TokenType.ADMIN_ACCESS,
+                                revocations, adminRepository),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
@@ -103,7 +108,8 @@ public class SecurityConfig {
                         .authenticationEntryPoint(entryPoint)
                         .accessDeniedHandler(entryPoint))
                 .addFilterBefore(
-                        new JwtAuthenticationFilter(tokenProvider, objectMapper, TokenType.USER_ACCESS),
+                        new JwtAuthenticationFilter(tokenProvider, objectMapper, TokenType.USER_ACCESS,
+                                revocations, adminRepository),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

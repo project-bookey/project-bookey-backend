@@ -61,9 +61,20 @@ public class Admin extends BaseTimeEntity {
         this.lastLoginIp = ip;
     }
 
-    public void enableTotp(String secret) {
+    /** 2FA 등록 시작 — 시크릿만 저장하고 아직 켜지 않는다. 코드를 확인해야 켜진다({@link #confirmTotp}). */
+    public void prepareTotp(String secret) {
         this.totpSecret = secret;
+        this.totpEnabled = false;
+    }
+
+    public void confirmTotp() {
         this.totpEnabled = true;
+    }
+
+    /** 기기를 잃어버렸을 때 — 최고 관리자가 끄고, 본인이 다시 등록한다. */
+    public void resetTotp() {
+        this.totpSecret = null;
+        this.totpEnabled = false;
     }
 
     public void changeRole(AdminRole role) {

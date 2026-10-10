@@ -29,6 +29,15 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     List<User> findAllByStatusAndDeletionRequestedAtLessThanEqual(UserStatus status, Instant cutoff);
 
+    /** 쓰기정지 확인처럼 상태만 필요할 때 — 회원 행 전체를 읽지 않는다. */
+    @Query("select u.status from User u where u.id = :id")
+    Optional<UserStatus> findStatusById(@Param("id") Long id);
+
+    /** 제재로 묶인 회원(탈퇴 신청자 제외) — 만료된 제재를 풀어 주는 잡이 훑는다. */
+    List<User> findAllByStatusInAndDeletionRequestedAtIsNull(List<UserStatus> statuses);
+
+    long countByStatusNot(UserStatus status);
+
     /** 탈퇴를 요청한 계정 — 아직 30일이 지나지 않아 행이 남아 있는 사람까지. */
     List<User> findAllByStatusAndDeletionRequestedAtIsNotNull(UserStatus status);
 

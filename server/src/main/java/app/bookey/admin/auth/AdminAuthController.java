@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
 
 @Tag(name = "Admin Auth", description = "관리자 인증 — 서비스 계정과 분리")
 @RestController
@@ -35,10 +34,17 @@ public class AdminAuthController {
         return adminAuthService.me(admin.id());
     }
 
-    @Operation(summary = "2FA 시크릿 발급")
+    @Operation(summary = "2FA 등록 1단계 — 시크릿 발급(아직 켜지지 않음). 이미 켜져 있으면 409")
     @PostMapping("/totp")
-    public Map<String, String> issueTotp(@AuthenticationPrincipal AuthAdmin admin) {
-        return adminAuthService.issueTotpSecret(admin.id());
+    public TotpSecretView prepareTotp(@AuthenticationPrincipal AuthAdmin admin) {
+        return adminAuthService.prepareTotp(admin);
+    }
+
+    @Operation(summary = "2FA 등록 2단계 — 인증 앱 코드를 확인하고 켠다")
+    @PostMapping("/totp/confirm")
+    public AdminProfile confirmTotp(@AuthenticationPrincipal AuthAdmin admin,
+                                    @Valid @RequestBody TotpConfirmRequest request) {
+        return adminAuthService.confirmTotp(admin, request.code());
     }
 
     @Operation(summary = "관리자 계정 생성 (SUPER_ADMIN)")
