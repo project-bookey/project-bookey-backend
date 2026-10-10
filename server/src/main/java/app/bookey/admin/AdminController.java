@@ -1,5 +1,6 @@
 package app.bookey.admin;
 
+import app.bookey.admin.dto.AdminCatalogDtos.ClubCodeView;
 import app.bookey.admin.dto.AdminDtos.*;
 import app.bookey.admin.support.AdminAuditService;
 import app.bookey.common.error.ApiException;
@@ -72,6 +73,7 @@ public class AdminController {
     private final OpsFlagRepository opsFlagRepository;
     private final InquiryRepository inquiryRepository;
     private final AdminRepository adminRepository;
+    private final app.bookey.api.club.ClubService clubService;
 
     // ── 대시보드 ─────────────────────────────────────────────
     @Operation(summary = "대시보드 KPI")
@@ -174,9 +176,7 @@ public class AdminController {
                                        @RequestParam(defaultValue = "20") int size) {
         return PageResponse.of(
                 bookRepository.searchForAdmin(emptyToNull(keyword), PageRequest.of(page, pageSize(size))),
-                book -> new BookRow(book.getId(), book.getIsbn13(), book.getTitle(),
-                        book.getAuthor(), book.getPublisher(), book.getTotalPages(),
-                        book.getSource().name(), book.isUserCreated(), book.getCreatedAt()));
+                AdminCatalogService::toRow);
     }
 
     @Operation(summary = "도서 메타 수정 — 페이지 수 보정 등")
@@ -301,7 +301,7 @@ public class AdminController {
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_FOUND));
         ClubStatus before = club.getStatus();
-        club.end();
+        clubService.adminEnd(clubId);   // 호스트가 끝낸 것과 같은 종료 기록(ClubEvent)을 남긴다
         auditService.log(admin, "FORCE_END_CLUB", "CLUB", clubId, request.reason(),
                 Map.of("status", before.name(), "name", club.getName()),
                 Map.of("status", club.getStatus().name()));
@@ -311,7 +311,7 @@ public class AdminController {
     @Operation(summary = "초대 코드 강제 회전")
     @PostMapping("/clubs/{clubId}/rotate-code")
     @Transactional
-    public Map<String, String> rotateClubCode(@AuthenticationPrincipal AuthAdmin admin,
+    public ClubCodeView rotateClubCode(@AuthenticationPrincipal AuthAdmin admin,
                                               @PathVariable Long clubId,
                                               @Valid @RequestBody ClubActionRequest request) {
         if (!admin.canModerate()) {
@@ -327,7 +327,7 @@ public class AdminController {
         club.rotateJoinCode(code);
         auditService.log(admin, "ROTATE_CLUB_CODE", "CLUB", clubId, request.reason(),
                 Map.of("joinCode", String.valueOf(previous)), Map.of("joinCode", code));
-        return Map.of("joinCode", code);
+        return new ClubCodeView(code);
     }
 
     @Operation(summary = "호스트 승계 — 호스트 장기 미접속 대응")
@@ -342,14 +342,9 @@ public class AdminController {
         }
         Club club = clubRepository.findById(clubId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_FOUND));
-        ClubMember newHost = clubMemberRepository.findByClubIdAndUserId(clubId, newOwnerId)
-                .filter(ClubMember::isActive)
-                .orElseThrow(() -> ApiException.of(ErrorCode.CLUB_NOT_MEMBER));
         Long previousOwnerId = club.getOwnerId();
-        clubMemberRepository.findByClubIdAndUserId(clubId, previousOwnerId)
-                .ifPresent(old -> old.changeRole(ClubRole.MEMBER));
-        newHost.changeRole(ClubRole.HOST);
-        club.transferHost(newOwnerId);
+        // 정지·탈퇴 회원에게는 넘기지 않는다(ClubService 가 검사)
+        clubService.adminTransferHost(clubId, newOwnerId);
 
         auditService.log(admin, "TRANSFER_CLUB_HOST", "CLUB", clubId, request.reason(),
                 Map.of("ownerId", previousOwnerId), Map.of("ownerId", newOwnerId));

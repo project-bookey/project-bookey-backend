@@ -463,6 +463,55 @@ public class ClubService {
         member.updateSharing(request.shareProgress(), request.allowNudge());
     }
 
+    // ────────────────────────────── 관리자 ──────────────────────────────
+
+    /**
+     * 관리자 강퇴 — 호스트와 같은 정리(채팅 이용권·읽음 위치·다가올 모임 참여)를 한다.
+     * 호스트는 내보낼 수 없다 — 먼저 다른 멤버에게 넘긴다.
+     */
+    @Transactional
+    public void adminKick(Long clubId, Long userId, String reason) {
+        Club club = getClub(clubId);
+        if (club.isHost(userId)) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "호스트는 내보낼 수 없습니다. 먼저 다른 멤버에게 호스트를 넘기세요.");
+        }
+        ClubMember target = activeMember(clubId, userId);
+        target.kick(reason);
+        club.leaveMember();
+        forgetMemberTraces(clubId, userId);
+        eventRepository.save(new ClubEvent(clubId, userId, ClubEventType.KICKED,
+                Map.of("reason", reason, "byAdmin", true)));
+    }
+
+    /** 관리자 호스트 승계 — 호스트 장기 미접속 대응. 로그인할 수 없는(정지·탈퇴) 회원에게는 넘기지 않는다. */
+    @Transactional
+    public void adminTransferHost(Long clubId, Long newOwnerId) {
+        Club club = getClub(clubId);
+        if (club.isHost(newOwnerId)) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "이미 호스트인 멤버입니다.");
+        }
+        boolean usable = userRepository.findStatusById(newOwnerId).map(UserStatus::canLogin).orElse(false);
+        if (!usable) {
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "이용이 정지됐거나 탈퇴한 회원에게는 호스트를 넘길 수 없습니다.");
+        }
+        ClubMember newHost = activeMember(clubId, newOwnerId);
+        memberRepository.findByClubIdAndUserId(clubId, club.getOwnerId())
+                .ifPresent(old -> old.changeRole(ClubRole.MEMBER));
+        newHost.changeRole(ClubRole.HOST);
+        club.transferHost(newOwnerId);
+    }
+
+    /** 관리자 강제 종료 — 호스트가 끝낸 것과 같은 종료 기록을 남긴다(관리자 표시). */
+    @Transactional
+    public void adminEnd(Long clubId) {
+        Club club = getClub(clubId);
+        if (club.getStatus().isOver()) {
+            throw new ApiException(ErrorCode.CONFLICT, "이미 끝난 모임입니다.");
+        }
+        club.end();
+        eventRepository.save(new ClubEvent(clubId, club.getOwnerId(), ClubEventType.ENDED, Map.of("byAdmin", true)));
+    }
+
     @Transactional
     public void end(Long userId, Long clubId) {
         Club club = getClub(clubId);

@@ -7,10 +7,12 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -102,6 +104,16 @@ public class GlobalExceptionHandler {
         log.debug("Unsupported media type - {}", e.getMessage());
         return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
                 .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "처리할 수 없는 형식이에요."));
+    }
+
+    /** 필수 쿼리 파라미터가 빠졌거나 타입이 맞지 않는 경우(?reason 누락, ?userId=abc) — 클라이언트 실수라 400 으로 맞춘다. */
+    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ErrorResponse> handleBadParameter(Exception e) {
+        log.debug("Bad request parameter - {}", e.getMessage());
+        String name = e instanceof MissingServletRequestParameterException m ? m.getParameterName()
+                : ((MethodArgumentTypeMismatchException) e).getName();
+        return ResponseEntity.status(ErrorCode.INVALID_REQUEST.getStatus())
+                .body(ErrorResponse.of(ErrorCode.INVALID_REQUEST, "요청 값(" + name + ")을 확인해 주세요."));
     }
 
     @ExceptionHandler(Exception.class)
