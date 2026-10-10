@@ -37,6 +37,15 @@ public final class AuthDtos {
             @Size(max = 20) String marketingVersion
     ) {}
 
+    /** 카카오 로그인 교환 — code 는 서버가 앱 주소(bookey://auth/kakao)에 붙여 준 교환 코드, codeVerifier 는 authorize 때 보낸 code_challenge 의 원문. */
+    public record KakaoTokenRequest(
+            @NotBlank @Size(max = 128) String code,
+            @NotBlank @Size(min = 43, max = 128) String codeVerifier
+    ) {}
+
+    /** 카카오 액세스 토큰 — 앱은 이 값을 SocialLoginRequest.token(provider=KAKAO)으로 보낸다. */
+    public record KakaoTokenResponse(@NotNull String accessToken) {}
+
     public record RefreshRequest(@NotBlank String refreshToken) {}
 
     /** 인증 코드 발급 요청 — 가입 코드와 비밀번호 재설정 코드가 같은 모양을 쓴다. */

@@ -101,6 +101,10 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 | `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` | 운영 최초 관리자 생성용. 관리자 계정이 0명일 때만 사용 |
 | `GOOGLE_OAUTH_CLIENT_IDS` | 허용할 Google OAuth 클라이언트 ID 목록(쉼표 구분) |
 | `APPLE_OAUTH_AUDIENCES` | 허용할 Apple Sign in audience 목록(기본 `app.bookey.mobile`) |
+| `KAKAO_LOGIN_REST_KEY` / `KAKAO_LOGIN_CLIENT_SECRET` | 카카오 로그인용 REST API 키와 그 클라이언트 시크릿 — 서버가 콜백에서 코드를 토큰으로 바꾼다. 키나 `KAKAO_APP_ID` 가 없으면 앱에 '쓸 수 없음'을 돌려준다 |
+| `KAKAO_LOGIN_REDIRECT_URI` | 카카오 콘솔에 등록한 리다이렉트 URI(기본 `https://api.bookey.site/api/v1/auth/kakao/callback`, 글자까지 같아야 한다). EC2 compose 는 넘기지 않아 운영은 늘 기본값 — 로컬·다른 도메인에서만 바꾼다 |
+| `KAKAO_LOGIN_APP_REDIRECTS` | 로그인 결과를 돌려보낼 앱 주소(정확히 일치, 쉼표 구분, 기본 `bookey://auth/kakao`). 운영은 기본값 |
+| `KAKAO_APP_ID` | 카카오 앱 ID — 소셜 로그인에 온 카카오 토큰이 우리 앱 것인지 확인한다. 없으면 카카오 로그인을 받지 않는다 |
 | `TOSS_CLIENT_KEY` / `TOSS_SECRET_KEY` | Toss Payments 결제 연동 |
 | `TOSS_SUCCESS_URL` / `TOSS_FAIL_URL` | Toss 결제 완료/실패 딥링크 또는 웹 URL |
 | `SUBSCRIPTION_PRODUCT_ID` | App Store/Google Play 공통 구독 상품 ID |
@@ -247,6 +251,7 @@ GitHub Repository Secrets:
 | `EC2_USER` | 예: `ec2-user` |
 | `EC2_SSH_KEY` | EC2 접속용 private key 전체 내용 |
 | `KAKAO_REST_KEY` / `ALADIN_TTB_KEY` / `GOOGLE_BOOKS_KEY` / `YES24_API_KEY` | 도서 검색 API 키 |
+| `KAKAO_LOGIN_REST_KEY` / `KAKAO_LOGIN_CLIENT_SECRET` / `KAKAO_APP_ID` | 카카오 로그인(선택 — 없으면 배포가 건너뛰고 카카오 로그인은 '쓸 수 없음') |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_USERNAME` / `SMTP_PASSWORD` | 가입 인증 메일 SMTP 설정 |
 | `MAIL_FROM` | 가입 인증 메일 발신 주소 |
 
