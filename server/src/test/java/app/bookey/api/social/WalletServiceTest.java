@@ -159,4 +159,23 @@ class WalletServiceTest {
         assertThat(wallet.freePostcardsLeft(5)).isEqualTo(5);
         verify(walletRepository).save(any(Wallet.class));
     }
+
+    @Test
+    @DisplayName("관리자 지갑 조정 — 모자란 재화를 그대로 알리고, 아무것도 바꾸지 않는다")
+    void adminAdjustNamesTheShortCurrency() {
+        Instant now = Instant.parse("2026-10-10T03:00:00Z");
+        when(clock.instant()).thenReturn(now);
+        Wallet wallet = wallet(now);
+        wallet.add(5, 0, 0);
+
+        assertThatThrownBy(() -> service.adminAdjust(1L, 5, 0, -1))
+                .isInstanceOf(ApiException.class)
+                .hasMessageContaining("우표")
+                .extracting(e -> ((ApiException) e).getErrorCode())
+                .isEqualTo(ErrorCode.INSUFFICIENT_STAMP);
+        assertThat(wallet.getBookmarkBalance()).isEqualTo(5);
+
+        service.adminAdjust(1L, -5, 0, 0);
+        assertThat(wallet.getBookmarkBalance()).isZero();
+    }
 }

@@ -119,13 +119,18 @@ public class WalletService {
     @Transactional
     public void adminAdjust(Long userId, int bookmarks, int postcards, int stamps) {
         Wallet wallet = prepared(userId);
-        if (wallet.getBookmarkBalance() + bookmarks < 0
-                || wallet.getPostcardBalance() + postcards < 0
-                || wallet.getStampBalance() + stamps < 0) {
-            throw ApiException.of(ErrorCode.INSUFFICIENT_BOOKMARK);
-        }
+        // 어느 재화가 모자란지 관리자에게 그대로 알린다 — 우표가 모자란데 '책갈피가 모자라요' 로 보이지 않게.
+        requireEnough(ErrorCode.INSUFFICIENT_BOOKMARK, "책갈피", wallet.getBookmarkBalance(), bookmarks);
+        requireEnough(ErrorCode.INSUFFICIENT_POSTCARD, "엽서", wallet.getPostcardBalance(), postcards);
+        requireEnough(ErrorCode.INSUFFICIENT_STAMP, "우표", wallet.getStampBalance(), stamps);
         wallet.add(bookmarks, postcards, stamps);
         record(userId, WalletTransactionKind.ADMIN_ADJUST, bookmarks, postcards, stamps, null, null);
+    }
+
+    private static void requireEnough(ErrorCode code, String name, int balance, int delta) {
+        if (balance + delta < 0) {
+            throw new ApiException(code, name + " 잔액(" + balance + "개)보다 많이 뺄 수 없습니다.");
+        }
     }
 
     @Transactional
