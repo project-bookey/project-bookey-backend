@@ -128,7 +128,8 @@ class AdminAuthServiceTest {
     void meCarriesCapabilities() {
         admin(5L, AdminRole.SUPPORT);
         assertThat(service.me(5L).capabilities())
-                .containsExactly(AdminCapability.WARN, AdminCapability.HANDLE_SUPPORT, AdminCapability.VIEW_PAYMENTS);
+                .containsExactly(AdminCapability.WARN, AdminCapability.HANDLE_SUPPORT, AdminCapability.VIEW_PAYMENTS,
+                        AdminCapability.VIEW_PII);
     }
 
     @Test

@@ -26,5 +26,7 @@ public enum AdminCapability {
     /** 전체 푸시 발송 */
     BROADCAST,
     /** 결제·지갑 내역 열람 */
-    VIEW_PAYMENTS
+    VIEW_PAYMENTS,
+    /** 회원 이메일 전체 보기 */
+    VIEW_PII
 }
