@@ -12,8 +12,4 @@ public record AuthAdmin(Long id, String email, AdminRole role) {
     public boolean canSanction() {
         return role.canSanction();
     }
-
-    public boolean isSuper() {
-        return role == AdminRole.SUPER_ADMIN;
-    }
 }

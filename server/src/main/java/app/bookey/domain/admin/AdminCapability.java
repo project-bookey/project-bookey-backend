@@ -15,6 +15,8 @@ public enum AdminCapability {
     HANDLE_SUPPORT,
     /** 도서 메타 수정 */
     EDIT_BOOK,
+    /** 도서 병합 — 되돌릴 수 없다 */
+    MERGE_BOOKS,
     /** 배너·공지·에디터 픽 */
     MANAGE_CONTENT,
     /** 운영 스위치 */

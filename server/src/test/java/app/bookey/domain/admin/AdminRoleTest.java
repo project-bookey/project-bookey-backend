@@ -29,6 +29,16 @@ class AdminRoleTest {
     }
 
     @Test
+    @DisplayName("도서 병합은 되돌릴 수 없어 최고 관리자만 — 도서 수정이 되는 운영자도 못 한다")
+    void mergeBooks() {
+        assertThat(AdminRole.SUPER_ADMIN.canMergeBooks()).isTrue();
+        assertThat(AdminRole.OPERATOR.canEditBook()).isTrue();
+        assertThat(AdminRole.OPERATOR.canMergeBooks()).isFalse();
+        assertThat(AdminRole.OPERATOR.capabilities()).doesNotContain(AdminCapability.MERGE_BOOKS);
+        assertThat(AdminRole.SUPER_ADMIN.capabilities()).contains(AdminCapability.MERGE_BOOKS);
+    }
+
+    @Test
     @DisplayName("capabilities — 역할 판정과 같은 목록을 웹에 내려준다")
     void capabilitiesMatchRole() {
         assertThat(AdminRole.VIEWER.capabilities()).isEmpty();
