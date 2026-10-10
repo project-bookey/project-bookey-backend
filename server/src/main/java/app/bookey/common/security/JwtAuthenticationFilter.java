@@ -29,7 +29,7 @@ import java.util.List;
  * <p>
  * 관리자 토큰은 매 요청마다 계정을 다시 읽어 정지 여부와 현재 권한을 반영한다 — 토큰에 박힌 권한을 믿으면
  * 권한을 내리거나 계정을 정지해도 토큰이 끝날 때(30분)까지 그대로 쓸 수 있다.
- * 사용자 토큰은 정지·탈퇴로 폐기된 시각 이전에 발급됐으면 거절한다({@link UserAccessRevocations}).
+ * 사용자 토큰은 정지·탈퇴로 폐기된 시각 이전에 발급됐으면 거절한다({@link AccessRevocations}).
  */
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -37,7 +37,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtTokenProvider tokenProvider;
     private final ObjectMapper objectMapper;
     private final TokenType expectedType;
-    private final UserAccessRevocations revocations;
+    private final AccessRevocations revocations;
     private final AdminRepository adminRepository;
 
     @Override
@@ -57,6 +57,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 Admin admin = adminRepository.findById(id)
                         .filter(Admin::isActive)
                         .orElseThrow(() -> ApiException.of(ErrorCode.INVALID_TOKEN));
+                Date adminIssuedAt = claims.getIssuedAt();
+                if (adminIssuedAt != null && revocations.isAdminRevoked(id, adminIssuedAt.toInstant())) {
+                    throw ApiException.of(ErrorCode.INVALID_TOKEN);
+                }
                 AuthAdmin principal = new AuthAdmin(admin.getId(), admin.getEmail(), admin.getRole());
                 setAuthentication(principal, "ROLE_ADMIN_" + admin.getRole().name());
             } else {

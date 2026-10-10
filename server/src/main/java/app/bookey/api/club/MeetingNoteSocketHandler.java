@@ -8,7 +8,7 @@ import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.JwtTokenProvider;
 import app.bookey.common.security.TokenType;
-import app.bookey.common.security.UserAccessRevocations;
+import app.bookey.common.security.AccessRevocations;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -60,7 +60,7 @@ public class MeetingNoteSocketHandler extends TextWebSocketHandler {
 
     private final ClubMeetingNoteService noteService;
     private final UserWriteGuard writeGuard;
-    private final UserAccessRevocations revocations;
+    private final AccessRevocations revocations;
     private final MeetingNoteRelay relay;
     private final JwtTokenProvider tokenProvider;
     private final ObjectMapper objectMapper;
