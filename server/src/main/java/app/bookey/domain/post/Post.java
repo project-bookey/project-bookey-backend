@@ -61,6 +61,14 @@ public class Post extends BaseTimeEntity {
     @Column(name = "club_id")
     private Long clubId;
 
+    /** VISIBLE | HIDDEN | DELETED — 리뷰·모임 글과 같은 규칙. 숨기면 작성자만 보고, 지우면 아무도 못 본다. */
+    @Column(nullable = false, length = 10)
+    private String status = VISIBLE;
+
+    public static final String VISIBLE = "VISIBLE";
+    public static final String HIDDEN = "HIDDEN";
+    public static final String DELETED = "DELETED";
+
     @Builder
     private Post(Long userId, Long bookId, Long readingRecordId, String slug, String title,
                  String bodyMd, PostVisibility visibility, String[] tags,
@@ -98,6 +106,28 @@ public class Post extends BaseTimeEntity {
         }
     }
 
+    /** 신고·관리자 조치로 숨긴다. 작성자에게는 그대로 보인다. */
+    public void hide() {
+        this.status = HIDDEN;
+    }
+
+    public void restore() {
+        this.status = VISIBLE;
+    }
+
+    /** 관리자 삭제 — 행은 남기고 아무에게도 보이지 않게 한다(작성자가 지우는 것은 하드 삭제). */
+    public void softDelete() {
+        this.status = DELETED;
+    }
+
+    public boolean isVisible() {
+        return VISIBLE.equals(status);
+    }
+
+    public boolean isDeleted() {
+        return DELETED.equals(status);
+    }
+
     public void increaseView() {
         this.viewCount++;
     }
@@ -128,11 +158,18 @@ public class Post extends BaseTimeEntity {
 
     /**
      * 비공개는 작성자만, 모임 공개(CLUB)는 작성자와 그 모임 활성 멤버만, 공개·링크 공개는 누구나(비로그인 포함) 읽는다.
+     * 숨긴 글은 작성자만, 관리자가 지운 글은 아무도 읽지 못한다.
      * 멤버 여부는 조회 비용이 있어 서비스가 CLUB 글일 때만 판정해 넘긴다.
      */
     public boolean isReadableBy(Long viewerId, boolean activeClubMember) {
+        if (isDeleted()) {
+            return false;
+        }
         if (isOwnedBy(viewerId)) {
             return true;
+        }
+        if (!isVisible()) {
+            return false;
         }
         return switch (visibility) {
             case PUBLIC, LINK -> true;

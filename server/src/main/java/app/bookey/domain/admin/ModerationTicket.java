@@ -77,6 +77,31 @@ public class ModerationTicket {
         }
     }
 
+    /**
+     * 신고 수를 대상의 '처리 전(PENDING)' 신고 건수에 맞춘다. 3건이 넘으면 우선순위를 올린다(임시 비노출 기준, §8.3).
+     */
+    public void syncReportCount(int pendingReports) {
+        this.reportCount = Math.max(1, pendingReports);
+        if (reportCount >= 3 && priority > 1) {
+            this.priority = 1;
+        }
+    }
+
+    /**
+     * 처리한 대상에 새 신고가 들어오면 다시 연다 — 예전 판정(유지 등)이 새 신고를 묻어 버리지 않게.
+     * SLA 를 새로 잡고 담당·판정을 비운다.
+     */
+    public void reopen(String reason) {
+        this.status = ModerationStatus.PENDING;
+        this.reason = reason;
+        this.resolution = null;
+        this.resolutionNote = null;
+        this.resolvedAt = null;
+        this.assignedAdminId = null;
+        this.priority = 3;
+        this.slaDueAt = Instant.now().plus(SLA);
+    }
+
     public void assign(Long adminId) {
         this.assignedAdminId = adminId;
         this.status = ModerationStatus.IN_REVIEW;

@@ -66,6 +66,7 @@ public class PostcardService {
         // 글 컨텍스트는 수신자의 글이어야 한다 — "이 글을 보고 보냈다"가 성립하도록.
         if (request.postId() != null) {
             Post post = postRepository.findById(request.postId())
+                    .filter(Post::isVisible)
                     .orElseThrow(() -> ApiException.of(ErrorCode.POST_NOT_FOUND));
             if (!post.isOwnedBy(to.getId())) {
                 throw new ApiException(ErrorCode.INVALID_REQUEST, "받는 사람이 쓴 독후감이 아니에요.");
@@ -194,7 +195,9 @@ public class PostcardService {
         if (ids.isEmpty()) {
             return Map.of();
         }
+        // 숨기거나 지운 글은 엽서에 붙어 있어도 보여 주지 않는다(엽서 자체는 그대로 둔다).
         return postRepository.findAllById(ids).stream()
+                .filter(Post::isVisible)
                 .collect(Collectors.toMap(Post::getId, Function.identity()));
     }
 

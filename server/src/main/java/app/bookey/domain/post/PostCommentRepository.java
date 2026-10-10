@@ -3,13 +3,15 @@ package app.bookey.domain.post;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
 
-public interface PostCommentRepository extends JpaRepository<PostComment, Long> {
+public interface PostCommentRepository extends JpaRepository<PostComment, Long>,
+        JpaSpecificationExecutor<PostComment> {
 
     /**
      * 루트 댓글 — 오래된 순(대화 흐름), 같은 시각이면 id 로 안정 정렬.

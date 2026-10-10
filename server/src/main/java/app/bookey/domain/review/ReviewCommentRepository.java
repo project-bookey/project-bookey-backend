@@ -3,13 +3,15 @@ package app.bookey.domain.review;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
 
-public interface ReviewCommentRepository extends JpaRepository<ReviewComment, Long> {
+public interface ReviewCommentRepository extends JpaRepository<ReviewComment, Long>,
+        JpaSpecificationExecutor<ReviewComment> {
 
     /**
      * 최상위 댓글만 — 오래된 순(대화 흐름). 답글은 접어두고 별도 엔드포인트로 편다.

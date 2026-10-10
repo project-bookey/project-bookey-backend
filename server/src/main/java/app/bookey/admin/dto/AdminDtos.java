@@ -178,7 +178,12 @@ public final class AdminDtos {
             Long assignedAdminId,
             String contentPreview,
             Long authorId,
-            String authorNickname
+            String authorNickname,
+            @NotNull Instant createdAt,
+            ModerationResolution resolution,
+            String resolutionNote,
+            Instant resolvedAt,
+            String assignedAdminName
     ) {}
 
     public record ResolveRequest(
