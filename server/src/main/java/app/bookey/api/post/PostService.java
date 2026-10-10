@@ -218,8 +218,9 @@ public class PostService {
         User user = blogOwner(handle);
         Post post = postRepository.findByUserIdAndSlug(user.getId(), slug)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        // 공개 블로그는 비회원 경로라 비공개·모임 공개 글은 없는 것으로 본다.
-        if (post.getVisibility() == PostVisibility.PRIVATE || post.getVisibility() == PostVisibility.CLUB) {
+        // 공개 블로그는 비회원 경로라 비공개·모임 공개 글, 숨기거나 지운 글은 없는 것으로 본다.
+        if (post.getVisibility() == PostVisibility.PRIVATE || post.getVisibility() == PostVisibility.CLUB
+                || !post.isVisible()) {
             throw ApiException.of(ErrorCode.NOT_FOUND);
         }
         post.increaseView();
@@ -241,8 +242,10 @@ public class PostService {
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
     }
 
+    /** 내 글 — 관리자가 지운 글은 작성자에게도 없는 글이다(숨긴 글은 고칠 수 있다). */
     private Post owned(Long userId, Long postId) {
         Post post = postRepository.findById(postId)
+                .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> ApiException.of(ErrorCode.POST_NOT_FOUND));
         if (!post.isOwnedBy(userId)) {
             throw ApiException.of(ErrorCode.FORBIDDEN);

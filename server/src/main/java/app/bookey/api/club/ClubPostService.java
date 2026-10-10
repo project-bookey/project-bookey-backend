@@ -7,15 +7,13 @@ import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
 import app.bookey.common.support.RateLimiter;
 import app.bookey.domain.admin.ModerationSource;
+import app.bookey.api.report.AbuseReportService;
 import app.bookey.domain.admin.ModerationTicket;
-import app.bookey.domain.admin.ModerationTicketRepository;
 import app.bookey.domain.club.*;
 import app.bookey.domain.notification.NotificationType;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingStatus;
-import app.bookey.domain.report.AbuseReport;
-import app.bookey.domain.report.AbuseReportRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -51,8 +49,7 @@ public class ClubPostService {
     private final ClubEventRepository eventRepository;
     private final ReadingRecordRepository recordRepository;
     private final UserRepository userRepository;
-    private final AbuseReportRepository abuseReportRepository;
-    private final ModerationTicketRepository moderationTicketRepository;
+    private final AbuseReportService abuseReportService;
     private final ClubService clubService;
     private final NotificationService notificationService;
     private final RateLimiter rateLimiter;
@@ -291,21 +288,9 @@ public class ClubPostService {
         if (post.isAuthor(userId)) {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "내 글은 신고할 수 없어요.");
         }
-        if (abuseReportRepository.existsByTargetTypeAndTargetIdAndReporterId(
-                "CLUB_POST", postId, userId)) {
-            throw ApiException.of(ErrorCode.CONFLICT);
-        }
-        abuseReportRepository.save(
-                new AbuseReport("CLUB_POST", postId, userId, request.reason(), request.detail()));
+        ModerationTicket ticket = abuseReportService.file(
+                ModerationSource.CLUB_POST, postId, userId, request.reason(), request.detail());
         post.addReport();
-
-        ModerationTicket ticket = moderationTicketRepository
-                .findBySourceTypeAndSourceId(ModerationSource.CLUB_POST, postId)
-                .orElseGet(() -> moderationTicketRepository.save(
-                        new ModerationTicket(ModerationSource.CLUB_POST, postId, request.reason())));
-        if (ticket.getReportCount() < post.getReportCount()) {
-            ticket.addReport();
-        }
         if (ticket.shouldAutoHide()) {
             post.hide();
         }

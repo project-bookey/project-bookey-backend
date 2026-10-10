@@ -1,14 +1,36 @@
 package app.bookey.domain.review;
 
+import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public interface ReviewRepository extends JpaRepository<Review, Long> {
+public interface ReviewRepository extends JpaRepository<Review, Long>,
+        JpaSpecificationExecutor<Review> {
+
+    /**
+     * 관리자 검증 심사 목록 — 숨김·삭제된 리뷰까지 모두. 주어진 조건만 AND 로 묶는다(null 바인딩 회피).
+     * reportedOnly 는 신고가 한 번이라도 들어온 리뷰만.
+     */
+    static Specification<Review> adminSearch(Long bookId, Long userId, String status, VerificationLevel level,
+                                             boolean reportedOnly) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (bookId != null) predicates.add(cb.equal(root.get("bookId"), bookId));
+            if (userId != null) predicates.add(cb.equal(root.get("userId"), userId));
+            if (status != null) predicates.add(cb.equal(root.get("status"), status));
+            if (level != null) predicates.add(cb.equal(root.get("verificationLevel"), level));
+            if (reportedOnly) predicates.add(cb.greaterThan(root.get("reportCount"), 0));
+            return cb.and(predicates.toArray(Predicate[]::new));
+        };
+    }
 
     /**
      * 도서 상세 리뷰 목록 — 탈퇴한(계정이 종료된) 사람의 리뷰는 뺀다. 아래 평점도 같은 리뷰로만 계산한다.

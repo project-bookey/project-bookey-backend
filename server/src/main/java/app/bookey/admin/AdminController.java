@@ -232,14 +232,18 @@ public class AdminController {
     }
 
     // ── 검증 심사 ───────────────────────────────────────────
-    @Operation(summary = "리뷰 목록 — 검증 등급 필터")
+    @Operation(summary = "리뷰 목록 — 숨김·삭제 포함, 최근 순. 도서·회원·상태·검증 등급·신고 여부로 거른다")
     @GetMapping("/reviews")
     public PageResponse<ReviewRow> reviews(@RequestParam(required = false) Long bookId,
+                                           @RequestParam(required = false) Long userId,
+                                           @RequestParam(required = false) String status,
+                                           @RequestParam(required = false) VerificationLevel verificationLevel,
+                                           @RequestParam(defaultValue = "false") boolean reportedOnly,
                                            @RequestParam(defaultValue = "0") int page,
                                            @RequestParam(defaultValue = "20") int size) {
-        var result = bookId == null
-                ? reviewRepository.findAll(PageRequest.of(page, pageSize(size)))
-                : reviewRepository.findByBook(bookId, false, PageRequest.of(page, pageSize(size)));
+        var result = reviewRepository.findAll(
+                ReviewRepository.adminSearch(bookId, userId, emptyToNull(status), verificationLevel, reportedOnly),
+                PageRequest.of(page, pageSize(size), Sort.by(Sort.Direction.DESC, "id")));
         return PageResponse.of(result, this::toReviewRow);
     }
 

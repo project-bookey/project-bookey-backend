@@ -5,15 +5,13 @@ import app.bookey.common.error.ApiException;
 import app.bookey.common.error.ErrorCode;
 import app.bookey.common.support.PageResponse;
 import app.bookey.domain.admin.ModerationSource;
+import app.bookey.api.report.AbuseReportService;
 import app.bookey.domain.admin.ModerationTicket;
-import app.bookey.domain.admin.ModerationTicketRepository;
 import app.bookey.domain.book.Book;
 import app.bookey.domain.book.BookRepository;
 import app.bookey.domain.reading.ReadingRecord;
 import app.bookey.domain.reading.ReadingRecordRepository;
 import app.bookey.domain.reading.ReadingStatus;
-import app.bookey.domain.report.AbuseReport;
-import app.bookey.domain.report.AbuseReportRepository;
 import app.bookey.domain.review.Review;
 import app.bookey.domain.review.ReviewCommentRepository;
 import app.bookey.domain.review.ReviewCommentRepository.CommentCount;
@@ -43,8 +41,7 @@ public class ReviewService {
     private final ReadingRecordRepository recordRepository;
     private final BookRepository bookRepository;
     private final UserRepository userRepository;
-    private final AbuseReportRepository abuseReportRepository;
-    private final ModerationTicketRepository moderationTicketRepository;
+    private final AbuseReportService abuseReportService;
     private final VerificationService verificationService;
 
     @Transactional(readOnly = true)
@@ -161,20 +158,8 @@ public class ReviewService {
     public void report(Long userId, Long reviewId, String reason, String detail) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> ApiException.of(ErrorCode.REVIEW_NOT_FOUND));
-        if (abuseReportRepository.existsByTargetTypeAndTargetIdAndReporterId(
-                "REVIEW", reviewId, userId)) {
-            throw ApiException.of(ErrorCode.CONFLICT);
-        }
-        abuseReportRepository.save(new AbuseReport("REVIEW", reviewId, userId, reason, detail));
+        ModerationTicket ticket = abuseReportService.file(ModerationSource.REVIEW, reviewId, userId, reason, detail);
         review.addReport();
-
-        ModerationTicket ticket = moderationTicketRepository
-                .findBySourceTypeAndSourceId(ModerationSource.REVIEW, reviewId)
-                .orElseGet(() -> moderationTicketRepository.save(
-                        new ModerationTicket(ModerationSource.REVIEW, reviewId, reason)));
-        if (ticket.getReportCount() < review.getReportCount()) {
-            ticket.addReport();
-        }
         if (ticket.shouldAutoHide()) {
             review.hide();
         }

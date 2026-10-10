@@ -105,7 +105,7 @@ class RemarkServiceTest {
 
         service.delete(USER_ID, RECORD_ID);
 
-        verify(remarkRepository, never()).delete(any());
+        verify(remarkRepository, never()).delete(any(BookRemark.class));
     }
 
     @Test

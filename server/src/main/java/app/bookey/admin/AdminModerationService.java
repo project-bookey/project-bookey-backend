@@ -1,5 +1,7 @@
 package app.bookey.admin;
 
+import app.bookey.admin.dto.AdminContentDtos.AbuseReportRow;
+import app.bookey.admin.dto.AdminContentDtos.ModerationDetailView;
 import app.bookey.admin.dto.AdminDtos.*;
 import app.bookey.admin.support.AdminAuditService;
 import app.bookey.common.error.ApiException;
@@ -7,11 +9,8 @@ import app.bookey.common.error.ErrorCode;
 import app.bookey.common.security.AuthAdmin;
 import app.bookey.common.support.PageResponse;
 import app.bookey.domain.admin.*;
-import app.bookey.domain.club.ClubPost;
-import app.bookey.domain.club.ClubPostRepository;
+import app.bookey.domain.report.AbuseReport;
 import app.bookey.domain.report.AbuseReportRepository;
-import app.bookey.domain.review.Review;
-import app.bookey.domain.review.ReviewRepository;
 import app.bookey.domain.user.User;
 import app.bookey.domain.user.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,8 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 /** 신고 큐 처리 (§F13 신고 큐 · §8.3). SLA 48h. */
 @Service
@@ -32,11 +33,12 @@ import java.util.Optional;
 public class AdminModerationService {
 
     private final ModerationTicketRepository ticketRepository;
-    private final ReviewRepository reviewRepository;
-    private final ClubPostRepository clubPostRepository;
     private final AbuseReportRepository abuseReportRepository;
     private final UserRepository userRepository;
+    private final AdminRepository adminRepository;
+    private final UserSanctionRepository sanctionRepository;
     private final AdminUserService adminUserService;
+    private final AdminContentService contentService;
     private final AdminAuditService auditService;
 
     @Transactional(readOnly = true)
@@ -56,30 +58,84 @@ public class AdminModerationService {
         } else {
             tickets = ticketRepository.findAllBy(pageable);
         }
-        return PageResponse.of(tickets, this::toRow);
+        Map<Long, String> names = adminNames(tickets.getContent());
+        return PageResponse.of(tickets, ticket -> toRow(ticket, names));
     }
 
-    private ModerationRow toRow(ModerationTicket ticket) {
-        String preview = null;
-        Long authorId = null;
-
-        if (ticket.getSourceType() == ModerationSource.REVIEW) {
-            Optional<Review> review = reviewRepository.findById(ticket.getSourceId());
-            preview = review.map(r -> truncate(r.getBody())).orElse("(삭제됨)");
-            authorId = review.map(Review::getUserId).orElse(null);
-        } else if (ticket.getSourceType() == ModerationSource.CLUB_POST) {
-            Optional<ClubPost> post = clubPostRepository.findById(ticket.getSourceId());
-            preview = post.map(p -> truncate(p.getBody())).orElse("(삭제됨)");
-            authorId = post.map(ClubPost::getUserId).orElse(null);
+    /**
+     * 신고 상세 — 신고 하나하나(신고자·사유·상세)와 원문, 작성자의 제재 이력. 열람 기록(VIEW_MODERATION)이 남는다.
+     * CS 담당(경고 권한)부터 볼 수 있고, 판정은 신고 처리 권한이 있어야 한다.
+     */
+    @Transactional
+    public ModerationDetailView detail(AuthAdmin admin, Long ticketId) {
+        if (!admin.role().canWarn()) {
+            throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
         }
+        ModerationTicket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        ModerationRow row = toRow(ticket, adminNames(List.of(ticket)));
 
+        List<AbuseReport> reports = abuseReportRepository.findAllByTargetTypeAndTargetIdOrderByIdDesc(
+                ticket.getSourceType().name(), ticket.getSourceId());
+        Map<Long, String> reporters = userRepository.findAllById(
+                        reports.stream().map(AbuseReport::getReporterId).distinct().toList())
+                .stream().collect(Collectors.toMap(User::getId, User::getNickname, (a, b) -> a));
+
+        List<SanctionRow> sanctions = row.authorId() == null ? List.of()
+                : sanctionRepository.findAllByUserIdOrderByCreatedAtDesc(row.authorId()).stream()
+                        .map(s -> new SanctionRow(s.getId(), s.getType(), s.getReason(), s.getStartsAt(),
+                                s.getEndsAt(), s.getReleasedAt(), s.getAdminId()))
+                        .toList();
+
+        auditService.log(admin, "VIEW_MODERATION", ticket.getSourceType().name(), ticket.getSourceId(),
+                null, null, Map.of("ticketId", ticketId));
+        return new ModerationDetailView(row,
+                contentService.detailForTicket(admin, ticket.getSourceType(), ticket.getSourceId()),
+                reports.stream().map(r -> toReportRow(r, reporters)).toList(),
+                sanctions);
+    }
+
+    /** 한 사람이 신고한 내역 — 신고를 남발하는지 볼 때. */
+    @Transactional(readOnly = true)
+    public PageResponse<AbuseReportRow> reportsBy(AuthAdmin admin, Long reporterId, int page, int size) {
+        if (!admin.role().canWarn()) {
+            throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
+        }
+        var result = abuseReportRepository.findAllByReporterIdOrderByIdDesc(reporterId,
+                PageRequest.of(page, Math.clamp(size, 1, 100)));
+        Map<Long, String> reporters = userRepository.findById(reporterId)
+                .map(u -> Map.of(u.getId(), u.getNickname())).orElse(Map.of());
+        return PageResponse.of(result, r -> toReportRow(r, reporters));
+    }
+
+    private static AbuseReportRow toReportRow(AbuseReport r, Map<Long, String> reporters) {
+        return new AbuseReportRow(r.getId(), r.getTargetType(), r.getTargetId(), r.getReporterId(),
+                reporters.get(r.getReporterId()), r.getReason(), r.getDetail(), r.getStatus(), r.getCreatedAt());
+    }
+
+    private Map<Long, String> adminNames(List<ModerationTicket> tickets) {
+        List<Long> ids = tickets.stream().map(ModerationTicket::getAssignedAdminId)
+                .filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return adminRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Admin::getId, Admin::getName, (a, b) -> a));
+    }
+
+    private ModerationRow toRow(ModerationTicket ticket, Map<Long, String> adminNames) {
+        var summary = contentService.summarize(ticket.getSourceType(), ticket.getSourceId());
+        String preview = summary.map(AdminContentService.Summary::preview).orElse("(삭제됨)");
+        Long authorId = summary.map(AdminContentService.Summary::authorId).orElse(null);
         String authorNickname = authorId == null ? null : userRepository.findById(authorId)
                 .map(User::getNickname).orElse(null);
 
         return new ModerationRow(ticket.getId(), ticket.getSourceType(), ticket.getSourceId(),
                 ticket.getReason(), ticket.getReportCount(), ticket.getPriority(),
                 ticket.getSlaDueAt(), ticket.isOverdue(), ticket.getStatus(),
-                ticket.getAssignedAdminId(), preview, authorId, authorNickname);
+                ticket.getAssignedAdminId(), preview, authorId, authorNickname,
+                ticket.getCreatedAt(), ticket.getResolution(), ticket.getResolutionNote(), ticket.getResolvedAt(),
+                ticket.getAssignedAdminId() == null ? null : adminNames.get(ticket.getAssignedAdminId()));
     }
 
     @Transactional
@@ -119,27 +175,9 @@ public class AdminModerationService {
                 Map.of("resolution", request.resolution().name(), "status", ticket.getStatus().name()));
     }
 
-    /** @return 대상 콘텐츠 작성자 id */
+    /** @return 제재를 걸 대상(콘텐츠 작성자·모임 호스트·신고된 회원). 없으면 null. */
     private Long applyResolution(ModerationTicket ticket, ModerationResolution resolution) {
-        return switch (ticket.getSourceType()) {
-            case REVIEW -> reviewRepository.findById(ticket.getSourceId()).map(review -> {
-                switch (resolution) {
-                    case KEEP -> review.restore();
-                    case HIDE, SANCTION -> review.hide();
-                    case DELETE -> review.softDelete();
-                }
-                return review.getUserId();
-            }).orElse(null);
-            case CLUB_POST -> clubPostRepository.findById(ticket.getSourceId()).map(post -> {
-                switch (resolution) {
-                    case KEEP -> post.restore();
-                    case HIDE, SANCTION -> post.hide();
-                    case DELETE -> post.softDelete();
-                }
-                return post.getUserId();
-            }).orElse(null);
-            default -> null;
-        };
+        return contentService.applyResolution(ticket.getSourceType(), ticket.getSourceId(), resolution);
     }
 
     @Transactional(readOnly = true)
@@ -156,12 +194,5 @@ public class AdminModerationService {
         if (!admin.canModerate()) {
             throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
         }
-    }
-
-    private String truncate(String body) {
-        if (body == null) {
-            return null;
-        }
-        return body.length() > 200 ? body.substring(0, 200) + "…" : body;
     }
 }

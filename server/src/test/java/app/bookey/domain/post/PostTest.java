@@ -152,4 +152,22 @@ class PostTest {
 
         assertThat(post.isClubPost()).isFalse();
     }
+
+    @Test
+    @DisplayName("숨긴 독후감은 작성자만 읽고, 관리자가 지운 독후감은 작성자도 못 읽는다")
+    void hiddenAndDeleted() {
+        Post post = post(PostVisibility.PUBLIC);
+
+        post.hide();
+        assertThat(post.isReadableBy(OWNER, false)).isTrue();
+        assertThat(post.isReadableBy(99L, false)).isFalse();
+        assertThat(post.isReadableBy(null, false)).isFalse();
+
+        post.restore();
+        assertThat(post.isReadableBy(99L, false)).isTrue();
+
+        post.softDelete();
+        assertThat(post.isReadableBy(OWNER, false)).isFalse();
+        assertThat(post.isVisible()).isFalse();
+    }
 }

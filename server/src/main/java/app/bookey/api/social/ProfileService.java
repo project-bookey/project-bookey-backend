@@ -116,6 +116,7 @@ public class ProfileService {
     @Transactional(readOnly = true)
     public PageResponse<LikerView> likers(Long viewerId, Long postId, Pageable pageable) {
         Post post = postRepository.findById(postId)
+                .filter(found -> !found.isDeleted())
                 .orElseThrow(() -> ApiException.of(ErrorCode.POST_NOT_FOUND));
         if (!post.isOwnedBy(viewerId)) {
             throw ApiException.of(ErrorCode.FORBIDDEN);
