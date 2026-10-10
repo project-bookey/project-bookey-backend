@@ -194,7 +194,9 @@ public class AdminCatalogService {
      */
     @Transactional(readOnly = true)
     public BookMergePreview mergePreview(AuthAdmin admin, Long sourceId, Long targetId) {
-        requireSuper(admin);
+        if (!admin.role().canMergeBooks()) {
+            throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
+        }
         Book source = bookRepository.findById(sourceId).orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
         Book target = bookRepository.findById(targetId).orElseThrow(() -> ApiException.of(ErrorCode.BOOK_NOT_FOUND));
         List<String> blockers = new ArrayList<>();
@@ -346,12 +348,6 @@ public class AdminCatalogService {
     private long count(String sql, Object... args) {
         Long value = jdbc.queryForObject(sql, Long.class, args);
         return value == null ? 0 : value;
-    }
-
-    private static void requireSuper(AuthAdmin admin) {
-        if (!admin.isSuper()) {
-            throw ApiException.of(ErrorCode.ADMIN_FORBIDDEN);
-        }
     }
 
     /** ISBN 은 숫자만 남겨 13자리일 때만 쓴다(하이픈·공백 허용). 비면 null. */

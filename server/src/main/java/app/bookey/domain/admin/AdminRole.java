@@ -31,6 +31,11 @@ public enum AdminRole {
         return this == SUPER_ADMIN || this == OPERATOR;
     }
 
+    /** 도서 병합 — 원본을 지우고 모든 기록을 옮겨 되돌릴 수 없으니 최고 관리자만. */
+    public boolean canMergeBooks() {
+        return this == SUPER_ADMIN;
+    }
+
     /** 홈 배너·공지 팝업·에디터 픽 — 매일 손보는 운영 콘텐츠라 운영자(OPERATOR)도 다룬다. */
     public boolean canManageContent() {
         return this == SUPER_ADMIN || this == OPERATOR;
@@ -61,6 +66,7 @@ public enum AdminRole {
         if (canWarn()) caps.add(AdminCapability.WARN);
         if (canHandleSupport()) caps.add(AdminCapability.HANDLE_SUPPORT);
         if (canEditBook()) caps.add(AdminCapability.EDIT_BOOK);
+        if (canMergeBooks()) caps.add(AdminCapability.MERGE_BOOKS);
         if (canManageContent()) caps.add(AdminCapability.MANAGE_CONTENT);
         if (canManageOps()) caps.add(AdminCapability.MANAGE_OPS);
         if (canManageAdmins()) caps.add(AdminCapability.MANAGE_ADMINS);
