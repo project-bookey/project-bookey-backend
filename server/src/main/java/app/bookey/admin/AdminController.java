@@ -30,6 +30,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -40,7 +41,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/** 관리자 백오피스 API (§F13). 서비스 JWT 로는 접근할 수 없다. */
+/**
+ * 관리자 백오피스 API (§F13). 서비스 JWT 로는 접근할 수 없다.
+ * open-in-view 가 꺼져 있으므로 엔티티를 직접 고치는 핸들러는 @Transactional 이 있어야 변경이 저장된다 —
+ * 없으면 감사 로그(별도 트랜잭션)만 남고 실제 값은 그대로다.
+ */
 @Tag(name = "Admin", description = "관리자 백오피스 — 대시보드 · 회원 · 도서 · 신고 · 모임 · 운영")
 @RestController
 @RequestMapping("/admin/v1")
@@ -176,6 +181,7 @@ public class AdminController {
 
     @Operation(summary = "도서 메타 수정 — 페이지 수 보정 등")
     @PatchMapping("/books/{bookId}")
+    @Transactional
     public ResponseEntity<Void> updateBook(@AuthenticationPrincipal AuthAdmin admin,
                                            @PathVariable Long bookId,
                                            @Valid @RequestBody UpdateBookRequest request) {
@@ -239,6 +245,7 @@ public class AdminController {
 
     @Operation(summary = "검증 등급 수동 조정 — 사유 필수, 감사 로그 대상")
     @PostMapping("/reviews/{reviewId}/verification")
+    @Transactional
     public ResponseEntity<Void> overrideVerification(
             @AuthenticationPrincipal AuthAdmin admin,
             @PathVariable Long reviewId,
@@ -280,6 +287,7 @@ public class AdminController {
 
     @Operation(summary = "모임 강제 해산")
     @PostMapping("/clubs/{clubId}/force-end")
+    @Transactional
     public ResponseEntity<Void> forceEndClub(@AuthenticationPrincipal AuthAdmin admin,
                                              @PathVariable Long clubId,
                                              @Valid @RequestBody ClubActionRequest request) {
@@ -298,6 +306,7 @@ public class AdminController {
 
     @Operation(summary = "초대 코드 강제 회전")
     @PostMapping("/clubs/{clubId}/rotate-code")
+    @Transactional
     public Map<String, String> rotateClubCode(@AuthenticationPrincipal AuthAdmin admin,
                                               @PathVariable Long clubId,
                                               @Valid @RequestBody ClubActionRequest request) {
@@ -319,6 +328,7 @@ public class AdminController {
 
     @Operation(summary = "호스트 승계 — 호스트 장기 미접속 대응")
     @PostMapping("/clubs/{clubId}/transfer-host")
+    @Transactional
     public ResponseEntity<Void> transferHost(@AuthenticationPrincipal AuthAdmin admin,
                                              @PathVariable Long clubId,
                                              @RequestParam Long newOwnerId,
@@ -365,6 +375,7 @@ public class AdminController {
 
     @Operation(summary = "운영 스위치 변경 — PUSH_ENABLED 는 긴급 킬스위치 (SUPER_ADMIN)")
     @PatchMapping("/ops-flags/{key}")
+    @Transactional
     public ResponseEntity<Void> updateOpsFlag(@AuthenticationPrincipal AuthAdmin admin,
                                               @PathVariable String key,
                                               @Valid @RequestBody OpsFlagRequest request) {
