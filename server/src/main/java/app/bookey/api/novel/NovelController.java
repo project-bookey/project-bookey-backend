@@ -43,6 +43,9 @@ public class NovelController {
     }
     @GetMapping("/{id}")
     public NovelDetail detail(@AuthenticationPrincipal AuthUser user, @PathVariable Long id) { return service.get(user.id(), id); }
+    /** 좋아요 토글 — 책·독후감 좋아요처럼 쓰기 제재와 상관없이 누를 수 있다. */
+    @PostMapping("/{id}/like")
+    public NovelLikeView like(@AuthenticationPrincipal AuthUser user, @PathVariable Long id) { return service.toggleLike(user.id(), id); }
     @PutMapping("/{id}/cover") @WriteBanGuarded
     public NovelDetail cover(@AuthenticationPrincipal AuthUser user, @PathVariable Long id, @Valid @RequestBody NovelCoverRequest request) {
         return service.changeCover(user.id(), id, request.coverId());
