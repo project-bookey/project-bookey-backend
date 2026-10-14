@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service @RequiredArgsConstructor
 public class NovelService {
@@ -19,6 +20,7 @@ public class NovelService {
     private final NovelChapterRepository chapters;
     private final NovelDraftRepository drafts;
     private final NovelCoverRepository covers;
+    private final NovelLikeRepository likes;
     private final UserRepository users;
     private final RateLimiter limiter;
 
@@ -37,16 +39,30 @@ public class NovelService {
 
     @Transactional(readOnly = true)
     public PageResponse<NovelSummary> feed(Long me, NovelKind kind, NovelStatus status, Pageable page) {
-        return PageResponse.of(novels.feed(kind, status, page), n -> summary(n, me));
+        Page<Novel> found = novels.feed(kind, status, page);
+        LikeStats likeStats = likeStats(found.getContent(), me);
+        return PageResponse.of(found, n -> summary(n, me, likeStats));
     }
     @Transactional(readOnly = true)
     public PageResponse<NovelSummary> mine(Long me, NovelKind kind, Pageable page) {
-        return PageResponse.of(novels.mine(me, kind, page), n -> summary(n, me));
+        Page<Novel> found = novels.mine(me, kind, page);
+        LikeStats likeStats = likeStats(found.getContent(), me);
+        return PageResponse.of(found, n -> summary(n, me, likeStats));
     }
     @Transactional(readOnly = true)
     public List<NovelSummary> myTurns(Long me) {
-        return novels.myTurns(me, Instant.now(), PageRequest.of(0, 20)).stream()
-                .map(n -> summary(n, me)).toList();
+        List<Novel> found = novels.myTurns(me, Instant.now(), PageRequest.of(0, 20));
+        LikeStats likeStats = likeStats(found, me);
+        return found.stream().map(n -> summary(n, me, likeStats)).toList();
+    }
+    /** 책·독후감 좋아요처럼 누를 때마다 켜고 끈다. 볼 수 있는 작품에만 누를 수 있다. */
+    @Transactional
+    public NovelLikeView toggleLike(Long me, Long id) {
+        readable(me, id, false);
+        var existing = likes.findByUserIdAndNovelId(me, id);
+        if (existing.isPresent()) likes.delete(existing.get());
+        else likes.save(NovelLike.builder().userId(me).novelId(id).build());
+        return new NovelLikeView(existing.isEmpty(), likes.countByNovelId(id));
     }
     @Transactional
     public NovelDetail get(Long me, Long id) {
@@ -212,12 +228,28 @@ public class NovelService {
         return new NovelMemberView(m.getUserId(), nickname(m.getUserId()), u == null ? null : u.getAvatarUrl(),
                 m.getStatus(), n.isOwner(m.getUserId()), Objects.equals(n.getCurrentWriterId(), m.getUserId()));
     }
-    private NovelSummary summary(Novel n, Long me) {
+    private NovelSummary summary(Novel n, Long me) { return summary(n, me, likeStats(List.of(n), me)); }
+    private NovelSummary summary(Novel n, Long me, LikeStats likeStats) {
         String url = n.getCoverId() == null ? null : covers.findById(n.getCoverId()).map(NovelCover::getUrl).orElse(null);
         boolean myTurn = n.canWrite(me) && (n.getTurnDueAt() == null || Instant.now().isBefore(n.getTurnDueAt()));
         return new NovelSummary(n.getId(), n.getKind(), n.getStatus(), n.getTitle(), n.getDescription(), n.getGenre(),
                 url, nickname(n.getOwnerId()), active(n).size(), n.getMemberLimit(), n.getChapterCount(),
-                n.getChapterLimit(), n.isPublic(), n.isOwner(me), myTurn, n.getTurnDueAt(), n.getCreatedAt());
+                n.getChapterLimit(), n.isPublic(), n.isOwner(me), myTurn, n.getTurnDueAt(), n.getCreatedAt(),
+                likeStats.count(n.getId()), likeStats.liked(n.getId()));
+    }
+    /** 작품들의 좋아요 수와 내가 누른 작품. 목록 한 페이지를 줄마다 세지 않고 한 번에 읽는다. */
+    private record LikeStats(Map<Long, Long> counts, Set<Long> mine) {
+        long count(Long id) { return counts.getOrDefault(id, 0L); }
+        boolean liked(Long id) { return mine.contains(id); }
+    }
+    private LikeStats likeStats(List<Novel> found, Long me) {
+        List<Long> ids = found.stream().map(Novel::getId).toList();
+        if (ids.isEmpty()) return new LikeStats(Map.of(), Set.of());
+        Map<Long, Long> counts = likes.countPerNovel(ids).stream().collect(Collectors.toMap(
+                NovelLikeRepository.NovelLikeCount::getNovelId, NovelLikeRepository.NovelLikeCount::getLikeCount));
+        Set<Long> mine = likes.findAllByUserIdAndNovelIdIn(me, ids).stream()
+                .map(NovelLike::getNovelId).collect(Collectors.toSet());
+        return new LikeStats(counts, mine);
     }
     private NovelDetail detail(Novel n, Long me) {
         var active = active(n);

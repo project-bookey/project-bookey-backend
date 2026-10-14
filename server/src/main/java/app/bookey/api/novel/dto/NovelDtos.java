@@ -24,7 +24,10 @@ public final class NovelDtos {
             @NotNull String title, @NotNull String description, @NotNull String genre,
             String coverUrl, @NotNull String ownerNickname, int memberCount, int memberLimit,
             int chapterCount, int chapterLimit, boolean isPublic, boolean mine, boolean myTurn,
-            Instant turnDueAt, @NotNull Instant createdAt) {}
+            Instant turnDueAt, @NotNull Instant createdAt,
+            @Schema(description = "탈퇴한 사람을 뺀 좋아요 수") long likeCount,
+            @Schema(description = "내가 좋아요를 눌렀는지") boolean liked) {}
+    public record NovelLikeView(boolean liked, long likeCount) {}
     public record NovelDetail(@NotNull NovelSummary novel, List<NovelMemberView> members,
             List<NovelMemberView> applications, @NotNull String myMembership,
             boolean canApply, boolean canWrite, boolean canStart, boolean canComplete,
