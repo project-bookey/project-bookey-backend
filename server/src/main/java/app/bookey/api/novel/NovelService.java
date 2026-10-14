@@ -4,6 +4,8 @@ import app.bookey.api.novel.dto.NovelDtos.*;
 import app.bookey.common.error.*;
 import app.bookey.common.support.*;
 import app.bookey.domain.novel.*;
+import app.bookey.domain.social.UserFollow;
+import app.bookey.domain.social.UserFollowRepository;
 import app.bookey.domain.user.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.*;
@@ -23,18 +25,53 @@ public class NovelService {
     private final NovelLikeRepository likes;
     private final UserRepository users;
     private final RateLimiter limiter;
+    private final NovelDeliveryRepository deliveries;
+    private final NovelDeliveryService delivery;
+    private final NovelBaseWorkRepository baseWorks;
+    private final UserFollowRepository follows;
 
     @Transactional
     public NovelDetail create(Long me, CreateNovelRequest request) {
         limiter.require("novel:create:" + me, 5, Duration.ofMinutes(1));
-        Novel n = novels.saveAndFlush(new Novel(me, request.kind(), request.title(), request.description(),
-                request.genre(), request.memberLimit() == null ? 6 : request.memberLimit(),
-                request.chapterLimit() == null ? 20 : request.chapterLimit(),
-                request.turnHours() == null ? 24 : request.turnHours(), request.isPublic(),
-                UUID.randomUUID().toString().replace("-", "")));
+        NovelMode mode = request.mode() == null ? NovelMode.CIRCLE : request.mode();
+        if (mode == NovelMode.OPEN && (request.kind() != NovelKind.RELAY || request.deliveryCount() == null))
+            throw ApiException.of(ErrorCode.INVALID_REQUEST);
+        Long baseWorkId = requireBaseWork(request.baseWorkId());
+        int chapterLimit = request.chapterLimit() == null ? 20 : request.chapterLimit();
+        int turnHours = request.turnHours() == null ? 24 : request.turnHours();
+        List<Long> invitees = mode == NovelMode.CIRCLE ? invitees(me, request.inviteeIds()) : List.of();
+        Novel created;
+        if (mode == NovelMode.OPEN) {
+            created = Novel.open(me, request.title(), request.description(), request.genre(), chapterLimit, turnHours,
+                    request.deliveryCount(), baseWorkId);
+        } else {
+            // 함께 쓸 작가를 고르면 정원은 고른 사람과 나다. 고르지 않으면 예전처럼 모집한다.
+            int memberLimit = invitees.isEmpty() ? (request.memberLimit() == null ? 6 : request.memberLimit()) : invitees.size() + 1;
+            created = new Novel(me, request.kind(), request.title(), request.description(), request.genre(),
+                    memberLimit, chapterLimit, turnHours, request.isPublic());
+            created.useBaseWork(baseWorkId);
+        }
+        Novel n = novels.saveAndFlush(created);
         members.saveAndFlush(new NovelMember(n.getId(), me, true));
+        invitees.forEach(id -> members.save(new NovelMember(n.getId(), id, true)));
+        members.flush();
         attachCover(n, me, request.coverId());
         return detail(n, me);
+    }
+    private Long requireBaseWork(Long id) {
+        if (id == null) return null;
+        return baseWorks.findById(id).filter(NovelBaseWork::isActive).map(NovelBaseWork::getId)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+    }
+    /** 모여 만들기는 내가 팔로우한, 탈퇴하지 않은 작가만 고를 수 있다. */
+    private List<Long> invitees(Long me, List<Long> requested) {
+        if (requested == null || requested.isEmpty()) return List.of();
+        List<Long> ids = requested.stream().filter(Objects::nonNull).filter(id -> !id.equals(me)).distinct().toList();
+        Set<Long> followed = follows.findAllByFollowerIdAndFolloweeIdIn(me, ids).stream()
+                .map(UserFollow::getFolloweeId).collect(Collectors.toSet());
+        if (!followed.containsAll(ids) || ids.stream().anyMatch(users::isTerminated))
+            throw ApiException.of(ErrorCode.NOVEL_INVITEE_NOT_FOLLOWED);
+        return ids;
     }
 
     @Transactional(readOnly = true)
@@ -54,6 +91,23 @@ public class NovelService {
         List<Novel> found = novels.myTurns(me, Instant.now(), PageRequest.of(0, 20));
         LikeStats likeStats = likeStats(found, me);
         return found.stream().map(n -> summary(n, me, likeStats)).toList();
+    }
+    /** 내가 받은 열매 — 홈 열매 밭에 떨어진다. */
+    @Transactional(readOnly = true)
+    public List<NovelDeliveryView> deliveries(Long me) {
+        List<NovelDelivery> held = deliveries.holding(me, Instant.now(), PageRequest.of(0, 20));
+        Map<Long, Novel> byId = novels.findAllById(held.stream().map(NovelDelivery::getNovelId).toList()).stream()
+                .collect(Collectors.toMap(Novel::getId, n -> n));
+        LikeStats likeStats = likeStats(List.copyOf(byId.values()), me);
+        List<NovelDeliveryView> views = new ArrayList<>();
+        for (NovelDelivery d : held) {
+            Novel n = byId.get(d.getNovelId());
+            NovelChapter c = chapters.findById(d.getChapterId()).orElse(null);
+            if (n == null || c == null) continue;
+            views.add(new NovelDeliveryView(d.getId(), summary(n, me, likeStats), c.getId(), c.getChapterNumber(),
+                    c.getTitle(), d.getDueAt()));
+        }
+        return views;
     }
     /** 책·독후감 좋아요처럼 누를 때마다 켜고 끈다. 볼 수 있는 작품에만 누를 수 있다. */
     @Transactional
@@ -85,28 +139,21 @@ public class NovelService {
         n.changeCover(id);
     }
 
-    /** 공개는 누구나 신청, 비공개는 코드로 신청. 승인 전에는 집필 순서에 들어가지 않는다. */
+    /** 공개 작품은 누구나 신청한다. 승인 전에는 집필 순서에 들어가지 않는다. 비공개 작품은 만들 때 고른 작가만 참가한다. */
     @Transactional
     public NovelDetail apply(Long me, Long id) {
         Novel n = readable(me, id, true);
         if (!n.isPublic() && !n.isOwner(me)) throw ApiException.of(ErrorCode.FORBIDDEN);
         return applyTo(n, me);
     }
-    @Transactional
-    public NovelDetail joinByCode(Long me, String code) {
-        Novel found = novels.findByInviteCode(code.strip()).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        Novel n = novels.lockById(found.getId()).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        if (users.isTerminated(n.getOwnerId())) throw ApiException.of(ErrorCode.NOT_FOUND);
-        return applyTo(n, me);
-    }
     private NovelDetail applyTo(Novel n, Long me) {
-        if (n.getKind() != NovelKind.RELAY || n.getStatus() == NovelStatus.COMPLETED)
+        if (n.getKind() != NovelKind.RELAY || n.isOpen() || n.getStatus() == NovelStatus.COMPLETED)
             throw new ApiException(ErrorCode.CONFLICT, "참가자를 받고 있지 않은 작품이에요.");
         var existing = members.findByNovelIdAndUserId(n.getId(), me);
         if (existing.isPresent() && List.of("ACTIVE", "PENDING").contains(existing.get().getStatus()))
             return detail(n, me);
         limiter.require("novel:apply:" + me, 10, Duration.ofMinutes(1));
-        if (active(n).size() >= n.getMemberLimit()) throw ApiException.of(ErrorCode.NOVEL_FULL);
+        if (isFull(n, active(n).size())) throw ApiException.of(ErrorCode.NOVEL_FULL);
         NovelMember member = existing.orElseGet(() -> new NovelMember(n.getId(), me, false));
         member.apply(); members.saveAndFlush(member);
         return detail(n, me);
@@ -119,7 +166,7 @@ public class NovelService {
                 .filter(v -> "PENDING".equals(v.getStatus()) && !users.isTerminated(v.getUserId()))
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         if (approved) {
-            if (active(n).size() >= n.getMemberLimit()) throw ApiException.of(ErrorCode.NOVEL_FULL);
+            if (isFull(n, active(n).size())) throw ApiException.of(ErrorCode.NOVEL_FULL);
             m.approve();
         } else m.reject();
         members.flush(); return detail(n, me);
@@ -135,7 +182,7 @@ public class NovelService {
     public NovelDetail complete(Long me, Long id) {
         Novel n = readable(me, id, true); requireOwner(n, me);
         if (n.getChapterCount() == 0) throw new ApiException(ErrorCode.CONFLICT, "첫 회차를 올린 뒤 완결할 수 있어요.");
-        n.complete(); return detail(n, me);
+        n.complete(); delivery.closeAll(n.getId()); return detail(n, me);
     }
     @Transactional
     public void leave(Long me, Long id) {
@@ -168,35 +215,56 @@ public class NovelService {
     public NovelChapterView publish(Long me, Long id, NovelWriteRequest request) {
         Novel n = readable(me, id, true); expire(n); requireWrite(n, me, request.turnNumber());
         if (request.title().isBlank() || request.body().isBlank()) throw ApiException.of(ErrorCode.INVALID_REQUEST);
-        NovelChapter c = chapters.saveAndFlush(new NovelChapter(id, me, n.getChapterCount() + 1,
+        // 한 줄기로 이어지는 작품은 마지막 회차가 부모다. 열매로 퍼뜨리는 작품은 여기서 뿌리 회차만 나온다.
+        Long parentId = n.getChapterCount() == 0 ? null
+                : chapters.findFirstByNovelIdOrderByChapterNumberDescIdDesc(id).map(NovelChapter::getId).orElse(null);
+        NovelChapter c = chapters.saveAndFlush(new NovelChapter(id, me, parentId, n.getChapterCount() + 1,
                 request.title(), request.body()));
         drafts.findByNovelIdAndUserId(id, me).ifPresent(drafts::delete);
-        n.publish(writerIds(n), Instant.now());
+        Instant now = Instant.now();
+        n.publish(writerIds(n), now);
+        if (n.isOpen()) delivery.deliverNewChapter(n, c, now);
         return chapterView(c);
     }
     @Transactional(readOnly = true)
     public PageResponse<NovelChapterSummary> chapters(Long me, Long id, Pageable page) {
         requireReadChapters(me, id);
-        return PageResponse.of(chapters.findByNovelIdOrderByChapterNumberAsc(id, page),
+        return PageResponse.of(chapters.findByNovelIdOrderByChapterNumberAscIdAsc(id, page),
                 c -> new NovelChapterSummary(c.getId(), c.getChapterNumber(), c.getTitle(),
                         nickname(c.getAuthorId()), excerpt(c.getBody()), c.getCreatedAt()));
     }
     @Transactional(readOnly = true)
     public NovelChapterView chapter(Long me, Long id, int number) {
         requireReadChapters(me, id);
-        return chapterView(chapters.findByNovelIdAndChapterNumber(id, number)
+        return chapterView(chapters.findFirstByNovelIdAndChapterNumberOrderByIdAsc(id, number)
                 .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)));
+    }
+    /** 가지가 갈라진 작품은 번호(깊이)로 회차를 하나로 정할 수 없어 id 로 읽는다. */
+    @Transactional(readOnly = true)
+    public NovelChapterView chapterNode(Long me, Long id, Long chapterId) {
+        requireReadChapters(me, id);
+        return chapterView(chapters.findByIdAndNovelId(chapterId, id).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)));
+    }
+    /** 회차 나무 전체 — 마디마다 부모 회차를 실어, 앱이 가지와 끝 열매를 그린다. */
+    @Transactional(readOnly = true)
+    public List<NovelChapterNode> chapterTree(Long me, Long id) {
+        requireReadChapters(me, id);
+        List<NovelChapter> all = chapters.findByNovelIdOrderByIdAsc(id);
+        Map<Long, String> nicknames = nicknames(all.stream().map(NovelChapter::getAuthorId).filter(Objects::nonNull).distinct().toList());
+        return all.stream().map(c -> new NovelChapterNode(c.getId(), c.getParentChapterId(), c.getChapterNumber(),
+                c.getTitle(), c.getAuthorId() == null ? "탈퇴한 작가" : nicknames.getOrDefault(c.getAuthorId(), "탈퇴한 작가"),
+                excerpt(c.getBody()), c.getCreatedAt())).toList();
     }
     private NovelChapterView chapterView(NovelChapter c) {
         return new NovelChapterView(c.getId(), c.getNovelId(), c.getChapterNumber(), c.getTitle(),
-                c.getBody(), nickname(c.getAuthorId()), c.getCreatedAt());
+                c.getBody(), nickname(c.getAuthorId()), c.getCreatedAt(), c.getParentChapterId());
     }
     @Transactional
     public void expire(Long id) { novels.lockById(id).ifPresent(this::expire); }
     private void expire(Novel n) {
         var ids = writerIds(n);
         n.expire(ids, Instant.now());
-        if (n.getKind() == NovelKind.RELAY && n.getStatus() == NovelStatus.ONGOING
+        if (n.getKind() == NovelKind.RELAY && !n.isOpen() && n.getStatus() == NovelStatus.ONGOING
                 && !ids.contains(n.getCurrentWriterId())) n.skip(ids, Instant.now());
     }
     private void requireReadChapters(Long me, Long id) {
@@ -218,6 +286,12 @@ public class NovelService {
     }
     private List<NovelMember> active(Novel n) { return members.activeMembers(n.getId()); }
     private List<Long> writerIds(Novel n) { return active(n).stream().map(NovelMember::getUserId).toList(); }
+    private boolean isFull(Novel n, int activeCount) { return n.getMemberLimit() != null && activeCount >= n.getMemberLimit(); }
+    private Map<Long, String> nicknames(List<Long> ids) {
+        if (ids.isEmpty()) return Map.of();
+        return users.findAllById(ids).stream().filter(u -> u.getStatus() != UserStatus.TERMINATED)
+                .collect(Collectors.toMap(User::getId, User::getNickname));
+    }
     private String nickname(Long id) {
         return id == null ? "탈퇴한 작가" : users.findById(id).filter(u -> u.getStatus() != UserStatus.TERMINATED)
                 .map(User::getNickname).orElse("탈퇴한 작가");
@@ -233,9 +307,14 @@ public class NovelService {
         String url = n.getCoverId() == null ? null : covers.findById(n.getCoverId()).map(NovelCover::getUrl).orElse(null);
         boolean myTurn = n.canWrite(me) && (n.getTurnDueAt() == null || Instant.now().isBefore(n.getTurnDueAt()));
         return new NovelSummary(n.getId(), n.getKind(), n.getStatus(), n.getTitle(), n.getDescription(), n.getGenre(),
-                url, nickname(n.getOwnerId()), active(n).size(), n.getMemberLimit(), n.getChapterCount(),
+                url, nickname(n.getOwnerId()), memberCount(n), n.getMemberLimit(), n.getChapterCount(),
                 n.getChapterLimit(), n.isPublic(), n.isOwner(me), myTurn, n.getTurnDueAt(), n.getCreatedAt(),
-                likeStats.count(n.getId()), likeStats.liked(n.getId()));
+                likeStats.count(n.getId()), likeStats.liked(n.getId()), n.getMode(), n.getDeliveryCount());
+    }
+    /** 열매로 퍼뜨리는 작품은 참가 신청이 없으니 회차를 쓴 작가 수를 센다. */
+    private int memberCount(Novel n) {
+        if (!n.isOpen()) return active(n).size();
+        return (int) Math.max(1, chapters.countAuthors(n.getId()));
     }
     /** 작품들의 좋아요 수와 내가 누른 작품. 목록 한 페이지를 줄마다 세지 않고 한 번에 읽는다. */
     private record LikeStats(Map<Long, Long> counts, Set<Long> mine) {
@@ -257,11 +336,12 @@ public class NovelService {
         var applications = n.isOwner(me) ? members.findByNovelIdAndStatusOrderByIdAsc(n.getId(), "PENDING").stream()
                 .filter(m -> !users.isTerminated(m.getUserId())).map(m -> member(n, m)).toList() : List.<NovelMemberView>of();
         return new NovelDetail(summary(n, me), active.stream().map(m -> member(n, m)).toList(), applications, membership,
-                n.isPublic() && n.getKind() == NovelKind.RELAY && n.getStatus() != NovelStatus.COMPLETED
-                        && !List.of("ACTIVE", "PENDING").contains(membership) && active.size() < n.getMemberLimit(),
+                n.isPublic() && n.getKind() == NovelKind.RELAY && !n.isOpen() && n.getStatus() != NovelStatus.COMPLETED
+                        && !List.of("ACTIVE", "PENDING").contains(membership) && !isFull(n, active.size()),
                 n.canWrite(me), n.isOwner(me) && n.getStatus() == NovelStatus.RECRUITING && active.size() >= 2,
                 n.isOwner(me) && n.getStatus() == NovelStatus.ONGOING && n.getChapterCount() > 0,
                 n.getTurnNumber(), n.getCurrentWriterId() == null ? null : nickname(n.getCurrentWriterId()),
-                n.isOwner(me) || "ACTIVE".equals(membership) ? n.getInviteCode() : null, n.getCoverId());
+                n.getCoverId(),
+                deliveries.holdingIn(n.getId(), me, Instant.now()).map(NovelDelivery::getId).orElse(null), n.getBaseWorkId());
     }
 }
