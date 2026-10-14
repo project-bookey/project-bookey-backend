@@ -128,6 +128,8 @@ public enum ErrorCode {
     NOVEL_FULL(HttpStatus.CONFLICT, "참가자 정원이 다 찼어요."),
     NOVEL_CLOSED(HttpStatus.CONFLICT, "완결한 작품이에요."),
     NOVEL_NOT_YOUR_TURN(HttpStatus.CONFLICT, "지금은 집필 차례가 아니에요. 작품에서 현재 차례를 확인해 주세요."),
+    NOVEL_DELIVERY_GONE(HttpStatus.CONFLICT, "이어 쓸 수 있는 시간이 지난 열매예요. 홈에서 다른 열매를 골라 주세요."),
+    NOVEL_INVITEE_NOT_FOLLOWED(HttpStatus.BAD_REQUEST, "팔로우한 작가만 함께 쓰자고 고를 수 있어요."),
     POST_NOT_FOUND(HttpStatus.NOT_FOUND, "독후감을 찾을 수 없어요."),
     POST_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없어요."),
     POST_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, "사진을 찾을 수 없어요."),

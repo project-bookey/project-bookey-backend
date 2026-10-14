@@ -31,7 +31,6 @@ public interface NovelRepository extends JpaRepository<Novel, Long> {
 
     @Query("select n.id from Novel n where n.status = 'ONGOING' and n.turnDueAt <= :now")
     List<Long> expiredIds(@Param("now") Instant now, Pageable pageable);
-    Optional<Novel> findByInviteCode(String inviteCode);
     @Query("select n from Novel n where n.kind = :kind and n.ownerId not in (select u.id from User u where u.status = 'TERMINATED') and (n.ownerId = :userId or n.id in (select m.novelId from NovelMember m where m.userId = :userId and m.status in ('ACTIVE', 'PENDING'))) order by n.createdAt desc")
     Page<Novel> mine(@Param("userId") Long userId, @Param("kind") NovelKind kind, Pageable pageable);
 }

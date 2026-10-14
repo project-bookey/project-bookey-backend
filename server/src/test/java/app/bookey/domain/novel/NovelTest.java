@@ -7,9 +7,9 @@ import static org.assertj.core.api.Assertions.*;
 
 class NovelTest {
     private static final Instant START = Instant.parse("2026-10-10T00:00:00Z");
-    private Novel relay(int chapters) { return new Novel(1L, NovelKind.RELAY, "제목", "소개", "일상", 6, chapters, 24, true, "code"); }
+    private Novel relay(int chapters) { return new Novel(1L, NovelKind.RELAY, "제목", "소개", "일상", 6, chapters, 24, true); }
     @Test void soloOnlyOwnerWrites() {
-        Novel n = new Novel(1L, NovelKind.SOLO, "제목", "", "일상", 6, 3, 24, true, "code");
+        Novel n = new Novel(1L, NovelKind.SOLO, "제목", "", "일상", 6, 3, 24, true);
         assertThat(n.canWrite(1L)).isTrue(); assertThat(n.canWrite(2L)).isFalse();
         n.publish(List.of(1L), START);
         assertThat(n.getCurrentWriterId()).isEqualTo(1L); assertThat(n.getTurnDueAt()).isNull();
@@ -53,5 +53,25 @@ class NovelTest {
         Novel n = relay(10); n.start(START); n.publish(List.of(1L, 2L, 3L), START);
         n.skip(List.of(1L, 2L, 3L), START);
         assertThat(n.getCurrentWriterId()).isEqualTo(3L);
+    }
+    @Test void openNovelLetsOwnerWriteRootThenClearsTurn() {
+        Novel n = Novel.open(1L, "제목", "소개", "판타지", 20, 24, 3, null);
+        assertThat(n.getStatus()).isEqualTo(NovelStatus.ONGOING); assertThat(n.canWrite(1L)).isTrue();
+        assertThat(n.getMemberLimit()).isNull(); assertThat(n.getTurnDueAt()).isNull();
+        n.publish(List.of(1L), START);
+        assertThat(n.getCurrentWriterId()).isNull(); assertThat(n.getStatus()).isEqualTo(NovelStatus.ONGOING);
+        n.addBranch(); n.addBranch();
+        assertThat(n.getChapterCount()).isEqualTo(3); assertThat(n.getStatus()).isEqualTo(NovelStatus.ONGOING);
+    }
+    @Test void openNovelBranchesStopAtTargetDepth() {
+        Novel n = Novel.open(1L, "제목", "소개", "판타지", 3, 24, 3, null);
+        assertThat(n.canGrowFrom(2)).isTrue(); assertThat(n.canGrowFrom(3)).isFalse();
+        n.complete();
+        assertThat(n.canGrowFrom(1)).isFalse();
+    }
+    @Test void openNovelHasNoTurnDeadline() {
+        Novel n = Novel.open(1L, "제목", "소개", "판타지", 20, 24, 3, null);
+        n.expire(List.of(1L), START.plus(Duration.ofDays(30)));
+        assertThat(n.getCurrentWriterId()).isEqualTo(1L); assertThat(n.getTurnNumber()).isEqualTo(1);
     }
 }
