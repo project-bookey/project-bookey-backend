@@ -17,8 +17,17 @@ public record BookeyProperties(
         Social social,
         Payment payment,
         Storage storage,
-        Mail mail
+        Mail mail,
+        Novel novel
 ) {
+
+    /** 릴레이 소설 홈 열매 밭 — 북키 지갑·엽서와 따로 센다. */
+    public record Novel(
+            /** 하루 무료 새로고침 — 엽서처럼 KST 자정에 다시 찬다. */
+            int feedRefreshDailyFree,
+            /** 피드 자리 수 — 앱 열매 밭의 열매 자리 수와 같다. */
+            int homeFeedSize
+    ) {}
 
     /** 소셜 피드 경제 (§14.2) — 엽서·우표·책갈피·구독 정책. */
     public record Social(

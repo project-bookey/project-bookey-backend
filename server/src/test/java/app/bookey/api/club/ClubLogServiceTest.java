@@ -54,7 +54,7 @@ class ClubLogServiceTest {
     private final StorageService storage = mock(StorageService.class);
     private final BookeyProperties properties = new BookeyProperties(null, null, null, null, null, null, null, null,
             new BookeyProperties.Storage("local", null, null, null,
-                    new BookeyProperties.Storage.Image(10_485_760, 10)), null);
+                    new BookeyProperties.Storage.Image(10_485_760, 10)), null, null);
     private final ClubLogService service = new ClubLogService(clubService, postService, postRepository,
             memberRepository, clubBookRepository, bookRepository, sessionRepository,
             mock(app.bookey.domain.reading.ReadingRecordRepository.class), mock(UserRepository.class), storage,

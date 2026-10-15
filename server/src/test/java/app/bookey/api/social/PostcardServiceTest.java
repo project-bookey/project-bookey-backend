@@ -53,7 +53,7 @@ class PostcardServiceTest {
     private final NotificationService notificationService = mock(NotificationService.class);
     private final Clock clock = mock(Clock.class);
     private final BookeyProperties properties =
-            new BookeyProperties(null, null, null, null, null, null, SOCIAL, null, null, null);
+            new BookeyProperties(null, null, null, null, null, null, SOCIAL, null, null, null, null);
     private final UserBlockRepository blockRepository = mock(UserBlockRepository.class);
     private final BlockService blockService = new BlockService(blockRepository, userRepository, clock);
     private final PostcardService service = new PostcardService(

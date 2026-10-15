@@ -34,7 +34,7 @@ class ClubBackgroundServiceTest {
     private final StorageService storage = mock(StorageService.class);
     private final BookeyProperties properties = new BookeyProperties(null, null, null, null, null, null, null, null,
             new BookeyProperties.Storage("local", null, null, null,
-                    new BookeyProperties.Storage.Image(10_485_760, 10)), null);
+                    new BookeyProperties.Storage.Image(10_485_760, 10)), null, null);
     private final ClubBackgroundService service =
             new ClubBackgroundService(clubService, storage, mock(RateLimiter.class), properties);
 

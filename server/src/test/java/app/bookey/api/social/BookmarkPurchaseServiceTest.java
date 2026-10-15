@@ -41,7 +41,7 @@ class BookmarkPurchaseServiceTest {
     private final GooglePlayPaymentClient googlePlayPaymentClient = mock(GooglePlayPaymentClient.class);
     private final AppStorePaymentClient appStorePaymentClient = mock(AppStorePaymentClient.class);
     private final BookeyProperties properties =
-            new BookeyProperties(null, null, null, null, null, null, SOCIAL, PAYMENT, null, null);
+            new BookeyProperties(null, null, null, null, null, null, SOCIAL, PAYMENT, null, null, null);
     private final BookmarkPurchaseService service =
             new BookmarkPurchaseService(walletService, purchaseRepository, properties, tossPaymentClient,
                     googlePlayPaymentClient, appStorePaymentClient);

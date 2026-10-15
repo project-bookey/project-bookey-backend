@@ -34,7 +34,7 @@ class ClubPlaceServiceTest {
     private ClubPlaceService service(String jusoKey) {
         BookeyProperties properties = new BookeyProperties(null, null,
                 new BookeyProperties.BookApi("kakao-key", null, null, null, null, null, jusoKey),
-                null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null);
         return new ClubPlaceService(mock(ClubService.class), builder.build(), properties);
     }
 

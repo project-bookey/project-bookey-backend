@@ -51,7 +51,7 @@ class ClubSeatServiceTest {
     private final RateLimiter rateLimiter = mock(RateLimiter.class);
     private final Clock clock = mock(Clock.class);
     private final BookeyProperties properties =
-            new BookeyProperties(null, null, null, null, CLUB_POLICY, null, SOCIAL, null, null, null);
+            new BookeyProperties(null, null, null, null, CLUB_POLICY, null, SOCIAL, null, null, null, null);
     private final WalletService walletService = new WalletService(
             walletRepository, transactionRepository, mock(SubscriptionService.class), properties, clock);
     private final ClubSeatService service =
