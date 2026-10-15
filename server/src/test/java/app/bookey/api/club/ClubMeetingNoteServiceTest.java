@@ -47,7 +47,7 @@ class ClubMeetingNoteServiceTest {
     private final RateLimiter rateLimiter = mock(RateLimiter.class);
     private final ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
     private final BookeyProperties properties = new BookeyProperties(null, null, null, null, null, null, null, null,
-            null, null);
+            null, null, null);
     private ClubMeetingNoteService service;
 
     @BeforeEach

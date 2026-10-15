@@ -77,7 +77,7 @@ class ClubServiceTest {
             mock(OpsFlagRepository.class),
             mock(ProgressService.class),
             mock(RateLimiter.class),
-            new BookeyProperties(null, null, null, null, CLUB_POLICY, null, null, null, null, null));
+            new BookeyProperties(null, null, null, null, CLUB_POLICY, null, null, null, null, null, null));
 
     private static CreateClubRequest create(Integer memberLimit) {
         return new CreateClubRequest("월요일의 데미안", null, 7L,

@@ -31,7 +31,7 @@ class SmtpEmailCodeSenderTest {
         when(mailSender.createMimeMessage()).thenReturn(message);
         BookeyProperties properties = new BookeyProperties(
                 null, null, null, null, null, null, null, null, null,
-                new BookeyProperties.Mail(true, "no-reply@bookey.app", "Bookey", "[Bookey]"));
+                new BookeyProperties.Mail(true, "no-reply@bookey.app", "Bookey", "[Bookey]"), null);
 
         new SmtpEmailCodeSender(mailSender, properties)
                 .send("reader@example.com", "123456", Duration.ofMinutes(10), EmailCodePurpose.SIGNUP);
@@ -58,7 +58,7 @@ class SmtpEmailCodeSenderTest {
         when(mailSender.createMimeMessage()).thenReturn(message);
         BookeyProperties properties = new BookeyProperties(
                 null, null, null, null, null, null, null, null, null,
-                new BookeyProperties.Mail(true, "no-reply@bookey.app", "Bookey", "[Bookey]"));
+                new BookeyProperties.Mail(true, "no-reply@bookey.app", "Bookey", "[Bookey]"), null);
 
         new SmtpEmailCodeSender(mailSender, properties)
                 .send("reader@example.com", "654321", Duration.ofMinutes(10), EmailCodePurpose.PASSWORD_RESET);

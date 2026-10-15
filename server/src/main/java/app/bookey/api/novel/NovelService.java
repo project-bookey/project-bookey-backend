@@ -17,6 +17,8 @@ import java.util.stream.Collectors;
 
 @Service @RequiredArgsConstructor
 public class NovelService {
+    /** 내 차례·받은 열매 목록이 한 번에 내려 주는 수. 홈 열매 밭은 이 목록을 피드 묶음보다 먼저 놓는다. */
+    static final Pageable HOME_LIST_PAGE = PageRequest.of(0, 20);
     private final NovelRepository novels;
     private final NovelMemberRepository members;
     private final NovelChapterRepository chapters;
@@ -88,14 +90,17 @@ public class NovelService {
     }
     @Transactional(readOnly = true)
     public List<NovelSummary> myTurns(Long me) {
-        List<Novel> found = novels.myTurns(me, Instant.now(), PageRequest.of(0, 20));
+        return summaries(novels.myTurns(me, Instant.now(), HOME_LIST_PAGE), me);
+    }
+    /** 작품 목록을 순서 그대로 지금 사용자 기준 요약으로 바꾼다. 좋아요는 목록 전체를 한 번에 읽는다. */
+    public List<NovelSummary> summaries(List<Novel> found, Long me) {
         LikeStats likeStats = likeStats(found, me);
         return found.stream().map(n -> summary(n, me, likeStats)).toList();
     }
     /** 내가 받은 열매 — 홈 열매 밭에 떨어진다. */
     @Transactional(readOnly = true)
     public List<NovelDeliveryView> deliveries(Long me) {
-        List<NovelDelivery> held = deliveries.holding(me, Instant.now(), PageRequest.of(0, 20));
+        List<NovelDelivery> held = deliveries.holding(me, Instant.now(), HOME_LIST_PAGE);
         Map<Long, Novel> byId = novels.findAllById(held.stream().map(NovelDelivery::getNovelId).toList()).stream()
                 .collect(Collectors.toMap(Novel::getId, n -> n));
         LikeStats likeStats = likeStats(List.copyOf(byId.values()), me);

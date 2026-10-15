@@ -66,7 +66,7 @@ class KakaoLoginServiceTest {
         BookeyProperties properties = new BookeyProperties(null, null, null,
                 new BookeyProperties.OAuth(null, null, appId,
                         new BookeyProperties.OAuth.KakaoLogin(restKey, "secret-1", CALLBACK, List.of(APP))),
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
         return new KakaoLoginService(redis, new ObjectMapper(), builder.build(), properties, rateLimiter);
     }
 

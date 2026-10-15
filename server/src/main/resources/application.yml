@@ -163,6 +163,9 @@ bookey:
     image:
       max-bytes: 10485760                          # 10MB
       max-per-post: 10
+  novel:
+    feed-refresh-daily-free: 2           # 홈 열매 밭 하루 무료 새로고침 — 엽서처럼 KST 자정에 다시 찬다(다 쓰면 429)
+    home-feed-size: 7                    # 피드 자리 수 — 앱 열매 밭의 열매 자리 수
 
 logging:
   level:

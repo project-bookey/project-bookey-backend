@@ -5,6 +5,7 @@ import app.bookey.api.novel.dto.NovelDtos.*;
 import app.bookey.common.security.AuthUser;
 import app.bookey.common.support.PageResponse;
 import app.bookey.domain.novel.*;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -19,6 +20,7 @@ public class NovelController {
     private final NovelCoverService coverService;
     private final NovelBranchService branchService;
     private final NovelGenreService genreService;
+    private final NovelHomeFeedService homeFeedService;
     @GetMapping
     public PageResponse<NovelSummary> feed(@AuthenticationPrincipal AuthUser user,
             @RequestParam(defaultValue = "SOLO") NovelKind kind, @RequestParam(required = false) NovelStatus status,
@@ -31,6 +33,13 @@ public class NovelController {
     }
     @GetMapping("/my-turns")
     public List<NovelSummary> myTurns(@AuthenticationPrincipal AuthUser user) { return service.myTurns(user.id()); }
+    @Operation(summary = "홈 열매 밭 — 지금 놓인 묶음과 오늘 남은 무료 새로고침. 처음이거나 묶음이 비어 있으면 최신순으로 첫 묶음을 만든다(횟수 차감 없음)")
+    @GetMapping("/home-feed")
+    public NovelHomeFeedView homeFeed(@AuthenticationPrincipal AuthUser user) { return homeFeedService.current(user.id()); }
+    /** 좋아요처럼 쓰기 제재와 상관없이 누를 수 있다. 하루 무료 횟수가 남용을 막는다. */
+    @Operation(summary = "홈 열매 밭 새로고침 — 오늘 무료 횟수를 하나 쓰고 새 묶음으로 바꾼다. 다 쓰면 429, 새로 놓을 작품이 없으면 409(차감 없음)")
+    @PostMapping("/home-feed/refresh")
+    public NovelHomeFeedView refreshHomeFeed(@AuthenticationPrincipal AuthUser user) { return homeFeedService.refresh(user.id()); }
     /** 내가 받은 열매 — 마감 전이고 연재 중인 것만. */
     @GetMapping("/deliveries")
     public List<NovelDeliveryView> deliveries(@AuthenticationPrincipal AuthUser user) { return service.deliveries(user.id()); }

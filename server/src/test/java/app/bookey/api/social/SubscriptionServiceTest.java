@@ -51,7 +51,7 @@ class SubscriptionServiceTest {
     private final GooglePlayPaymentClient googlePlayPaymentClient = mock(GooglePlayPaymentClient.class);
     private final Clock clock = mock(Clock.class);
     private final BookeyProperties properties =
-            new BookeyProperties(null, null, null, null, null, null, SOCIAL, PAYMENT, null, null);
+            new BookeyProperties(null, null, null, null, null, null, SOCIAL, PAYMENT, null, null, null);
     private final SubscriptionService service =
             new SubscriptionService(subscriptionRepository, transactionRepository, properties, clock,
                     tossPaymentClient, appStorePaymentClient, googlePlayPaymentClient);

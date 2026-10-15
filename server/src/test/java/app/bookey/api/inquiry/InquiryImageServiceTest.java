@@ -93,7 +93,7 @@ class InquiryImageServiceTest {
                 new BookeyProperties.Storage.Local("./uploads", ""),
                 new BookeyProperties.Storage.Gcs(""),
                 new BookeyProperties.Storage.S3("", "ap-northeast-2", ""),
-                new BookeyProperties.Storage.Image(MAX_BYTES, 10)), null);
+                new BookeyProperties.Storage.Image(MAX_BYTES, 10)), null, null);
     }
 
     private static byte[] png(int totalLength) {

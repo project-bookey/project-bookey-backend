@@ -39,6 +39,12 @@ public final class NovelDtos {
             @Schema(description = "내가 좋아요를 눌렀는지") boolean liked,
             @NotNull NovelMode mode, @Schema(description = "OPEN: 회차 하나를 배달할 사람 수") Integer deliveryCount) {}
     public record NovelLikeView(boolean liked, long likeCount) {}
+    /** 홈 열매 밭 — 지금 놓인 묶음과 오늘 남은 무료 새로고침. */
+    public record NovelHomeFeedView(
+            @Schema(description = "피드 자리에 놓을 작품, 저장된 순서대로. 받은 열매·내 차례 작품 뒤에 놓는다") @NotNull List<NovelSummary> novels,
+            @Schema(description = "오늘 남은 무료 새로고침") int freeRefreshesLeftToday,
+            @Schema(description = "하루 무료 새로고침 횟수") int dailyFreeRefreshes,
+            @Schema(description = "무료 새로고침이 다시 차는 때 — 다음 KST 자정") @NotNull Instant resetsAt) {}
     public record NovelDetail(@NotNull NovelSummary novel, List<NovelMemberView> members,
             List<NovelMemberView> applications, @NotNull String myMembership,
             boolean canApply, boolean canWrite, boolean canStart, boolean canComplete,
