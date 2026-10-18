@@ -21,6 +21,7 @@ public class NovelController {
     private final NovelBranchService branchService;
     private final NovelGenreService genreService;
     private final NovelHomeFeedService homeFeedService;
+    private final NovelRefreshPurchaseService refreshPurchaseService;
     @GetMapping
     public PageResponse<NovelSummary> feed(@AuthenticationPrincipal AuthUser user,
             @RequestParam(defaultValue = "SOLO") NovelKind kind, @RequestParam(required = false) NovelStatus status,
@@ -33,13 +34,26 @@ public class NovelController {
     }
     @GetMapping("/my-turns")
     public List<NovelSummary> myTurns(@AuthenticationPrincipal AuthUser user) { return service.myTurns(user.id()); }
-    @Operation(summary = "홈 열매 밭 — 지금 놓인 묶음과 오늘 남은 무료 새로고침. 처음이거나 묶음이 비어 있으면 최신순으로 첫 묶음을 만든다(횟수 차감 없음)")
+    @Operation(summary = "홈 열매 밭 — 지금 놓인 묶음과 오늘 남은 무료·광고 새로고침, 결제한 새로고침. 처음이거나 묶음이 비어 있으면 최신순으로 첫 묶음을 만든다(횟수 차감 없음)")
     @GetMapping("/home-feed")
     public NovelHomeFeedView homeFeed(@AuthenticationPrincipal AuthUser user) { return homeFeedService.current(user.id()); }
-    /** 좋아요처럼 쓰기 제재와 상관없이 누를 수 있다. 하루 무료 횟수가 남용을 막는다. */
-    @Operation(summary = "홈 열매 밭 새로고침 — 오늘 무료 횟수를 하나 쓰고 새 묶음으로 바꾼다. 다 쓰면 429, 새로 놓을 작품이 없으면 409(차감 없음)")
+    /** 좋아요처럼 쓰기 제재와 상관없이 누를 수 있다. 하루 무료·광고 횟수가 남용을 막는다. */
+    @Operation(summary = "홈 열매 밭 새로고침 — 오늘 무료 횟수가 남았으면 무료로, 다 썼으면 결제한 횟수로 새 묶음으로 바꾼다(광고 횟수는 쓰지 않는다). 둘 다 없으면 429, 새로 놓을 작품이 없으면 409(차감 없음)")
     @PostMapping("/home-feed/refresh")
     public NovelHomeFeedView refreshHomeFeed(@AuthenticationPrincipal AuthUser user) { return homeFeedService.refresh(user.id()); }
+    @Operation(summary = "광고를 보고 새로고침 — 광고를 끝까지 본 뒤 부른다. 무료 횟수가 남았으면 무료를, 없으면 오늘 광고 횟수를 쓴다. 광고 횟수도 다 쓰면 429(NOVEL_REFRESH_AD_LIMIT), 새로 놓을 작품이 없으면 409(차감 없음)")
+    @PostMapping("/home-feed/refresh/ad")
+    public NovelHomeFeedView refreshHomeFeedWithAd(@AuthenticationPrincipal AuthUser user) { return homeFeedService.refreshWithAd(user.id()); }
+    @Operation(summary = "새로고침 결제 주문 — 오늘 무료·광고 횟수를 다 썼고 결제해 둔 횟수도 없을 때만 연다(아니면 409 NOVEL_REFRESH_STILL_LEFT). APPLE·GOOGLE 만")
+    @PostMapping("/home-feed/refresh-purchases/checkout")
+    public NovelRefreshCheckoutView checkoutRefresh(@AuthenticationPrincipal AuthUser user, @Valid @RequestBody NovelRefreshCheckoutRequest request) {
+        return refreshPurchaseService.checkout(user.id(), request);
+    }
+    @Operation(summary = "새로고침 결제 확인 — 스토어 결제를 확인하면 결제한 새로고침 하나를 더한다. 새로고침은 하지 않으니 이어서 /home-feed/refresh 를 부른다. 이미 확인한 주문이면 더하지 않고 지금 상태를 돌려준다")
+    @PostMapping("/home-feed/refresh-purchases/verify")
+    public NovelHomeFeedView verifyRefresh(@AuthenticationPrincipal AuthUser user, @Valid @RequestBody NovelRefreshVerifyRequest request) {
+        return refreshPurchaseService.verify(user.id(), request);
+    }
     /** 내가 받은 열매 — 마감 전이고 연재 중인 것만. */
     @GetMapping("/deliveries")
     public List<NovelDeliveryView> deliveries(@AuthenticationPrincipal AuthUser user) { return service.deliveries(user.id()); }

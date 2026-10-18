@@ -1,6 +1,7 @@
 package app.bookey.api.novel.dto;
 
 import app.bookey.domain.novel.*;
+import app.bookey.domain.wallet.SubscriptionStore;
 import jakarta.validation.constraints.*;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -39,12 +40,25 @@ public final class NovelDtos {
             @Schema(description = "내가 좋아요를 눌렀는지") boolean liked,
             @NotNull NovelMode mode, @Schema(description = "OPEN: 회차 하나를 배달할 사람 수") Integer deliveryCount) {}
     public record NovelLikeView(boolean liked, long likeCount) {}
-    /** 홈 열매 밭 — 지금 놓인 묶음과 오늘 남은 무료 새로고침. */
+    /** 홈 열매 밭 — 지금 놓인 묶음과 새로고침 횟수. 무료를 다 쓰면 광고를 보고, 광고 몫도 다 쓰면 결제해 새로고침한다. */
     public record NovelHomeFeedView(
             @Schema(description = "피드 자리에 놓을 작품, 저장된 순서대로. 받은 열매·내 차례 작품 뒤에 놓는다") @NotNull List<NovelSummary> novels,
             @Schema(description = "오늘 남은 무료 새로고침") int freeRefreshesLeftToday,
             @Schema(description = "하루 무료 새로고침 횟수") int dailyFreeRefreshes,
-            @Schema(description = "무료 새로고침이 다시 차는 때 — 다음 KST 자정") @NotNull Instant resetsAt) {}
+            @Schema(description = "무료·광고 새로고침이 다시 차는 때 — 다음 KST 자정") @NotNull Instant resetsAt,
+            @Schema(description = "오늘 남은 광고 새로고침 — 무료가 남아 있어도 센다. KST 자정에 다시 찬다") int adRefreshesLeftToday,
+            @Schema(description = "하루 광고 새로고침 횟수") int dailyAdRefreshes,
+            @Schema(description = "결제하고 아직 쓰지 않은 새로고침 — 날이 바뀌어도 남는다") int paidRefreshes) {}
+    /** 새로고침 결제 주문 — 오늘 무료·광고 횟수를 다 썼고 결제해 둔 횟수도 없을 때만 연다. */
+    public record NovelRefreshCheckoutRequest(@Schema(description = "APPLE·GOOGLE 만") @NotNull SubscriptionStore provider) {}
+    public record NovelRefreshCheckoutView(@NotNull SubscriptionStore provider,
+            @Schema(description = "스토어에서 살 소모성 상품 — 한 번 사면 새로고침 한 번") @NotNull String productId,
+            @NotNull String orderId,
+            @Schema(description = "주문에 적어 둔 가격 — 실제 결제 금액은 스토어 가격이다") int amountKrw) {}
+    /** 스토어 결제를 마친 뒤 보내는 확인 요청. GOOGLE 은 receiptData(구매 토큰), APPLE 은 originalTransactionId 가 있어야 한다. */
+    public record NovelRefreshVerifyRequest(@NotNull SubscriptionStore provider, @NotBlank String orderId, @NotBlank String productId,
+            @Schema(description = "GOOGLE: 구매 토큰") String receiptData,
+            @Schema(description = "APPLE: transactionId") String originalTransactionId) {}
     public record NovelDetail(@NotNull NovelSummary novel, List<NovelMemberView> members,
             List<NovelMemberView> applications, @NotNull String myMembership,
             boolean canApply, boolean canWrite, boolean canStart, boolean canComplete,
