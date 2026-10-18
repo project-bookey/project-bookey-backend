@@ -111,6 +111,7 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
 | `APPSTORE_ISSUER_ID` / `APPSTORE_KEY_ID` / `APPSTORE_PRIVATE_KEY` | App Store Server API 결제 검증 자격 증명 |
 | `GOOGLE_PLAY_PACKAGE_NAME` | Google Play 앱 패키지명 |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_PLAY_PRIVATE_KEY` | Google Play Developer API 결제 검증 서비스 계정 |
+| `RELAYNOVEL_REFRESH_PRODUCT_ID` / `RELAYNOVEL_APPSTORE_BUNDLE_ID` / `RELAYNOVEL_GOOGLE_PLAY_PACKAGE_NAME` | 릴레이노벨 홈 열매 밭 새로고침 결제(소모성 상품, 기본 `relaynovel.refresh.1`)와 그 앱의 번들 id·패키지명(기본 `app.relaynovel.mobile`). 결제 확인은 위 App Store·Google Play 자격 증명을 같이 쓰므로 Play 서비스 계정에 릴레이노벨 앱 권한이 있어야 한다. 운영은 기본값 |
 | `STORAGE_TYPE` | 독후감 사진 저장소 — `local`(기본) / `gcs` / `none`(업로드 끔). `prod` 프로파일 기본값은 `none` |
 | `STORAGE_LOCAL_DIR` | `local` 일 때 파일을 둘 디렉터리 (기본 `./uploads` → `server/uploads`) |
 | `STORAGE_PUBLIC_BASE_URL` | `local` 일 때 사진 URL 의 origin (예: `http://192.168.0.10:8080`). 비우면 요청 origin |

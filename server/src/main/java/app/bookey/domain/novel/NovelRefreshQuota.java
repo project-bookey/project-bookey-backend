@@ -5,10 +5,11 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 
 /**
- * 홈 열매 밭 새로고침의 하루 무료 횟수. 엽서처럼 KST 자정에 다시 찬다.
+ * 홈 열매 밭 새로고침의 하루 횟수. 무료 횟수와 광고 횟수를 같은 규칙으로 센다 — 엽서처럼 KST 자정에 다시 찬다.
  * 자정에 따로 지우지 않고, 횟수를 센 날(countedOn)이 오늘이 아니면 읽을 때든 쓸 때든 쓴 횟수를 0 으로 본다.
+ * 결제한 새로고침은 날이 바뀌어도 남으니 여기서 세지 않는다({@link NovelHomeFeed#getPaidRefreshes}).
  */
-public record NovelRefreshQuota(int dailyFree, int usedToday, LocalDate countedOn) {
+public record NovelRefreshQuota(int dailyLimit, int usedToday, LocalDate countedOn) {
     public static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     /** 지금이 KST 로 어느 날인지. */
@@ -16,7 +17,7 @@ public record NovelRefreshQuota(int dailyFree, int usedToday, LocalDate countedO
         return LocalDate.ofInstant(now, KST);
     }
 
-    /** 무료 횟수가 다시 차는 때 — 다음 KST 자정. */
+    /** 무료·광고 횟수가 다시 차는 때 — 다음 KST 자정. */
     public static Instant nextResetAfter(Instant now) {
         return today(now).plusDays(1).atStartOfDay(KST).toInstant();
     }
@@ -27,7 +28,7 @@ public record NovelRefreshQuota(int dailyFree, int usedToday, LocalDate countedO
     }
 
     public int leftOn(LocalDate today) {
-        return Math.max(0, dailyFree - usedOn(today));
+        return Math.max(0, dailyLimit - usedOn(today));
     }
 
     public boolean canRefreshOn(LocalDate today) {
@@ -37,8 +38,8 @@ public record NovelRefreshQuota(int dailyFree, int usedToday, LocalDate countedO
     /** 하나를 쓴 뒤의 횟수. 날이 바뀌었으면 0 에서 다시 센다. */
     public NovelRefreshQuota useOneOn(LocalDate today) {
         if (!canRefreshOn(today)) {
-            throw new IllegalStateException("오늘 남은 무료 새로고침이 없다");
+            throw new IllegalStateException("오늘 남은 새로고침 횟수가 없다");
         }
-        return new NovelRefreshQuota(dailyFree, usedOn(today) + 1, today);
+        return new NovelRefreshQuota(dailyLimit, usedOn(today) + 1, today);
     }
 }

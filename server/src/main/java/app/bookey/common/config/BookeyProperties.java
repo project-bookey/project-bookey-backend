@@ -25,9 +25,20 @@ public record BookeyProperties(
     public record Novel(
             /** 하루 무료 새로고침 — 엽서처럼 KST 자정에 다시 찬다. */
             int feedRefreshDailyFree,
+            /** 무료를 다 쓴 뒤 광고를 보고 받는 하루 새로고침 — 무료와 같이 KST 자정에 다시 찬다. */
+            int feedRefreshDailyAd,
             /** 피드 자리 수 — 앱 열매 밭의 열매 자리 수와 같다. */
-            int homeFeedSize
-    ) {}
+            int homeFeedSize,
+            /** 광고 몫까지 다 쓴 뒤 사는 새로고침. */
+            RefreshPurchase refreshPurchase
+    ) {
+        /**
+         * 새로고침 결제 — 소모성 상품, 한 번 사면 새로고침 한 번. 릴레이노벨은 북키와 다른 스토어 앱이라 상품과 앱 id 를 따로 두고,
+         * 스토어 결제 확인 자격 증명(App Store Server API 키, Play 서비스 계정)은 bookey.payment 의 것을 같이 쓴다.
+         * priceKrw 는 주문에 적어 두는 값이라 스토어에 등록한 가격과 맞춰야 한다.
+         */
+        public record RefreshPurchase(String productId, int priceKrw, String appleBundleId, String googlePackageName) {}
+    }
 
     /** 소셜 피드 경제 (§14.2) — 엽서·우표·책갈피·구독 정책. */
     public record Social(

@@ -164,8 +164,15 @@ bookey:
       max-bytes: 10485760                          # 10MB
       max-per-post: 10
   novel:
-    feed-refresh-daily-free: 2           # 홈 열매 밭 하루 무료 새로고침 — 엽서처럼 KST 자정에 다시 찬다(다 쓰면 429)
+    feed-refresh-daily-free: 2           # 홈 열매 밭 하루 무료 새로고침 — 엽서처럼 KST 자정에 다시 찬다
+    feed-refresh-daily-ad: 3             # 무료를 다 쓴 뒤 광고를 보고 받는 하루 새로고침 — 무료와 같이 KST 자정에 다시 찬다(다 쓰면 결제)
     home-feed-size: 7                    # 피드 자리 수 — 앱 열매 밭의 열매 자리 수
+    refresh-purchase:                    # 광고 몫까지 다 쓴 뒤 사는 새로고침 — 릴레이노벨 앱의 소모성 상품, 한 번 사면 한 번
+      product-id: ${RELAYNOVEL_REFRESH_PRODUCT_ID:relaynovel.refresh.1}
+      price-krw: 1000                    # 주문에 적어 두는 가격 — 스토어에 등록한 가격과 맞춰야 한다
+      # 결제 확인 자격 증명은 bookey.payment.apple·google 의 것을 같이 쓰고 앱 id 만 릴레이노벨 것으로 바꾼다
+      apple-bundle-id: ${RELAYNOVEL_APPSTORE_BUNDLE_ID:app.relaynovel.mobile}
+      google-package-name: ${RELAYNOVEL_GOOGLE_PLAY_PACKAGE_NAME:app.relaynovel.mobile}
 
 logging:
   level:

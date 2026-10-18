@@ -131,6 +131,8 @@ public enum ErrorCode {
     NOVEL_DELIVERY_GONE(HttpStatus.CONFLICT, "이어 쓸 수 있는 시간이 지난 열매예요. 홈에서 다른 열매를 골라 주세요."),
     NOVEL_INVITEE_NOT_FOLLOWED(HttpStatus.BAD_REQUEST, "팔로우한 작가만 함께 쓰자고 고를 수 있어요."),
     NOVEL_REFRESH_DAILY_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "오늘 무료 새로고침을 다 썼어요. 자정이 지나면 다시 할 수 있어요."),
+    NOVEL_REFRESH_AD_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "오늘 광고로 받을 수 있는 새로고침을 다 썼어요. 결제하면 더 받을 수 있어요."),
+    NOVEL_REFRESH_STILL_LEFT(HttpStatus.CONFLICT, "아직 쓸 수 있는 새로고침이 남아 있어요. 남은 새로고침을 먼저 써 주세요."),
     NOVEL_FEED_NO_NEW(HttpStatus.CONFLICT, "지금은 새로 보여 줄 열매가 없어요. 조금 뒤에 다시 해 주세요."),
     POST_NOT_FOUND(HttpStatus.NOT_FOUND, "독후감을 찾을 수 없어요."),
     POST_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "댓글을 찾을 수 없어요."),
