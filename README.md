@@ -1,5 +1,16 @@
 # project-bookey-backend
 
+릴레이 소설 문장 다듬기: `POST /api/v1/novels/{id}/writing-assist` 또는
+`POST /api/v1/novels/deliveries/{deliveryId}/writing-assist`에 인증된 사용자로
+`{"turnNumber":1,"text":"다듬을 글"}`을 보냅니다. 기존 집필 권한을 확인하고 최대 2,000자를
+Bookey AI API로 전달합니다. 응답은 `{"text":"다듬은 글"}`이며 초안을 저장하지 않습니다.
+사용자별 분당 3회·첫 요청부터 24시간에 10회로 제한합니다. 앱에 AI 키를 전달하지 않습니다.
+
+AI 연결은 `BOOKEY_AI_BASE_URL`(로컬 기본 `http://localhost:8000`, EC2 `http://bookey-ai:8000`),
+`BOOKEY_AI_API_KEY`로 설정합니다. EC2 배포 시 `/opt/bookey-ai/ai-api-key`의 키를 백엔드
+환경변수에 동기화하며 AI가 없어도 백엔드는 기동합니다. AI 오류는 429/503으로 안내하고
+원격 오류 원문이나 인증키를 응답에 노출하지 않습니다.
+
 **읽기로 한 책을 진짜로 다 읽게 만들고, 진짜로 읽은 사람만 리뷰를 쓰는 독서 관리 앱**
 
 bookey 백엔드 API 저장소입니다. 프론트는 각각 별도 저장소에 있습니다.

@@ -63,6 +63,9 @@ springdoc:
     path: /openapi.json
 
 bookey:
+  ai:
+    base-url: ${BOOKEY_AI_BASE_URL:http://localhost:8000}
+    api-key: ${BOOKEY_AI_API_KEY:}
   jwt:
     secret: ${JWT_SECRET:local-dev-secret-please-change-this-to-32bytes-or-more}
     access-token-ttl: PT1H

@@ -12,6 +12,7 @@ concurrency:
 
 env:
   EC2_APP_DIR: ${{ vars.EC2_APP_DIR || '/opt/bookey' }}
+  EC2_AI_APP_DIR: ${{ vars.EC2_AI_APP_DIR || '/opt/bookey-ai' }}
 
 jobs:
   validate:
@@ -125,6 +126,12 @@ jobs:
               update_env "${key}" "${!key}"
             fi
           done
+
+          # 같은 EC2의 AI 배포가 관리하는 내부 인증키를 사용한다. Groq 키는 AI 서버에만 둔다.
+          if sudo test -s "${EC2_AI_APP_DIR}/ai-api-key"; then
+            update_env BOOKEY_AI_API_KEY "$(sudo cat "${EC2_AI_APP_DIR}/ai-api-key")"
+            update_env BOOKEY_AI_BASE_URL "http://bookey-ai:8000"
+          fi
 
           # EC2 운영 Compose도 저장소를 단일 원천으로 사용한다.
           sudo install -m 644 \

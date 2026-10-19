@@ -40,6 +40,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       SERVER_PORT: 8080
+      BOOKEY_AI_BASE_URL: ${BOOKEY_AI_BASE_URL:-http://bookey-ai:8000}
+      BOOKEY_AI_API_KEY: ${BOOKEY_AI_API_KEY:-}
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       DB_USER: ${POSTGRES_USER}
       DB_PASSWORD: ${POSTGRES_PASSWORD}
