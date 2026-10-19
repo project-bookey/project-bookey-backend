@@ -17,6 +17,8 @@ public class NovelMaintenanceJob {
     private final NovelCoverService coverService;
     private final NovelDeliveryRepository deliveries;
     private final NovelDeliveryService deliveryService;
+    private final NovelChapterRepository chapters;
+    private final NovelBranchBinService binService;
     @Scheduled(fixedDelay = 60000)
     public void advanceExpiredTurns() {
         for (Long id : novels.expiredIds(Instant.now(), PageRequest.of(0, 100))) {
@@ -28,6 +30,21 @@ public class NovelMaintenanceJob {
     public void resendOverdueDeliveries() {
         for (Long id : deliveries.overdueIds(Instant.now(), PageRequest.of(0, 100))) {
             try { deliveryService.expireOverdue(id); } catch (RuntimeException e) { log.warn("열매 다시 배달하기 실패: id={}", id, e); }
+        }
+    }
+    /** 한 달이 지나도 조회가 모자란 끝 가지를 나뭇가지 수거함으로 옮긴다. */
+    @Scheduled(fixedDelay = 600000)
+    public void pruneStaleBranches() {
+        Instant judgedBefore = Instant.now().minus(NovelChapter.JUDGE_AFTER);
+        for (Long id : chapters.staleTipIds(judgedBefore, NovelChapter.MIN_VIEWS, PageRequest.of(0, 100))) {
+            try { binService.pruneIfStale(id); } catch (RuntimeException e) { log.warn("가지 수거 실패: id={}", id, e); }
+        }
+    }
+    /** 수거함에서 일주일이 지난 가지를 지우고, 부모 회차에 빈자리만큼 다시 배달한다. */
+    @Scheduled(fixedDelay = 600000)
+    public void purgeBranchBin() {
+        for (Long id : chapters.purgeDueIds(Instant.now(), PageRequest.of(0, 100))) {
+            try { binService.purgeIfDue(id); } catch (RuntimeException e) { log.warn("수거함 가지 지우기 실패: id={}", id, e); }
         }
     }
     @Scheduled(cron = "0 25 4 * * *", zone = "Asia/Seoul")

@@ -19,14 +19,15 @@ class NovelBranchServiceTest {
     private final NovelDeliveryRepository deliveries = mock(NovelDeliveryRepository.class);
     private final NovelDeliveryService delivery = mock(NovelDeliveryService.class);
     private final UserRepository users = mock(UserRepository.class);
+    private final NovelSunlightService sunlight = mock(NovelSunlightService.class);
     private final NovelBranchService service = new NovelBranchService(novels, chapters, drafts, deliveries, delivery,
-            users, mock(RateLimiter.class));
+            sunlight, users, mock(RateLimiter.class));
     private Novel open;
     private NovelChapter parent;
     private NovelDelivery held;
 
     @BeforeEach void setup() {
-        open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 3, null);
+        open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
         ReflectionTestUtils.setField(open, "id", 10L);
         parent = new NovelChapter(10L, 1L, null, 1, "뿌리", "본문");
         ReflectionTestUtils.setField(parent, "id", 100L);
@@ -82,7 +83,14 @@ class NovelBranchServiceTest {
     void declineResends() {
         service.decline(5L, 7L);
         assertThat(held.getStatus()).isEqualTo(NovelDeliveryStatus.DECLINED);
-        verify(delivery).resend(eq(open), eq(parent), any());
+        verify(delivery).settleUnwritten(eq(open), eq(held), any(), eq(true));
+    }
+    @Test @DisplayName("수거함에 들어간 회차의 열매로는 가지를 뻗을 수 없다")
+    void prunedParentRejectsBranch() {
+        parent.prune(Instant.now());
+        assertThatThrownBy(() -> service.publish(5L, 7L, new NovelBranchWriteRequest("제목", "본문")))
+                .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.NOVEL_DELIVERY_GONE);
+        verify(chapters, never()).saveAndFlush(any());
     }
     @Test @DisplayName("초안은 배달 id 로 저장해 다른 열매의 원고와 섞이지 않는다")
     void draftIsKeyedByDelivery() {

@@ -30,7 +30,8 @@ public record BookeyProperties(
             /** 피드 자리 수 — 앱 열매 밭의 열매 자리 수와 같다. */
             int homeFeedSize,
             /** 광고 몫까지 다 쓴 뒤 사는 새로고침. */
-            RefreshPurchase refreshPurchase
+            RefreshPurchase refreshPurchase,
+            Sunlight sunlight
     ) {
         /**
          * 새로고침 결제 — 소모성 상품, 한 번 사면 새로고침 한 번. 릴레이노벨은 북키와 다른 스토어 앱이라 상품과 앱 id 를 따로 두고,
@@ -38,6 +39,12 @@ public record BookeyProperties(
          * priceKrw 는 주문에 적어 두는 값이라 스토어에 등록한 가격과 맞춰야 한다.
          */
         public record RefreshPurchase(String productId, int priceKrw, String appleBundleId, String googlePackageName) {}
+        /** 햇살 — 수거함의 가지 살리기와 내 글 잇기에 쓰는 소설 전용 재화. 충전 상품은 스토어에 같은 id 로 등록한다. */
+        public record Sunlight(int restoreCost, int selfBranchCost, List<Product> products,
+                               /** 릴레이노벨 앱은 북키 앱과 따로 스토어에 올라가 번들·패키지 id 가 다르다. 스토어 키는 북키 결제 설정을 쓴다. */
+                               String appleBundleId, String googlePackageName) {
+            public record Product(String productId, int quantity, int amountKrw) {}
+        }
     }
 
     /** 소셜 피드 경제 (§14.2) — 엽서·우표·책갈피·구독 정책. */

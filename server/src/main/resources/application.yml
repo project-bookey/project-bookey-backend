@@ -176,6 +176,21 @@ bookey:
       # 결제 확인 자격 증명은 bookey.payment.apple·google 의 것을 같이 쓰고 앱 id 만 릴레이노벨 것으로 바꾼다
       apple-bundle-id: ${RELAYNOVEL_APPSTORE_BUNDLE_ID:app.relaynovel.mobile}
       google-package-name: ${RELAYNOVEL_GOOGLE_PLAY_PACKAGE_NAME:app.relaynovel.mobile}
+    sunlight:                            # 햇살 — 소설 전용 재화(북키 책갈피와 따로)
+      restore-cost: 3                    # 나뭇가지 수거함의 가지 살리기
+      self-branch-cost: 5                # 내가 쓴 회차에 다음 회차 이어 쓰기
+      apple-bundle-id: ${RELAYNOVEL_APPSTORE_BUNDLE_ID:app.relaynovel.mobile}
+      google-package-name: ${RELAYNOVEL_GOOGLE_PLAY_PACKAGE_NAME:app.relaynovel.mobile}
+      products:                          # 충전 상품 — 앱스토어·플레이스토어에 같은 id 의 소모형 상품으로 등록한다
+        - product-id: relaynovel.sunlight.10
+          quantity: 10
+          amount-krw: 1100
+        - product-id: relaynovel.sunlight.30
+          quantity: 30
+          amount-krw: 3300
+        - product-id: relaynovel.sunlight.100
+          quantity: 100
+          amount-krw: 9900
 
 logging:
   level:

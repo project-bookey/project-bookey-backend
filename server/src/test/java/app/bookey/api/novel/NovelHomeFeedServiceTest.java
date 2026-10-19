@@ -31,9 +31,9 @@ class NovelHomeFeedServiceTest {
     private final NovelService novelService = new NovelService(novels, mock(NovelMemberRepository.class),
             mock(NovelChapterRepository.class), mock(NovelDraftRepository.class), mock(NovelCoverRepository.class), likes,
             mock(UserRepository.class), mock(RateLimiter.class), deliveries, mock(NovelDeliveryService.class),
-            mock(NovelBaseWorkRepository.class), mock(UserFollowRepository.class));
+            mock(NovelBaseWorkRepository.class), mock(UserFollowRepository.class), mock(NovelSunlightService.class));
     private final BookeyProperties properties = new BookeyProperties(null, null, null, null, null, null, null, null,
-            null, null, new BookeyProperties.Novel(2, 3, 7, null));
+            null, null, new BookeyProperties.Novel(2, 3, 7, null, null));
     private final NovelHomeFeedService service =
             new NovelHomeFeedService(feeds, novels, deliveries, novelService, properties, clock);
     /** 비공개가 됐거나 지워졌거나 만든 사람이 탈퇴해 보여 줄 수 없는 작품. */

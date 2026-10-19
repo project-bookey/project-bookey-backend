@@ -14,10 +14,12 @@ public final class NovelDtos {
             @NotNull Boolean isPublic, @Min(2) @Max(10) Integer memberLimit,
             @Min(1) @Max(50) Integer chapterLimit, @Min(1) @Max(168) Integer turnHours, Long coverId,
             @Schema(description = "릴레이 방식. 비우면 CIRCLE(예전 앱 호환)") NovelMode mode,
-            @Schema(description = "OPEN: 회차 하나를 배달할 사람 수") @Min(1) @Max(10) Integer deliveryCount,
+            @Schema(description = "예전 앱 호환용 — 받기만 하고 쓰지 않는다. 배달은 늘 10명에게 간다", deprecated = true) Integer deliveryCount,
             @Schema(description = "CIRCLE: 함께 쓸 팔로우한 작가(본인 빼고 최대 9명). 승인 없이 바로 참가한다")
             @Size(max = 9, message = "함께 쓸 작가는 아홉 명까지 고를 수 있어요.") List<Long> inviteeIds,
-            @Schema(description = "줄거리를 가져온 베이스 작품") Long baseWorkId) {}
+            @Schema(description = "줄거리를 가져온 베이스 작품") Long baseWorkId,
+            @Schema(description = "OPEN: 회차 하나에 붙을 수 있는 가지 수(10~20). 비우면 10")
+            @Min(Novel.BRANCH_LIMIT_MIN) @Max(Novel.BRANCH_LIMIT_MAX) Integer branchLimit) {}
     public record NovelCoverRequest(Long coverId) {}
     public record NovelMemberDecision(@NotNull Boolean approved) {}
     public record NovelWriteRequest(@NotNull @Min(1) Long turnNumber,
@@ -38,7 +40,8 @@ public final class NovelDtos {
             Instant turnDueAt, @NotNull Instant createdAt,
             @Schema(description = "탈퇴한 사람을 뺀 좋아요 수") long likeCount,
             @Schema(description = "내가 좋아요를 눌렀는지") boolean liked,
-            @NotNull NovelMode mode, @Schema(description = "OPEN: 회차 하나를 배달할 사람 수") Integer deliveryCount) {}
+            @NotNull NovelMode mode, @Schema(description = "OPEN: 회차 하나를 처음 배달할 사람 수(늘 10)") Integer deliveryCount,
+            @Schema(description = "OPEN: 회차 하나에 붙을 수 있는 가지 수") Integer branchLimit) {}
     public record NovelLikeView(boolean liked, long likeCount) {}
     /** 홈 열매 밭 — 지금 놓인 묶음과 새로고침 횟수. 무료를 다 쓰면 광고를 보고, 광고 몫도 다 쓰면 결제해 새로고침한다. */
     public record NovelHomeFeedView(
@@ -70,14 +73,33 @@ public final class NovelDtos {
             @NotNull String authorNickname, @NotNull String excerpt, @NotNull Instant createdAt) {}
     public record NovelChapterView(@NotNull Long id, @NotNull Long novelId, int chapterNumber,
             @NotNull String title, @NotNull String body, @NotNull String authorNickname,
-            @NotNull Instant createdAt, @Schema(description = "뻗어 나온 회차. 뿌리 회차는 비어 있다") Long parentChapterId) {}
+            @NotNull Instant createdAt, @Schema(description = "뻗어 나온 회차. 뿌리 회차는 비어 있다") Long parentChapterId,
+            @Schema(description = "글쓴이를 뺀, 이 회차를 연 사람 수(한 사람당 한 번)") int viewCount,
+            @Schema(description = "내가 쓴 회차라 햇살을 내고 다음 회차를 이어 쓸 수 있는지") boolean canSelfContinue,
+            @Schema(description = "내 글 잇기에 드는 햇살") int selfContinueCost) {}
     /** 회차 나무의 마디 하나. chapterNumber 는 가지의 깊이다. */
     public record NovelChapterNode(@NotNull Long id, Long parentChapterId, int chapterNumber, @NotNull String title,
             @NotNull String authorNickname, @NotNull String excerpt, @NotNull Instant createdAt) {}
     /** 내가 받은 열매 — 이 회차에서 가지를 뻗어 이어 쓸 수 있다. */
     public record NovelDeliveryView(@NotNull Long deliveryId, @NotNull NovelSummary novel, @NotNull Long chapterId,
-            int chapterNumber, @NotNull String chapterTitle, @NotNull Instant dueAt) {}
+            int chapterNumber, @NotNull String chapterTitle, @NotNull Instant dueAt,
+            @Schema(description = "RANDOM: 무작위로 온 열매, SELF: 햇살을 내고 내 회차에 이어 쓰는 열매(넘기면 햇살을 돌려받는다)")
+            @NotNull NovelDeliverySource source) {}
     public record NovelBaseWorkView(@NotNull Long id, @NotNull String title, @NotNull String genre,
             @NotNull String synopsis, @NotNull String source) {}
+    /** 나뭇가지 수거함의 가지 하나 — 지울 날(purgeAt) 전에 살리거나 버린다. */
+    public record NovelBinBranchView(@NotNull Long chapterId, @NotNull Long novelId, @NotNull String novelTitle,
+            int chapterNumber, @NotNull String title, @NotNull String excerpt, int viewCount,
+            @NotNull Instant prunedAt, @NotNull Instant purgeAt) {}
+    public record NovelBranchBinView(@NotNull List<NovelBinBranchView> branches,
+            @Schema(description = "가지 하나를 살리는 데 드는 햇살") int restoreCost) {}
+    public record NovelSunlightProductView(@NotNull String productId, int quantity, int amountKrw) {}
+    public record NovelSunlightView(int balance, int restoreCost, int selfBranchCost,
+            @NotNull List<NovelSunlightProductView> products) {}
+    public record NovelSunlightCheckoutRequest(@NotNull SubscriptionStore provider, @NotBlank String productId) {}
+    public record NovelSunlightCheckoutView(@NotNull SubscriptionStore provider, @NotNull String productId,
+            @NotNull String orderId, int quantity, int amountKrw) {}
+    public record NovelSunlightVerifyRequest(@NotNull SubscriptionStore provider, @NotBlank String orderId,
+            @NotBlank String productId, String receiptData, String originalTransactionId) {}
     public record NovelDraftView(long turnNumber, @NotNull String title, @NotNull String body, Instant savedAt) {}
 }

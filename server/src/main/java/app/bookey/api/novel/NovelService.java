@@ -31,21 +31,22 @@ public class NovelService {
     private final NovelDeliveryService delivery;
     private final NovelBaseWorkRepository baseWorks;
     private final UserFollowRepository follows;
+    private final NovelSunlightService sunlight;
 
     @Transactional
     public NovelDetail create(Long me, CreateNovelRequest request) {
         limiter.require("novel:create:" + me, 5, Duration.ofMinutes(1));
         NovelMode mode = request.mode() == null ? NovelMode.CIRCLE : request.mode();
-        if (mode == NovelMode.OPEN && (request.kind() != NovelKind.RELAY || request.deliveryCount() == null))
-            throw ApiException.of(ErrorCode.INVALID_REQUEST);
+        if (mode == NovelMode.OPEN && request.kind() != NovelKind.RELAY) throw ApiException.of(ErrorCode.INVALID_REQUEST);
         Long baseWorkId = requireBaseWork(request.baseWorkId());
         int chapterLimit = request.chapterLimit() == null ? 20 : request.chapterLimit();
         int turnHours = request.turnHours() == null ? 24 : request.turnHours();
         List<Long> invitees = mode == NovelMode.CIRCLE ? invitees(me, request.inviteeIds()) : List.of();
         Novel created;
         if (mode == NovelMode.OPEN) {
+            int branchLimit = request.branchLimit() == null ? Novel.BRANCH_LIMIT_MIN : request.branchLimit();
             created = Novel.open(me, request.title(), request.description(), request.genre(), chapterLimit, turnHours,
-                    request.deliveryCount(), baseWorkId);
+                    branchLimit, baseWorkId);
         } else {
             // 함께 쓸 작가를 고르면 정원은 고른 사람과 나다. 고르지 않으면 예전처럼 모집한다.
             int memberLimit = invitees.isEmpty() ? (request.memberLimit() == null ? 6 : request.memberLimit()) : invitees.size() + 1;
@@ -107,12 +108,25 @@ public class NovelService {
         List<NovelDeliveryView> views = new ArrayList<>();
         for (NovelDelivery d : held) {
             Novel n = byId.get(d.getNovelId());
-            NovelChapter c = chapters.findById(d.getChapterId()).orElse(null);
+            NovelChapter c = chapters.findById(d.getChapterId()).filter(NovelChapter::isActive).orElse(null);
             if (n == null || c == null) continue;
-            views.add(new NovelDeliveryView(d.getId(), summary(n, me, likeStats), c.getId(), c.getChapterNumber(),
-                    c.getTitle(), d.getDueAt()));
+            views.add(deliveryView(d, n, c, me, likeStats));
         }
         return views;
+    }
+    private NovelDeliveryView deliveryView(NovelDelivery d, Novel n, NovelChapter c, Long me, LikeStats likeStats) {
+        return new NovelDeliveryView(d.getId(), summary(n, me, likeStats), c.getId(), c.getChapterNumber(),
+                c.getTitle(), d.getDueAt(), d.getSource());
+    }
+    /** 내 글 잇기 — 햇살을 내고 내가 쓴 회차를 나에게 배달한다. 그 뒤로는 받은 열매처럼 쓰고 발행한다. */
+    @Transactional
+    public NovelDeliveryView sendToSelf(Long me, Long id, Long chapterId) {
+        limiter.require("novel:self-branch:" + me, 10, Duration.ofMinutes(1));
+        Novel n = readable(me, id, true);
+        NovelChapter c = chapters.findByIdAndNovelId(chapterId, id).filter(NovelChapter::isActive)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        NovelDelivery d = delivery.sendToSelf(n, c, me, Instant.now());
+        return deliveryView(d, n, c, me, likeStats(List.of(n), me));
     }
     /** 책·독후감 좋아요처럼 누를 때마다 켜고 끈다. 볼 수 있는 작품에만 누를 수 있다. */
     @Transactional
@@ -187,7 +201,7 @@ public class NovelService {
     public NovelDetail complete(Long me, Long id) {
         Novel n = readable(me, id, true); requireOwner(n, me);
         if (n.getChapterCount() == 0) throw new ApiException(ErrorCode.CONFLICT, "첫 회차를 올린 뒤 완결할 수 있어요.");
-        n.complete(); delivery.closeAll(n.getId()); return detail(n, me);
+        n.complete(); delivery.closeAll(n); return detail(n, me);
     }
     @Transactional
     public void leave(Long me, Long id) {
@@ -229,40 +243,52 @@ public class NovelService {
         Instant now = Instant.now();
         n.publish(writerIds(n), now);
         if (n.isOpen()) delivery.deliverNewChapter(n, c, now);
-        return chapterView(c);
+        return chapterView(c, n, me);
     }
     @Transactional(readOnly = true)
     public PageResponse<NovelChapterSummary> chapters(Long me, Long id, Pageable page) {
         requireReadChapters(me, id);
-        return PageResponse.of(chapters.findByNovelIdOrderByChapterNumberAscIdAsc(id, page),
+        return PageResponse.of(chapters.findByNovelIdAndStateOrderByChapterNumberAscIdAsc(id, NovelChapterState.ACTIVE, page),
                 c -> new NovelChapterSummary(c.getId(), c.getChapterNumber(), c.getTitle(),
                         nickname(c.getAuthorId()), excerpt(c.getBody()), c.getCreatedAt()));
     }
     @Transactional(readOnly = true)
     public NovelChapterView chapter(Long me, Long id, int number) {
-        requireReadChapters(me, id);
-        return chapterView(chapters.findFirstByNovelIdAndChapterNumberOrderByIdAsc(id, number)
-                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)));
+        Novel n = requireReadChapters(me, id);
+        return chapterView(chapters.findFirstByNovelIdAndChapterNumberAndStateOrderByIdAsc(id, number, NovelChapterState.ACTIVE)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)), n, me);
     }
-    /** 가지가 갈라진 작품은 번호(깊이)로 회차를 하나로 정할 수 없어 id 로 읽는다. */
-    @Transactional(readOnly = true)
+    /**
+     * 가지가 갈라진 작품은 번호(깊이)로 회차를 하나로 정할 수 없어 id 로 읽는다. 앱이 회차를 열 때 부르므로 여기서 조회수를 센다 —
+     * 글쓴이 본인은 빼고 한 사람당 한 번. 수거함에 들어간 가지는 나무에서 숨기므로 찾지 못한다.
+     */
+    @Transactional
     public NovelChapterView chapterNode(Long me, Long id, Long chapterId) {
-        requireReadChapters(me, id);
-        return chapterView(chapters.findByIdAndNovelId(chapterId, id).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND)));
+        Novel n = requireReadChapters(me, id);
+        NovelChapter c = chapters.findByIdAndNovelId(chapterId, id).filter(NovelChapter::isActive)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        int viewCount = c.getViewCount();
+        if (!c.isWrittenBy(me) && chapters.recordView(c.getId(), me) > 0) {
+            chapters.incrementViews(c.getId());
+            viewCount++;
+        }
+        return chapterView(c, n, me, viewCount);
     }
     /** 회차 나무 전체 — 마디마다 부모 회차를 실어, 앱이 가지와 끝 열매를 그린다. */
     @Transactional(readOnly = true)
     public List<NovelChapterNode> chapterTree(Long me, Long id) {
         requireReadChapters(me, id);
-        List<NovelChapter> all = chapters.findByNovelIdOrderByIdAsc(id);
+        List<NovelChapter> all = chapters.findByNovelIdAndStateOrderByIdAsc(id, NovelChapterState.ACTIVE);
         Map<Long, String> nicknames = nicknames(all.stream().map(NovelChapter::getAuthorId).filter(Objects::nonNull).distinct().toList());
         return all.stream().map(c -> new NovelChapterNode(c.getId(), c.getParentChapterId(), c.getChapterNumber(),
                 c.getTitle(), c.getAuthorId() == null ? "탈퇴한 작가" : nicknames.getOrDefault(c.getAuthorId(), "탈퇴한 작가"),
                 excerpt(c.getBody()), c.getCreatedAt())).toList();
     }
-    private NovelChapterView chapterView(NovelChapter c) {
+    private NovelChapterView chapterView(NovelChapter c, Novel n, Long me) { return chapterView(c, n, me, c.getViewCount()); }
+    private NovelChapterView chapterView(NovelChapter c, Novel n, Long me, int viewCount) {
         return new NovelChapterView(c.getId(), c.getNovelId(), c.getChapterNumber(), c.getTitle(),
-                c.getBody(), nickname(c.getAuthorId()), c.getCreatedAt(), c.getParentChapterId());
+                c.getBody(), nickname(c.getAuthorId()), c.getCreatedAt(), c.getParentChapterId(), viewCount,
+                delivery.canSendToSelf(n, c, me, Instant.now()), sunlight.selfBranchCost());
     }
     @Transactional
     public void expire(Long id) { novels.lockById(id).ifPresent(this::expire); }
@@ -272,10 +298,11 @@ public class NovelService {
         if (n.getKind() == NovelKind.RELAY && !n.isOpen() && n.getStatus() == NovelStatus.ONGOING
                 && !ids.contains(n.getCurrentWriterId())) n.skip(ids, Instant.now());
     }
-    private void requireReadChapters(Long me, Long id) {
+    private Novel requireReadChapters(Long me, Long id) {
         Novel n = readable(me, id, false);
         if (!n.isPublic() && !n.isOwner(me) && members.findByNovelIdAndUserId(id, me)
                 .filter(m -> "ACTIVE".equals(m.getStatus())).isEmpty()) throw ApiException.of(ErrorCode.FORBIDDEN);
+        return n;
     }
     private void requireWrite(Novel n, Long me, long turn) {
         if (!n.canWrite(me) || n.getTurnNumber() != turn) throw ApiException.of(ErrorCode.NOVEL_NOT_YOUR_TURN);
@@ -314,7 +341,8 @@ public class NovelService {
         return new NovelSummary(n.getId(), n.getKind(), n.getStatus(), n.getTitle(), n.getDescription(), n.getGenre(),
                 url, nickname(n.getOwnerId()), memberCount(n), n.getMemberLimit(), n.getChapterCount(),
                 n.getChapterLimit(), n.isPublic(), n.isOwner(me), myTurn, n.getTurnDueAt(), n.getCreatedAt(),
-                likeStats.count(n.getId()), likeStats.liked(n.getId()), n.getMode(), n.getDeliveryCount());
+                likeStats.count(n.getId()), likeStats.liked(n.getId()), n.getMode(), n.getDeliveryCount(),
+                n.isOpen() ? n.getBranchLimit() : null);
     }
     /** 열매로 퍼뜨리는 작품은 참가 신청이 없으니 회차를 쓴 작가 수를 센다. */
     private int memberCount(Novel n) {
