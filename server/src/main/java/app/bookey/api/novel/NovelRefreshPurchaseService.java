@@ -103,40 +103,11 @@ public class NovelRefreshPurchaseService {
         return transaction.transactionId();
     }
 
-    /**
-     * 북키 앱의 App Store Server API 키(같은 개발자 계정)로 릴레이노벨 앱의 거래를 조회한다 — 번들 id 만 릴레이노벨 것으로 바꾼다.
-     * 키가 없으면 결제를 확인할 수 없으니 거절한다.
-     */
     private BookeyProperties.Payment.Apple appleConfig() {
-        BookeyProperties.Payment payment = properties.payment();
-        String bundleId = purchaseConfig().appleBundleId();
-        if (payment == null || payment.apple() == null || blank(bundleId)) {
-            throw ApiException.of(ErrorCode.PAYMENT_NOT_CONFIGURED);
-        }
-        BookeyProperties.Payment.Apple bookey = payment.apple();
-        if (blank(bookey.issuerId()) || blank(bookey.keyId()) || blank(bookey.privateKey())) {
-            throw ApiException.of(ErrorCode.PAYMENT_NOT_CONFIGURED);
-        }
-        return new BookeyProperties.Payment.Apple(bookey.issuerId(), bookey.keyId(), bundleId, bookey.privateKey(),
-                bookey.environment());
+        return NovelStoreCredentials.apple(properties.payment(), purchaseConfig().appleBundleId());
     }
-
-    /**
-     * 북키의 Play 서비스 계정으로 릴레이노벨 앱의 구매를 조회한다 — 패키지명만 릴레이노벨 것으로 바꾼다.
-     * Play Console 에서 그 서비스 계정에 릴레이노벨 앱 권한을 줘야 한다. 계정이 없으면 결제를 확인할 수 없으니 거절한다.
-     */
     private BookeyProperties.Payment.Google googleConfig() {
-        BookeyProperties.Payment payment = properties.payment();
-        String packageName = purchaseConfig().googlePackageName();
-        if (payment == null || payment.google() == null || blank(packageName)) {
-            throw ApiException.of(ErrorCode.PAYMENT_NOT_CONFIGURED);
-        }
-        BookeyProperties.Payment.Google bookey = payment.google();
-        if (blank(bookey.serviceAccountEmail()) || blank(bookey.privateKey())) {
-            throw ApiException.of(ErrorCode.PAYMENT_NOT_CONFIGURED);
-        }
-        return new BookeyProperties.Payment.Google(packageName, bookey.serviceAccountEmail(), bookey.privateKey(),
-                bookey.rtdnToken());
+        return NovelStoreCredentials.google(properties.payment(), purchaseConfig().googlePackageName());
     }
 
     private BookeyProperties.Novel.RefreshPurchase purchaseConfig() {
@@ -145,5 +116,5 @@ public class NovelRefreshPurchaseService {
         return config;
     }
 
-    private static boolean blank(String value) { return value == null || value.isBlank(); }
+    private static boolean blank(String value) { return NovelStoreCredentials.blank(value); }
 }

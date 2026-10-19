@@ -30,7 +30,7 @@ class NovelRefreshPurchaseServiceTest {
             new BookeyProperties.Payment.Apple("issuer", "key", "app.bookey.mobile", "private-key", "SANDBOX"),
             new BookeyProperties.Payment.Google("app.bookey.mobile", "service@test", "private-key", "rtdn-token"));
     private static final BookeyProperties.Novel NOVEL = new BookeyProperties.Novel(2, 3, 7,
-            new BookeyProperties.Novel.RefreshPurchase(PRODUCT, 1000, RELAY_APP, RELAY_APP));
+            new BookeyProperties.Novel.RefreshPurchase(PRODUCT, 1000, RELAY_APP, RELAY_APP), null);
 
     private final NovelHomeFeedRepository feeds = mock(NovelHomeFeedRepository.class);
     private final NovelRepository novels = mock(NovelRepository.class);
@@ -42,7 +42,7 @@ class NovelRefreshPurchaseServiceTest {
     private final NovelService novelService = new NovelService(novels, mock(NovelMemberRepository.class),
             mock(NovelChapterRepository.class), mock(NovelDraftRepository.class), mock(NovelCoverRepository.class),
             mock(NovelLikeRepository.class), mock(UserRepository.class), mock(RateLimiter.class), deliveries,
-            mock(NovelDeliveryService.class), mock(NovelBaseWorkRepository.class), mock(UserFollowRepository.class));
+            mock(NovelDeliveryService.class), mock(NovelBaseWorkRepository.class), mock(UserFollowRepository.class), mock(NovelSunlightService.class));
     private final NovelHomeFeedService homeFeedService = feedService(PAYMENT);
     private final NovelRefreshPurchaseService service = purchaseService(homeFeedService, PAYMENT);
 

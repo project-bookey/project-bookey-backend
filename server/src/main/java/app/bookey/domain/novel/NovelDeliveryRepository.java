@@ -28,6 +28,9 @@ public interface NovelDeliveryRepository extends JpaRepository<NovelDelivery, Lo
     Optional<NovelDelivery> holdingIn(@Param("novelId") Long novelId, @Param("userId") Long userId, @Param("now") Instant now);
 
     List<NovelDelivery> findByNovelIdAndStatus(Long novelId, NovelDeliveryStatus status);
+    List<NovelDelivery> findByChapterIdAndStatus(Long chapterId, NovelDeliveryStatus status);
+    /** 이 회차를 들고 있는 열매 수 — 쓰면 가지가 되므로 가지 자리를 미리 차지한다. */
+    long countByChapterIdAndStatus(Long chapterId, NovelDeliveryStatus status);
 
     @Query("select d.id from NovelDelivery d where d.status = 'DELIVERED' and d.dueAt <= :now order by d.dueAt")
     List<Long> overdueIds(@Param("now") Instant now, Pageable pageable);

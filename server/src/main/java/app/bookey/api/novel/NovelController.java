@@ -22,6 +22,9 @@ public class NovelController {
     private final NovelGenreService genreService;
     private final NovelHomeFeedService homeFeedService;
     private final NovelRefreshPurchaseService refreshPurchaseService;
+    private final NovelBranchBinService binService;
+    private final NovelSunlightService sunlightService;
+    private final NovelSunlightPurchaseService sunlightPurchaseService;
     @GetMapping
     public PageResponse<NovelSummary> feed(@AuthenticationPrincipal AuthUser user,
             @RequestParam(defaultValue = "SOLO") NovelKind kind, @RequestParam(required = false) NovelStatus status,
@@ -76,6 +79,34 @@ public class NovelController {
     @PostMapping("/deliveries/{deliveryId}/decline")
     public void decline(@AuthenticationPrincipal AuthUser user, @PathVariable Long deliveryId) {
         branchService.decline(user.id(), deliveryId);
+    }
+    @Operation(summary = "나뭇가지 수거함 — 한 달 동안 조회가 50회를 못 넘겨 나무에서 숨긴 내 가지. 지울 날(purgeAt) 전에 살리거나 버린다")
+    @GetMapping("/me/branch-bin")
+    public NovelBranchBinView branchBin(@AuthenticationPrincipal AuthUser user) { return binService.bin(user.id()); }
+    @Operation(summary = "수거함의 가지 살리기 — 햇살을 내고 나무로 되돌린다. 살린 날부터 한 달 뒤 다시 판정. 햇살이 모자라면 402")
+    @PostMapping("/me/branch-bin/{chapterId}/restore")
+    public NovelBranchBinView restoreBranch(@AuthenticationPrincipal AuthUser user, @PathVariable Long chapterId) {
+        return binService.restore(user.id(), chapterId);
+    }
+    @Operation(summary = "수거함의 가지 버리기 — 바로 지우고 부모 회차의 가지 자리를 비운다")
+    @PostMapping("/me/branch-bin/{chapterId}/discard")
+    public NovelBranchBinView discardBranch(@AuthenticationPrincipal AuthUser user, @PathVariable Long chapterId) {
+        return binService.discard(user.id(), chapterId);
+    }
+    @Operation(summary = "햇살 잔액·쓰는 값·충전 상품")
+    @GetMapping("/me/sunlight")
+    public NovelSunlightView sunlight(@AuthenticationPrincipal AuthUser user) { return sunlightService.view(user.id()); }
+    @Operation(summary = "햇살 충전 주문 — 앱 안 결제(APPLE·GOOGLE)만")
+    @PostMapping("/sunlight-purchases/checkout")
+    public NovelSunlightCheckoutView checkoutSunlight(@AuthenticationPrincipal AuthUser user,
+            @Valid @RequestBody NovelSunlightCheckoutRequest request) {
+        return sunlightPurchaseService.checkout(user.id(), request);
+    }
+    @Operation(summary = "햇살 충전 확인 — 스토어에 거래를 확인하면 햇살을 넣는다. 같은 주문은 한 번만 넣는다")
+    @PostMapping("/sunlight-purchases/verify")
+    public NovelSunlightView verifySunlight(@AuthenticationPrincipal AuthUser user,
+            @Valid @RequestBody NovelSunlightVerifyRequest request) {
+        return sunlightPurchaseService.verify(user.id(), request);
     }
     @GetMapping("/genres")
     public List<String> genres() { return genreService.genres(); }
@@ -135,6 +166,11 @@ public class NovelController {
     @GetMapping("/{id}/chapters/nodes/{chapterId}")
     public NovelChapterView chapterNode(@AuthenticationPrincipal AuthUser user, @PathVariable Long id, @PathVariable Long chapterId) {
         return service.chapterNode(user.id(), id, chapterId);
+    }
+    @Operation(summary = "내 글 잇기 — 햇살을 내고 내가 쓴 회차를 나에게 배달한다(마감 7일). 넘기거나 마감이 지나면 햇살을 돌려받는다")
+    @PostMapping("/{id}/chapters/{chapterId}/self-delivery") @WriteBanGuarded
+    public NovelDeliveryView selfDelivery(@AuthenticationPrincipal AuthUser user, @PathVariable Long id, @PathVariable Long chapterId) {
+        return service.sendToSelf(user.id(), id, chapterId);
     }
     @GetMapping("/{id}/chapters/{number}")
     public NovelChapterView chapter(@AuthenticationPrincipal AuthUser user, @PathVariable Long id, @PathVariable int number) {

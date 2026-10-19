@@ -21,6 +21,7 @@ public class NovelBranchService {
     private final NovelDraftRepository drafts;
     private final NovelDeliveryRepository deliveries;
     private final NovelDeliveryService delivery;
+    private final NovelSunlightService sunlight;
     private final UserRepository users;
     private final RateLimiter limiter;
 
@@ -51,7 +52,7 @@ public class NovelBranchService {
         Novel n = novels.lockById(found.getNovelId()).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         NovelDelivery d = held(me, deliveryId, true);
         NovelChapter parent = chapters.findById(d.getChapterId()).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
-        if (!n.canGrowFrom(parent.getChapterNumber())) throw ApiException.of(ErrorCode.NOVEL_DELIVERY_GONE);
+        if (!parent.isActive() || !n.canGrowFrom(parent.getChapterNumber())) throw ApiException.of(ErrorCode.NOVEL_DELIVERY_GONE);
         NovelChapter branch = chapters.saveAndFlush(new NovelChapter(n.getId(), me, parent.getId(),
                 parent.getChapterNumber() + 1, request.title(), request.body()));
         d.written(branch.getId());
@@ -59,10 +60,11 @@ public class NovelBranchService {
         n.addBranch();
         delivery.deliverNewChapter(n, branch, now);
         return new NovelChapterView(branch.getId(), n.getId(), branch.getChapterNumber(), branch.getTitle(),
-                branch.getBody(), nickname(me), branch.getCreatedAt(), branch.getParentChapterId());
+                branch.getBody(), nickname(me), branch.getCreatedAt(), branch.getParentChapterId(), branch.getViewCount(),
+                delivery.canSendToSelf(n, branch, me, now), sunlight.selfBranchCost());
     }
 
-    /** 넘기기 — 열매를 내려놓으면 다른 한 사람에게 다시 간다. */
+    /** 넘기기 — 열매를 내려놓으면 다른 한 사람에게 다시 간다. 내 글 잇기였으면 낸 햇살을 돌려받는다. */
     @Transactional
     public void decline(Long me, Long deliveryId) {
         Instant now = Instant.now();
@@ -71,7 +73,7 @@ public class NovelBranchService {
         NovelDelivery d = held(me, deliveryId, true);
         d.decline();
         drafts.findByNovelIdAndUserId(n.getId(), me).filter(saved -> saved.getTurnNumber() == d.getId()).ifPresent(drafts::delete);
-        chapters.findById(d.getChapterId()).ifPresent(c -> delivery.resend(n, c, now));
+        delivery.settleUnwritten(n, d, now, true);
     }
 
     private NovelDelivery held(Long me, Long deliveryId, boolean lock) {

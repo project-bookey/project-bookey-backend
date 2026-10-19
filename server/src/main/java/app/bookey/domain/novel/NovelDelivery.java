@@ -16,11 +16,23 @@ public class NovelDelivery extends BaseTimeEntity {
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 10) private NovelDeliveryStatus status;
     @Column(name = "due_at", nullable = false) private Instant dueAt;
     @Column(name = "written_chapter_id") private Long writtenChapterId;
+    @Enumerated(EnumType.STRING) @Column(nullable = false, length = 10) private NovelDeliverySource source;
+    /** 내 글 잇기에 낸 햇살. 쓰지 않고 끝나면 이만큼 돌려준다. */
+    @Column(name = "sunlight_paid", nullable = false) private int sunlightPaid;
 
     public NovelDelivery(Long novelId, Long chapterId, Long recipientId, Instant dueAt) {
         this.novelId = novelId; this.chapterId = chapterId; this.recipientId = recipientId;
         this.dueAt = dueAt; this.status = NovelDeliveryStatus.DELIVERED;
+        this.source = NovelDeliverySource.RANDOM;
     }
+    /** 햇살을 내고 내가 쓴 회차를 나에게 보낸다. */
+    public static NovelDelivery toSelf(Long novelId, Long chapterId, Long authorId, Instant dueAt, int sunlightPaid) {
+        NovelDelivery d = new NovelDelivery(novelId, chapterId, authorId, dueAt);
+        d.source = NovelDeliverySource.SELF;
+        d.sunlightPaid = sunlightPaid;
+        return d;
+    }
+    public boolean isSelf() { return source == NovelDeliverySource.SELF; }
     /** 마감 시각은 포함하지 않는다 — 차례 마감과 같은 규칙. */
     public boolean isHeldBy(Long userId, Instant now) {
         return status == NovelDeliveryStatus.DELIVERED && recipientId.equals(userId) && now.isBefore(dueAt);

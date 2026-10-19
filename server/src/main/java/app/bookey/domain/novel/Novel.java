@@ -14,6 +14,10 @@ import java.util.List;
 @Table(name = "novels")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Novel extends BaseTimeEntity {
+    /** 새 회차는 늘 이만큼에게 먼저 배달한다(사용자 결정). */
+    public static final int DELIVERY_COUNT = 10;
+    public static final int BRANCH_LIMIT_MIN = 10;
+    public static final int BRANCH_LIMIT_MAX = 20;
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @Column(name = "owner_id", nullable = false) private Long ownerId;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 10) private NovelKind kind;
@@ -26,8 +30,10 @@ public class Novel extends BaseTimeEntity {
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 10) private NovelMode mode;
     /** 열매로 퍼뜨리는 작품(OPEN)은 작가 수 제한이 없어 비어 있다. */
     @Column(name = "member_limit") private Integer memberLimit;
-    /** OPEN 작품이 회차 하나를 몇 명에게 배달할지. */
+    /** OPEN 작품이 회차 하나를 몇 명에게 배달할지 — 늘 {@link #DELIVERY_COUNT}. */
     @Column(name = "delivery_count") private Integer deliveryCount;
+    /** OPEN 작품의 회차 하나에 붙을 수 있는 가지 수. 수거함에 있는 가지와 들고 있는 열매도 자리를 차지한다. */
+    @Column(name = "branch_limit", nullable = false) private int branchLimit = BRANCH_LIMIT_MIN;
     @Column(name = "base_work_id") private Long baseWorkId;
     @Column(name = "chapter_limit", nullable = false) private int chapterLimit;
     @Column(name = "turn_hours", nullable = false) private int turnHours;
@@ -55,11 +61,12 @@ public class Novel extends BaseTimeEntity {
 
     /** 열매로 퍼뜨리는 작품 — 바로 연재가 시작되고 만든 사람이 1회차를 쓴다. 그 뒤 회차는 배달로만 생긴다. */
     public static Novel open(Long ownerId, String title, String description, String genre, int chapterLimit,
-                             int turnHours, int deliveryCount, Long baseWorkId) {
+                             int turnHours, int branchLimit, Long baseWorkId) {
         Novel n = new Novel(ownerId, NovelKind.RELAY, title, description, genre, 1, chapterLimit, turnHours, true);
         n.mode = NovelMode.OPEN;
         n.memberLimit = null;
-        n.deliveryCount = deliveryCount;
+        n.deliveryCount = DELIVERY_COUNT;
+        n.branchLimit = branchLimit;
         n.baseWorkId = baseWorkId;
         n.status = NovelStatus.ONGOING;
         n.currentWriterId = ownerId;
@@ -103,6 +110,8 @@ public class Novel extends BaseTimeEntity {
     }
     /** 배달받은 사람이 가지를 하나 뻗었다. 작품 전체의 완결은 만든 사람이 정한다. */
     public void addBranch() { chapterCount++; }
+    /** 가지가 수거함으로 가면 나무에서 숨기므로 회차 수에서도 뺀다. 살리면 {@link #addBranch()} 로 되돌린다. */
+    public void hideBranch() { chapterCount = Math.max(0, chapterCount - 1); }
     /** 지연된 배치도 경과한 차례 수를 한 번에 계산해 무한 반복하지 않는다. */
     public void expire(List<Long> writers, Instant now) {
         if (status != NovelStatus.ONGOING || kind != NovelKind.RELAY || mode == NovelMode.OPEN || turnDueAt == null

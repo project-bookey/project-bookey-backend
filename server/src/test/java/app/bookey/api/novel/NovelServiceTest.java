@@ -29,7 +29,7 @@ class NovelServiceTest {
     private final NovelBaseWorkRepository baseWorks = mock(NovelBaseWorkRepository.class);
     private final UserFollowRepository follows = mock(UserFollowRepository.class);
     private final NovelService service = new NovelService(novels, members, chapters, drafts, covers, likes, users,
-            mock(RateLimiter.class), deliveries, delivery, baseWorks, follows);
+            mock(RateLimiter.class), deliveries, delivery, baseWorks, follows, mock(NovelSunlightService.class));
     private Novel n;
     @BeforeEach void setup() {
         n = new Novel(1L, NovelKind.RELAY, "제목", "소개", "일상", 2, 10, 24, true);
@@ -120,9 +120,9 @@ class NovelServiceTest {
         assertThat(content.get(1).likeCount()).isZero(); assertThat(content.get(1).liked()).isFalse();
         verify(likes, times(1)).countPerNovel(any()); verify(likes, never()).countByNovelId(any());
     }
-    private CreateNovelRequest request(NovelMode mode, Integer deliveryCount, List<Long> invitees) {
+    private CreateNovelRequest request(NovelMode mode, Integer branchLimit, List<Long> invitees) {
         return new CreateNovelRequest(NovelKind.RELAY, "새 이야기", "소개", "판타지", mode != NovelMode.OPEN ? false : true,
-                null, 20, 24, null, mode, deliveryCount, invitees, null);
+                null, 20, 24, null, mode, null, invitees, null, branchLimit);
     }
     private void saveReturnsWithId(long id) {
         when(novels.saveAndFlush(any(Novel.class))).thenAnswer(call -> {
@@ -134,21 +134,52 @@ class NovelServiceTest {
     @Test @DisplayName("열매로 퍼뜨리는 작품은 정원 없이 바로 연재되고 만든 사람이 1회차를 쓴다")
     void openNovelStartsWithOwnerWriting() {
         saveReturnsWithId(20L);
-        NovelDetail created = service.create(1L, request(NovelMode.OPEN, 3, null));
+        NovelDetail created = service.create(1L, request(NovelMode.OPEN, 15, null));
         assertThat(created.novel().mode()).isEqualTo(NovelMode.OPEN);
         assertThat(created.novel().status()).isEqualTo(NovelStatus.ONGOING);
         assertThat(created.novel().memberLimit()).isNull();
-        assertThat(created.novel().deliveryCount()).isEqualTo(3);
+        assertThat(created.novel().deliveryCount()).isEqualTo(Novel.DELIVERY_COUNT);
+        assertThat(created.novel().branchLimit()).isEqualTo(15);
         assertThat(created.canWrite()).isTrue(); assertThat(created.canApply()).isFalse();
     }
-    @Test @DisplayName("열매로 퍼뜨리는 작품은 배달 인원이 없으면 만들 수 없다")
-    void openNovelNeedsDeliveryCount() {
-        assertThatThrownBy(() -> service.create(1L, request(NovelMode.OPEN, null, null))).isInstanceOf(ApiException.class);
-        verify(novels, never()).saveAndFlush(any());
+    @Test @DisplayName("가지 상한을 비우면 10으로 만든다")
+    void openNovelDefaultsBranchLimit() {
+        saveReturnsWithId(21L);
+        NovelDetail created = service.create(1L, request(NovelMode.OPEN, null, null));
+        assertThat(created.novel().branchLimit()).isEqualTo(Novel.BRANCH_LIMIT_MIN);
+    }
+    @Test @DisplayName("회차를 열면 글쓴이가 아닌 사람만 한 번 조회수에 센다")
+    void chapterNodeCountsViewsOncePerReader() {
+        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
+        ReflectionTestUtils.setField(open, "id", 20L);
+        when(novels.findById(20L)).thenReturn(Optional.of(open));
+        NovelChapter c = new NovelChapter(20L, 3L, 100L, 2, "가지", "본문");
+        ReflectionTestUtils.setField(c, "id", 200L); ReflectionTestUtils.setField(c, "viewCount", 4);
+        when(chapters.findByIdAndNovelId(200L, 20L)).thenReturn(Optional.of(c));
+        when(chapters.recordView(200L, 5L)).thenReturn(1, 0);
+
+        assertThat(service.chapterNode(5L, 20L, 200L).viewCount()).isEqualTo(5);
+        assertThat(service.chapterNode(5L, 20L, 200L).viewCount()).isEqualTo(4);
+        service.chapterNode(3L, 20L, 200L);
+
+        verify(chapters, times(1)).incrementViews(200L);
+        verify(chapters, never()).recordView(200L, 3L);
+    }
+    @Test @DisplayName("수거함에 들어간 가지는 나무에서 숨겨 읽을 수 없다")
+    void prunedChapterIsHidden() {
+        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
+        ReflectionTestUtils.setField(open, "id", 20L);
+        when(novels.findById(20L)).thenReturn(Optional.of(open));
+        NovelChapter c = new NovelChapter(20L, 3L, 100L, 2, "가지", "본문");
+        c.prune(Instant.now());
+        when(chapters.findByIdAndNovelId(200L, 20L)).thenReturn(Optional.of(c));
+        assertThatThrownBy(() -> service.chapterNode(5L, 20L, 200L))
+                .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.NOT_FOUND);
+        verify(chapters, never()).recordView(any(), any());
     }
     @Test @DisplayName("열매로 퍼뜨리는 작품의 1회차를 발행하면 배달하고 차례를 비운다")
     void publishingOpenRootDelivers() {
-        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 3, null);
+        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
         ReflectionTestUtils.setField(open, "id", 20L); ReflectionTestUtils.setField(open, "createdAt", Instant.now());
         when(novels.lockById(20L)).thenReturn(Optional.of(open));
         when(chapters.saveAndFlush(any(NovelChapter.class))).thenAnswer(call -> call.getArgument(0));
@@ -188,7 +219,7 @@ class NovelServiceTest {
     }
     @Test @DisplayName("열매로 퍼뜨리는 작품에는 참가 신청을 받지 않는다")
     void openNovelRejectsApplications() {
-        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 3, null);
+        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
         ReflectionTestUtils.setField(open, "id", 20L);
         when(novels.lockById(20L)).thenReturn(Optional.of(open));
         assertThatThrownBy(() -> service.apply(2L, 20L)).isInstanceOf(ApiException.class);
@@ -198,7 +229,7 @@ class NovelServiceTest {
     void completingClosesDeliveries() {
         n.start(Instant.now()); ReflectionTestUtils.setField(n, "chapterCount", 2);
         service.complete(1L, 10L);
-        verify(delivery).closeAll(10L);
+        verify(delivery).closeAll(n);
     }
     private static UserFollow follow(Long follower, Long followee) {
         UserFollow f = mock(UserFollow.class);
