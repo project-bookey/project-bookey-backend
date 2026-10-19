@@ -25,19 +25,28 @@ public class NovelWritingAssistService {
     public record Request(@NotNull @Min(1) Long turnNumber, @NotBlank @Size(max = 2000) String text) {}
 
     public NovelAiClient.Rewrite turn(Long me, Long novelId, Request request) {
-        return rewrite(me, novels.draft(me, novelId), request);
+        authorizeTurn(me, novelId, request.turnNumber());
+        return ai.rewrite(request.text());
     }
 
     public NovelAiClient.Rewrite branch(Long me, Long deliveryId, Request request) {
-        return rewrite(me, branches.draft(me, deliveryId), request);
+        authorizeBranch(me, deliveryId, request.turnNumber());
+        return ai.rewrite(request.text());
     }
 
-    private NovelAiClient.Rewrite rewrite(Long me, NovelDraftView draft, Request request) {
-        if (!request.turnNumber().equals(draft.turnNumber()))
+    void authorizeTurn(Long me, Long novelId, Long turnNumber) {
+        authorize(me, novels.draft(me, novelId), turnNumber);
+    }
+
+    void authorizeBranch(Long me, Long deliveryId, Long turnNumber) {
+        authorize(me, branches.draft(me, deliveryId), turnNumber);
+    }
+
+    private void authorize(Long me, NovelDraftView draft, Long turnNumber) {
+        if (!turnNumber.equals(draft.turnNumber()))
             throw ApiException.of(ErrorCode.NOVEL_NOT_YOUR_TURN);
         limiter.require("novel:ai:minute:" + me, 3, Duration.ofMinutes(1));
         if (!limiter.tryAcquire("novel:ai:day:" + me, 10, Duration.ofDays(1)))
             throw ApiException.of(ErrorCode.AI_DAILY_LIMIT);
-        return ai.rewrite(request.text());
     }
 }
