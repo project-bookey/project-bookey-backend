@@ -18,7 +18,7 @@ class NovelCoverAiClientTest {
     private final RestClient.Builder builder = RestClient.builder();
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
     private final NovelCoverAiClient client = new NovelCoverAiClient(new AiProperties("http://ai", "server-secret"), builder);
-    private final NovelCoverGenerationService.Request request = new NovelCoverGenerationService.Request("달빛", "밤의 가게", "판타지");
+    private final NovelCoverGenerationService.NovelCoverGenerationRequest request = new NovelCoverGenerationService.NovelCoverGenerationRequest("달빛", "밤의 가게", "판타지");
 
     @Test void forwardsMetadataAndReturnsBinaryImage() {
         byte[] image = new byte[]{(byte) 0x89, 0x50, 0x4e, 0x47};

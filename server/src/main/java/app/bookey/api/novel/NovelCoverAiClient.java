@@ -38,21 +38,21 @@ public class NovelCoverAiClient {
         return RestClient.builder().requestFactory(factory);
     }
 
-    public record Config(boolean available) {}
-    public record Image(byte[] data, String contentType) {}
+    public record ImageAvailability(boolean available) {}
+    public record GeneratedCoverImage(byte[] data, String contentType) {}
 
     public boolean available() {
         if (!configured()) return false;
         try {
-            Config response = client.get().uri("/v1/cover-config")
-                    .header("X-API-Key", settings.apiKey()).retrieve().body(Config.class);
+            ImageAvailability response = client.get().uri("/v1/cover-config")
+                    .header("X-API-Key", settings.apiKey()).retrieve().body(ImageAvailability.class);
             return response != null && response.available();
         } catch (RestClientException exception) {
             return false;
         }
     }
 
-    public Image generate(NovelCoverGenerationService.Request body) {
+    public GeneratedCoverImage generate(NovelCoverGenerationService.NovelCoverGenerationRequest body) {
         if (!configured()) throw ApiException.of(ErrorCode.AI_COVER_UNAVAILABLE);
         try {
             return client.post().uri("/v1/covers").header("X-API-Key", settings.apiKey()).body(body)
@@ -67,7 +67,7 @@ public class NovelCoverAiClient {
                         byte[] data = response.getBody().readNBytes(MAX_BYTES + 1);
                         if (data.length == 0 || data.length > MAX_BYTES)
                             throw ApiException.of(ErrorCode.AI_COVER_UNAVAILABLE);
-                        return new Image(data, mime);
+                        return new GeneratedCoverImage(data, mime);
                     });
         } catch (RestClientException exception) {
             // 외부 응답이나 인증 정보를 앱으로 전달하지 않는다.

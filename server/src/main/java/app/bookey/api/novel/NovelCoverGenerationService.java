@@ -33,17 +33,17 @@ public class NovelCoverGenerationService {
         this.globalDailyLimit = globalDailyLimit;
     }
 
-    public record Request(@NotBlank @Size(max = 120) String title,
+    public record NovelCoverGenerationRequest(@NotBlank @Size(max = 120) String title,
                           @NotBlank @Size(max = 500) String description,
                           @NotBlank @Size(max = 30) String genre) {}
-    public record Config(boolean available, int dailyLimit) {}
+    public record NovelCoverGenerationConfig(boolean available, int dailyLimit) {}
 
-    public Config config() {
-        return new Config(storage.enabled() && dailyLimit > 0 && globalDailyLimit > 0 && ai.available(),
+    public NovelCoverGenerationConfig config() {
+        return new NovelCoverGenerationConfig(storage.enabled() && dailyLimit > 0 && globalDailyLimit > 0 && ai.available(),
                 Math.max(0, dailyLimit));
     }
 
-    public NovelCoverView generate(Long me, Request request) {
+    public NovelCoverView generate(Long me, NovelCoverGenerationRequest request) {
         if (!storage.enabled()) throw ApiException.of(ErrorCode.STORAGE_DISABLED);
         if (dailyLimit <= 0 || globalDailyLimit <= 0 || !ai.available())
             throw ApiException.of(ErrorCode.AI_COVER_UNAVAILABLE);
@@ -51,7 +51,7 @@ public class NovelCoverGenerationService {
         require("novel:ai-cover:minute:" + me, 1, Duration.ofMinutes(1));
         require("novel:ai-cover:daily:" + me, dailyLimit, Duration.ofDays(1));
         require("novel:ai-cover:global", globalDailyLimit, Duration.ofDays(1));
-        NovelCoverAiClient.Image image = ai.generate(new Request(
+        NovelCoverAiClient.GeneratedCoverImage image = ai.generate(new NovelCoverGenerationRequest(
                 request.title().strip(), request.description().strip(), request.genre().strip()));
         return covers.storeGenerated(me, image.data(), image.contentType());
     }

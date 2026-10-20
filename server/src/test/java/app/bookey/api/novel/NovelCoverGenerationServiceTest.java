@@ -18,7 +18,7 @@ class NovelCoverGenerationServiceTest {
     private final StorageService storage = mock(StorageService.class);
     private final RateLimiter limiter = mock(RateLimiter.class);
     private final NovelCoverGenerationService service = new NovelCoverGenerationService(ai, covers, storage, limiter, 3, 100);
-    private final NovelCoverGenerationService.Request request = new NovelCoverGenerationService.Request(" 달빛 ", " 밤의 가게 ", "판타지");
+    private final NovelCoverGenerationService.NovelCoverGenerationRequest request = new NovelCoverGenerationService.NovelCoverGenerationRequest(" 달빛 ", " 밤의 가게 ", "판타지");
 
     @BeforeEach void setup() {
         when(storage.enabled()).thenReturn(true);
@@ -28,11 +28,11 @@ class NovelCoverGenerationServiceTest {
 
     @Test void savesGeneratedCoverWithCurrentOwner() {
         byte[] image = {1, 2, 3};
-        when(ai.generate(any())).thenReturn(new NovelCoverAiClient.Image(image, "image/png"));
+        when(ai.generate(any())).thenReturn(new NovelCoverAiClient.GeneratedCoverImage(image, "image/png"));
         var cover = new NovelCoverView(8L, "https://storage/cover.png", 768, 1024);
         when(covers.storeGenerated(42L, image, "image/png")).thenReturn(cover);
         assertThat(service.generate(42L, request)).isEqualTo(cover);
-        verify(ai).generate(new NovelCoverGenerationService.Request("달빛", "밤의 가게", "판타지"));
+        verify(ai).generate(new NovelCoverGenerationService.NovelCoverGenerationRequest("달빛", "밤의 가게", "판타지"));
     }
 
     @Test void noPaidRequestWhenStorageIsDisabled() {

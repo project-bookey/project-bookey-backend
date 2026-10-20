@@ -17,13 +17,13 @@ public class NovelCoverGenerationController {
 
     @GetMapping("/generation-config")
     @Operation(summary = "AI 표지 사용 가능 여부와 24시간 시도 한도")
-    public NovelCoverGenerationService.Config config() { return service.config(); }
+    public NovelCoverGenerationService.NovelCoverGenerationConfig config() { return service.config(); }
 
     @PostMapping("/generate")
     @WriteBanGuarded
     @Operation(summary = "작품 제목·소개·장르로 표지 한 장을 생성하고 임시 저장")
     public NovelCoverView generate(@AuthenticationPrincipal AuthUser user,
-                                   @Valid @RequestBody NovelCoverGenerationService.Request request) {
+                                   @Valid @RequestBody NovelCoverGenerationService.NovelCoverGenerationRequest request) {
         return service.generate(user.id(), request);
     }
 }
