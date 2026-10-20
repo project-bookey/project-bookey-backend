@@ -15,6 +15,8 @@ public enum ErrorCode {
     CONFLICT(HttpStatus.CONFLICT, "이미 처리된 요청입니다."),
     RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "너무 자주 눌렀어요. 잠시 후 다시 시도해 주세요."),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "잠시 문제가 생겼어요. 조금 뒤 다시 시도해 주세요."),
+    AI_COVER_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "지금은 AI 표지를 만들 수 없어요. 잠시 후 다시 시도해 주세요."),
+    AI_COVER_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "표지 생성 횟수를 다 썼거나 요청이 많아요. 나중에 다시 시도해 주세요."),
     AI_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "지금은 AI 제안을 받을 수 없어요. 원고는 그대로 있으니 잠시 후 다시 시도해 주세요."),
     AI_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "글쓰기 보조 사용량이 많아요. 잠시 후 다시 시도해 주세요."),
     AI_DAILY_LIMIT(HttpStatus.TOO_MANY_REQUESTS, "글쓰기 보조는 24시간에 10번까지 사용할 수 있어요. 나중에 다시 시도해 주세요."),
