@@ -1,5 +1,14 @@
 # project-bookey-backend
 
+AI 소설 표지: `GET /api/v1/novels/covers/generation-config`로 사용 가능 여부와 24시간 시도 한도를 확인하고,
+`POST /api/v1/novels/covers/generate`에 `{ "title": "제목", "description": "소개", "genre": "판타지" }`를 보냅니다.
+로그인·쓰기 제재 검사를 거쳐 공통 AI 서버에서 생성한 이미지를 저장하고 기존 `NovelCoverView`를 반환합니다.
+작품 생성 요청의 `coverId`에 응답의 `id`를 넣으면 됩니다. 소유권 확인과 하루 뒤 미첨부 표지 정리는 기존 경로를 따릅니다.
+AI 서버 제공자 키가 없거나 저장소가 꺼져 있으면 사용 불가입니다.
+한도는 `AI_COVER_DAILY_LIMIT=3`, `AI_COVER_GLOBAL_DAILY_LIMIT=100`이며 0으로 끌 수 있습니다.
+실패한 요청도 시도 횟수에 포함하고 Redis 장애 시 생성을 중단합니다.
+운영에서는 AI 서버·백엔드와 함께 `infra/nginx/bookey-api.conf`의 표지 생성 전용 180초 대기 설정도 반영해야 합니다.
+
 소설 생성 보조: `POST /api/v1/novels/{id}/story-assist` 또는
 `POST /api/v1/novels/deliveries/{deliveryId}/story-assist`로
 `{"turnNumber":1,"mode":"CONTINUE","body":"현재 원고","prompt":"희망 전개"}`를 보냅니다.

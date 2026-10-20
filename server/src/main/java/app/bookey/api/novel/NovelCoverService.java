@@ -29,10 +29,23 @@ public class NovelCoverService {
         try (InputStream in = file.getInputStream()) { type = ImageSniffer.sniff(in.readNBytes(64 * 1024)); }
         catch (IOException e) { throw ApiException.of(ErrorCode.STORAGE_ERROR); }
         if (type == null) throw ApiException.of(ErrorCode.UNSUPPORTED_IMAGE_TYPE);
-        String key = "novels/" + me + "/" + UUID.randomUUID() + "." + type.extension();
-        String url;
-        try (InputStream in = file.getInputStream()) { url = storage.store(key, in, file.getSize(), type.contentType()); }
+        try (InputStream in = file.getInputStream()) { return store(me, in, file.getSize(), type); }
         catch (IOException e) { throw ApiException.of(ErrorCode.STORAGE_ERROR); }
+    }
+
+    public NovelCoverView storeGenerated(Long me, byte[] data, String contentType) {
+        if (!storage.enabled()) throw ApiException.of(ErrorCode.STORAGE_DISABLED);
+        if (data == null || data.length == 0 || data.length > properties.storage().image().maxBytes())
+            throw ApiException.of(ErrorCode.AI_COVER_UNAVAILABLE);
+        var type = ImageSniffer.sniff(java.util.Arrays.copyOf(data, Math.min(data.length, 64 * 1024)));
+        if (type == null || !type.contentType().equals(contentType))
+            throw ApiException.of(ErrorCode.AI_COVER_UNAVAILABLE);
+        return store(me, new ByteArrayInputStream(data), data.length, type);
+    }
+
+    private NovelCoverView store(Long me, InputStream in, long size, ImageSniffer.ImageType type) {
+        String key = "novels/" + me + "/" + UUID.randomUUID() + "." + type.extension();
+        String url = storage.store(key, in, size, type.contentType());
         try {
             NovelCover c = covers.save(new NovelCover(me, key, url, type.width(), type.height()));
             return new NovelCoverView(c.getId(), c.getUrl(), c.getWidth(), c.getHeight());
