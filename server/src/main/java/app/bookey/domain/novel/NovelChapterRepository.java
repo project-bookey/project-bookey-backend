@@ -17,6 +17,7 @@ public interface NovelChapterRepository extends JpaRepository<NovelChapter, Long
      * 가지 자리가 남은 것. 내 작품·내가 쓴 회차·탈퇴한 사람의 것은 빼고(내 작품은 줄기로, 내 회차는 햇살로 잇는다),
      * 이 작품에서 이미 자리를 맡고 있으면 뺀다(한 작품에 자리는 하나). 내가 이미 이어 쓴 회차도 뺀다(열매가 다시 떨어지지 않게).
      * 가지 자리는 {@code NovelDeliveryService.freeSlots} 와 같이 센다.
+     * 앞에 이어 붙이는 텍스트 블록은 줄바꿈으로 끝낸다 — 줄 끝 공백은 지워져서 "WHERE" 와 조건이 붙는다.
      */
     String CONTINUABLE_FOR_USER = """
         c.state = 'ACTIVE' AND n.mode = 'OPEN' AND n.status = 'ONGOING' AND n.is_public = TRUE
@@ -80,7 +81,8 @@ public interface NovelChapterRepository extends JpaRepository<NovelChapter, Long
      */
     @Query(value = """
         SELECT c.id FROM novel_chapters c JOIN novels n ON n.id = c.novel_id
-        WHERE """ + CONTINUABLE_FOR_USER + """
+        WHERE
+        """ + CONTINUABLE_FOR_USER + """
           AND NOT EXISTS (SELECT 1 FROM novel_home_seen s WHERE s.user_id = :userId AND s.chapter_id = c.id
                           AND s.shown_at > :seenSince)
         ORDER BY CASE WHEN c.created_at > :freshSince THEN 0 WHEN c.created_at > :recentSince THEN 1 ELSE 2 END,
@@ -101,7 +103,8 @@ public interface NovelChapterRepository extends JpaRepository<NovelChapter, Long
     /** {@link #continuableAmong} 을 쓴다 — 빈 목록을 넘기면 IN 이 깨진다. */
     @Query(value = """
         SELECT c.id FROM novel_chapters c JOIN novels n ON n.id = c.novel_id
-        WHERE c.id IN (:chapterIds) AND """ + CONTINUABLE_FOR_USER, nativeQuery = true)
+        WHERE c.id IN (:chapterIds) AND
+        """ + CONTINUABLE_FOR_USER, nativeQuery = true)
     List<Long> continuableAmongNonEmpty(@Param("userId") Long userId, @Param("chapterIds") Collection<Long> chapterIds);
 
     /** 홈 열매로 보여 준 때를 남긴다. 다시 보여 주면 그때로 고친다. */
