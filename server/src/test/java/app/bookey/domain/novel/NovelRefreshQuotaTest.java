@@ -75,7 +75,7 @@ class NovelRefreshQuotaTest {
         feed.refreshWithPaid(List.of(10L));
 
         assertThat(feed.getPaidRefreshes()).isZero();
-        assertThat(feed.getNovelIds()).containsExactly(10L);
+        assertThat(feed.getChapterIds()).containsExactly(10L);
         assertThatThrownBy(() -> feed.refreshWithPaid(List.of(11L))).isInstanceOf(IllegalStateException.class);
     }
 

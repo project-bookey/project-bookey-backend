@@ -25,11 +25,11 @@ public class NovelMaintenanceJob {
             try { service.expire(id); } catch (RuntimeException e) { log.warn("소설 차례 넘기기 실패: id={}", id, e); }
         }
     }
-    /** 마감이 지난 열매를 거두고 다른 사람에게 다시 배달한다. */
+    /** 마감이 지난 자리를 거둔다. 자리가 비면 그 회차가 다시 홈의 열매 후보가 된다. */
     @Scheduled(fixedDelay = 60000)
     public void resendOverdueDeliveries() {
         for (Long id : deliveries.overdueIds(Instant.now(), PageRequest.of(0, 100))) {
-            try { deliveryService.expireOverdue(id); } catch (RuntimeException e) { log.warn("열매 다시 배달하기 실패: id={}", id, e); }
+            try { deliveryService.expireOverdue(id); } catch (RuntimeException e) { log.warn("마감 지난 열매 거두기 실패: id={}", id, e); }
         }
     }
     /** 한 달이 지나도 조회가 모자란 끝 가지를 나뭇가지 수거함으로 옮긴다. */

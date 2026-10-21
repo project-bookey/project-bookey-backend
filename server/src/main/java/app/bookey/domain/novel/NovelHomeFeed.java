@@ -9,7 +9,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 /**
- * 홈 열매 밭의 피드 자리 — 지금 놓인 작품 묶음과 새로고침 횟수(오늘 쓴 무료·광고 횟수, 결제하고 아직 쓰지 않은 횟수).
+ * 홈 열매 밭의 피드 자리 — 지금 놓인 열매(이어 쓸 수 있는 회차) 묶음과 새로고침 횟수(오늘 쓴 무료·광고 횟수, 결제하고 아직 쓰지 않은 횟수).
  * 북키 지갑(wallets)과 따로 둔다. 행은 처음 열거나 새로고침할 때 {@link NovelHomeFeedRepository#insertIfAbsent} 로 만든다.
  */
 @Getter @Entity @Table(name = "novel_home_feeds")
@@ -17,10 +17,10 @@ import java.util.List;
 public class NovelHomeFeed extends BaseTimeEntity {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @Column(name = "user_id", nullable = false, unique = true) private Long userId;
-    /** 보여 줄 순서대로 둔 작품 id. 지워졌거나 가려진 작품은 읽을 때 뺀다. */
+    /** 보여 줄 순서대로 둔 회차 id. 더 이어 쓸 수 없게 된 회차는 읽을 때 뺀다. 예전 작품 묶음(novel_ids)은 읽지 않는다. */
     @JdbcTypeCode(SqlTypes.ARRAY)
-    @Column(name = "novel_ids", nullable = false, columnDefinition = "bigint[]")
-    private Long[] novelIds = new Long[0];
+    @Column(name = "chapter_ids", nullable = false, columnDefinition = "bigint[]")
+    private Long[] chapterIds = new Long[0];
     @Column(name = "free_used_today", nullable = false) private short freeUsedToday;
     /** 무료를 다 쓴 뒤 광고를 보고 쓴 횟수. */
     @Column(name = "ad_used_today", nullable = false) private short adUsedToday;
@@ -34,7 +34,7 @@ public class NovelHomeFeed extends BaseTimeEntity {
         this.freeResetDate = today;
     }
 
-    public List<Long> getNovelIds() { return List.of(novelIds); }
+    public List<Long> getChapterIds() { return List.of(chapterIds); }
 
     public NovelRefreshQuota freeQuota(int dailyFree) {
         return new NovelRefreshQuota(dailyFree, freeUsedToday, freeResetDate);
@@ -46,28 +46,28 @@ public class NovelHomeFeed extends BaseTimeEntity {
 
     /** 처음 놓는 묶음 — 횟수는 쓰지 않는다. */
     public void placeFirst(List<Long> ids) {
-        this.novelIds = ids.toArray(Long[]::new);
+        this.chapterIds = ids.toArray(Long[]::new);
     }
 
     /** 새 묶음으로 바꾸고 오늘 무료 횟수 하나를 쓴다. 남은 횟수는 부르는 쪽이 먼저 확인한다. */
     public void refreshWithFree(List<Long> ids, int dailyFree, LocalDate today) {
         countOn(today);
         this.freeUsedToday = (short) freeQuota(dailyFree).useOneOn(today).usedToday();
-        this.novelIds = ids.toArray(Long[]::new);
+        this.chapterIds = ids.toArray(Long[]::new);
     }
 
     /** 새 묶음으로 바꾸고 오늘 광고 횟수 하나를 쓴다. 남은 횟수는 부르는 쪽이 먼저 확인한다. */
     public void refreshWithAd(List<Long> ids, int dailyAd, LocalDate today) {
         countOn(today);
         this.adUsedToday = (short) adQuota(dailyAd).useOneOn(today).usedToday();
-        this.novelIds = ids.toArray(Long[]::new);
+        this.chapterIds = ids.toArray(Long[]::new);
     }
 
     /** 새 묶음으로 바꾸고 결제한 새로고침 하나를 쓴다. 남은 횟수는 부르는 쪽이 먼저 확인한다. */
     public void refreshWithPaid(List<Long> ids) {
         if (paidRefreshes <= 0) throw new IllegalStateException("결제한 새로고침이 없다");
         this.paidRefreshes--;
-        this.novelIds = ids.toArray(Long[]::new);
+        this.chapterIds = ids.toArray(Long[]::new);
     }
 
     /** 확인한 결제 하나만큼 새로고침을 더한다. 묶음은 바꾸지 않는다. */

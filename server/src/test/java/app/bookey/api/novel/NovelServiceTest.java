@@ -190,19 +190,21 @@ class NovelServiceTest {
         });
         when(chapters.saveAndFlush(any(NovelChapter.class))).thenAnswer(call -> call.getArgument(0));
     }
-    @Test @DisplayName("열매로 퍼뜨리는 작품은 정원 없이 바로 연재되고 만든 사람이 쓴 1회차를 함께 올려 배달한다")
+    @Test @DisplayName("열매로 퍼뜨리는 작품은 정원 없이 바로 연재되고, 만든 사람의 1회차가 줄기의 뿌리가 되며 아무에게도 배달하지 않는다")
     void openNovelStartsWithOwnersFirstChapter() {
         saveReturnsWithId(20L);
-        NovelDetail created = service.create(1L, request(NovelMode.OPEN, 15, null));
+        NovelDetail created = service.create(1L, request(NovelMode.OPEN, 4, null));
         assertThat(created.novel().mode()).isEqualTo(NovelMode.OPEN);
         assertThat(created.novel().status()).isEqualTo(NovelStatus.ONGOING);
         assertThat(created.novel().memberLimit()).isNull();
-        assertThat(created.novel().deliveryCount()).isEqualTo(Novel.DELIVERY_COUNT);
-        assertThat(created.novel().branchLimit()).isEqualTo(15);
+        assertThat(created.novel().deliveryCount()).isNull();
+        assertThat(created.novel().branchLimit()).isEqualTo(4);
         assertThat(created.novel().chapterCount()).isEqualTo(1);
-        assertThat(created.canWrite()).isFalse(); assertThat(created.canApply()).isFalse();
-        verify(delivery).deliverNewChapter(argThat(n -> n.getId() == 20L), argThat(c -> c.getChapterNumber() == 1
-                && c.getParentChapterId() == null && c.getAuthorId().equals(1L) && "첫 이야기".equals(c.getBody())), any());
+        // 만든 사람은 그 뒤로도 줄기를 이어 쓸 수 있다.
+        assertThat(created.canWrite()).isTrue(); assertThat(created.canApply()).isFalse();
+        verify(chapters).saveAndFlush(argThat(c -> c.isTrunk() && c.getChapterNumber() == 1
+                && c.getParentChapterId() == null && c.getAuthorId().equals(1L) && "첫 이야기".equals(c.getBody())));
+        verify(deliveries, never()).saveAll(any());
     }
     @Test @DisplayName("1회차 없이 작품을 만들면 거절한다")
     void createRequiresFirstChapter() {
@@ -211,15 +213,23 @@ class NovelServiceTest {
                         NovelMode.OPEN, null, null, null, null, null, List.of("판타지")));
         assertThat(violations).extracting(v -> v.getPropertyPath().toString()).contains("firstChapter");
     }
-    @Test @DisplayName("가지 상한을 비우면 10으로 만든다")
+    @Test @DisplayName("가지 상한을 비우면 3으로 만든다")
     void openNovelDefaultsBranchLimit() {
         saveReturnsWithId(21L);
         NovelDetail created = service.create(1L, request(NovelMode.OPEN, null, null));
-        assertThat(created.novel().branchLimit()).isEqualTo(Novel.BRANCH_LIMIT_MIN);
+        assertThat(created.novel().branchLimit()).isEqualTo(Novel.BRANCH_LIMIT_DEFAULT).isEqualTo(3);
+    }
+    @Test @DisplayName("가지 상한은 2~5개만 받는다")
+    void branchLimitMustBeBetweenTwoAndFive() {
+        var validator = jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator();
+        assertThat(validator.validate(request(NovelMode.OPEN, 1, null))).isNotEmpty();
+        assertThat(validator.validate(request(NovelMode.OPEN, 6, null))).isNotEmpty();
+        assertThat(validator.validate(request(NovelMode.OPEN, 2, null))).isEmpty();
+        assertThat(validator.validate(request(NovelMode.OPEN, 5, null))).isEmpty();
     }
     @Test @DisplayName("회차를 열면 글쓴이가 아닌 사람만 한 번 조회수에 센다")
     void chapterNodeCountsViewsOncePerReader() {
-        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
+        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 3, null);
         ReflectionTestUtils.setField(open, "id", 20L);
         when(novels.findById(20L)).thenReturn(Optional.of(open));
         NovelChapter c = new NovelChapter(20L, 3L, 100L, 2, "가지", "본문");
@@ -236,7 +246,7 @@ class NovelServiceTest {
     }
     @Test @DisplayName("수거함에 들어간 가지는 나무에서 숨겨 읽을 수 없다")
     void prunedChapterIsHidden() {
-        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
+        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 3, null);
         ReflectionTestUtils.setField(open, "id", 20L);
         when(novels.findById(20L)).thenReturn(Optional.of(open));
         NovelChapter c = new NovelChapter(20L, 3L, 100L, 2, "가지", "본문");
@@ -246,15 +256,65 @@ class NovelServiceTest {
                 .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.NOT_FOUND);
         verify(chapters, never()).recordView(any(), any());
     }
-    @Test @DisplayName("열매로 퍼뜨리는 작품의 1회차를 발행하면 배달하고 차례를 비운다")
-    void publishingOpenRootDelivers() {
-        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
+    /** 1회차까지 올린 열매로 퍼뜨리는 작품(목표 회차 3)과 그 뿌리 회차. */
+    private Novel openWithRoot(NovelChapter root) {
+        Novel open = Novel.open(1L, "열매", "소개", "판타지", 3, 24, 3, null);
         ReflectionTestUtils.setField(open, "id", 20L); ReflectionTestUtils.setField(open, "createdAt", Instant.now());
-        when(novels.lockById(20L)).thenReturn(Optional.of(open));
-        when(chapters.saveAndFlush(any(NovelChapter.class))).thenAnswer(call -> call.getArgument(0));
-        service.publish(1L, 20L, new NovelWriteRequest(1L, "뿌리", "본문"));
-        verify(delivery).deliverNewChapter(eq(open), argThat(c -> c.getChapterNumber() == 1 && c.getParentChapterId() == null), any());
-        assertThat(open.getCurrentWriterId()).isNull(); assertThat(open.canWrite(1L)).isFalse();
+        ReflectionTestUtils.setField(open, "chapterCount", 1); ReflectionTestUtils.setField(open, "turnNumber", 2L);
+        ReflectionTestUtils.setField(open, "currentWriterId", null);
+        ReflectionTestUtils.setField(root, "id", 100L);
+        when(novels.lockById(20L)).thenReturn(Optional.of(open)); when(novels.findById(20L)).thenReturn(Optional.of(open));
+        when(chapters.findFirstByNovelIdAndTrunkTrueOrderByChapterNumberDesc(20L)).thenReturn(Optional.of(root));
+        when(chapters.saveAndFlush(any(NovelChapter.class))).thenAnswer(call -> {
+            NovelChapter saved = call.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", 101L);
+            return saved;
+        });
+        return open;
+    }
+    @Test @DisplayName("첫 작가는 마감 없이 줄기 끝에서 위로 이어 쓰고, 아무에게도 배달하지 않는다")
+    void ownerGrowsTheTrunkUpward() {
+        Novel open = openWithRoot(NovelChapter.trunk(20L, 1L, null, "뿌리", "본문"));
+        assertThat(service.get(1L, 20L).canWrite()).isTrue();
+        assertThat(service.draft(1L, 20L).turnNumber()).isEqualTo(2L);
+
+        NovelChapterView second = service.publish(1L, 20L, new NovelWriteRequest(2L, "2장", "줄기를 잇는다"));
+
+        assertThat(second.parentChapterId()).isEqualTo(100L);
+        assertThat(second.chapterNumber()).isEqualTo(2);
+        assertThat(second.trunk()).isTrue();
+        assertThat(open.getChapterCount()).isEqualTo(2);
+        assertThat(open.getTurnNumber()).isEqualTo(3L);
+        assertThat(open.getCurrentWriterId()).isNull();
+        verify(deliveries, never()).saveAll(any());
+    }
+    @Test @DisplayName("줄기는 첫 작가만 쓰고, 낡은 차례 번호로는 쓰지 못한다")
+    void onlyOwnerWritesTheTrunk() {
+        openWithRoot(NovelChapter.trunk(20L, 1L, null, "뿌리", "본문"));
+        assertThat(service.get(2L, 20L).canWrite()).isFalse();
+        assertThatThrownBy(() -> service.publish(2L, 20L, new NovelWriteRequest(2L, "남의 줄기", "본문")))
+                .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.NOVEL_NOT_YOUR_TURN);
+        assertThatThrownBy(() -> service.publish(1L, 20L, new NovelWriteRequest(1L, "낡은 쓰기", "본문")))
+                .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.NOVEL_NOT_YOUR_TURN);
+        verify(chapters, never()).saveAndFlush(any());
+    }
+    @Test @DisplayName("줄기가 목표 회차에 닿으면 더 잇지 않는다")
+    void trunkStopsAtTheTargetDepth() {
+        NovelChapter tip = new NovelChapter(20L, 1L, 99L, 3, "3장", "본문");
+        ReflectionTestUtils.setField(tip, "trunk", true);
+        openWithRoot(tip);
+        assertThat(service.get(1L, 20L).canWrite()).isFalse();
+        assertThatThrownBy(() -> service.publish(1L, 20L, new NovelWriteRequest(2L, "4장", "본문")))
+                .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.NOVEL_NOT_YOUR_TURN);
+    }
+    @Test @DisplayName("회차 나무의 마디는 첫 작가의 줄기인지 알려 준다")
+    void chapterTreeMarksTrunk() {
+        NovelChapter root = NovelChapter.trunk(20L, 1L, null, "뿌리", "본문");
+        openWithRoot(root);
+        NovelChapter branch = new NovelChapter(20L, 3L, 100L, 2, "가지", "본문");
+        ReflectionTestUtils.setField(branch, "id", 200L);
+        when(chapters.findByNovelIdAndStateOrderByIdAsc(20L, NovelChapterState.ACTIVE)).thenReturn(List.of(root, branch));
+        assertThat(service.chapterTree(5L, 20L)).extracting(NovelChapterNode::trunk).containsExactly(true, false);
     }
     @Test @DisplayName("한 줄기 작품의 회차는 마지막 회차를 부모로 둔다")
     void circleChapterHangsOnLastChapter() {
@@ -266,7 +326,7 @@ class NovelServiceTest {
         when(chapters.saveAndFlush(any(NovelChapter.class))).thenAnswer(call -> call.getArgument(0));
         NovelChapterView published = service.publish(1L, 10L, new NovelWriteRequest(1L, "2화", "본문"));
         assertThat(published.parentChapterId()).isEqualTo(100L); assertThat(published.chapterNumber()).isEqualTo(2);
-        verify(delivery, never()).deliverNewChapter(any(), any(), any());
+        assertThat(published.trunk()).isFalse();
     }
     @Test @DisplayName("모여 만들기는 팔로우하지 않은 사람을 고르면 거절한다")
     void circleRejectsUnfollowedInvitee() {
@@ -296,8 +356,7 @@ class NovelServiceTest {
         assertThat(created.novel().status()).isEqualTo(NovelStatus.ONGOING);
         assertThat(created.novel().chapterCount()).isEqualTo(1);
         assertThat(created.canWrite()).isFalse(); assertThat(created.currentWriterNickname()).isNotNull();
-        verify(chapters).saveAndFlush(argThat(c -> c.getChapterNumber() == 1 && c.getAuthorId().equals(1L)));
-        verify(delivery, never()).deliverNewChapter(any(), any(), any());
+        verify(chapters).saveAndFlush(argThat(c -> c.getChapterNumber() == 1 && c.getAuthorId().equals(1L) && !c.isTrunk()));
     }
     @Test @DisplayName("모여 만들기는 함께 쓸 작가를 고르지 않으면 만들지 않는다")
     void circleRequiresInvitee() {
@@ -307,13 +366,13 @@ class NovelServiceTest {
     }
     @Test @DisplayName("열매로 퍼뜨리는 작품에는 참가 신청을 받지 않는다")
     void openNovelRejectsApplications() {
-        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
+        Novel open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 3, null);
         ReflectionTestUtils.setField(open, "id", 20L);
         when(novels.lockById(20L)).thenReturn(Optional.of(open));
         assertThatThrownBy(() -> service.apply(2L, 20L)).isInstanceOf(ApiException.class);
         verify(members, never()).saveAndFlush(any());
     }
-    @Test @DisplayName("완결하면 아직 들고 있는 열매를 거둔다")
+    @Test @DisplayName("완결하면 아직 맡은 자리를 거둔다")
     void completingClosesDeliveries() {
         n.start(Instant.now()); ReflectionTestUtils.setField(n, "chapterCount", 2);
         service.complete(1L, 10L);

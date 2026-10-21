@@ -31,6 +31,8 @@ public class NovelChapter extends BaseTimeEntity {
     @Column(name = "judged_from", nullable = false) private Instant judgedFrom;
     @Column(name = "pruned_at") private Instant prunedAt;
     @Column(name = "purge_at") private Instant purgeAt;
+    /** 첫 작가의 줄기 — 자기 회차로만 위로 이어지고, 가지 자리에 들지 않으며 수거되지 않는다. */
+    @Column(nullable = false) private boolean trunk;
 
     public NovelChapter(Long novelId, Long authorId, Long parentChapterId, int chapterNumber, String title, String body) {
         this.novelId = novelId; this.authorId = authorId; this.parentChapterId = parentChapterId;
@@ -39,13 +41,21 @@ public class NovelChapter extends BaseTimeEntity {
         this.judgedFrom = Instant.now();
     }
 
+    /** 첫 작가의 줄기 회차를 만든다. 뿌리 회차도 줄기다. */
+    public static NovelChapter trunk(Long novelId, Long authorId, NovelChapter tip, String title, String body) {
+        NovelChapter c = new NovelChapter(novelId, authorId, tip == null ? null : tip.getId(),
+                tip == null ? 1 : tip.getChapterNumber() + 1, title, body);
+        c.trunk = true;
+        return c;
+    }
+
     public boolean isActive() { return state == NovelChapterState.ACTIVE; }
     public boolean isPruned() { return state == NovelChapterState.PRUNED; }
     public boolean isRoot() { return parentChapterId == null; }
     public boolean isWrittenBy(Long userId) { return authorId != null && authorId.equals(userId); }
-    /** 판정 기간이 지났는데 조회가 모자라다. 끝 가지인지는 부르는 쪽이 본다. */
+    /** 판정 기간이 지났는데 조회가 모자라다. 끝 가지인지는 부르는 쪽이 본다. 줄기는 떨어지지 않는다. */
     public boolean isStale(Instant now) {
-        return isActive() && !isRoot() && viewCount < MIN_VIEWS && !now.isBefore(judgedFrom.plus(JUDGE_AFTER));
+        return isActive() && !isRoot() && !trunk && viewCount < MIN_VIEWS && !now.isBefore(judgedFrom.plus(JUDGE_AFTER));
     }
     public void prune(Instant now) {
         state = NovelChapterState.PRUNED;

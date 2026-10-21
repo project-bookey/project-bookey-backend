@@ -169,6 +169,11 @@ public class NovelController {
     public NovelChapterView chapterNode(@AuthenticationPrincipal AuthUser user, @PathVariable Long id, @PathVariable Long chapterId) {
         return service.chapterNode(user.id(), id, chapterId);
     }
+    @Operation(summary = "자리 맡기 — 홈의 열매(이어 쓸 수 있는 회차)를 골라 쓰기 시작한다. 작품의 제한 시간 동안 그 회차의 가지 자리 하나를 맡는다. 자리가 다 찼으면 409")
+    @PostMapping("/{id}/chapters/{chapterId}/claim") @WriteBanGuarded
+    public NovelDeliveryView claim(@AuthenticationPrincipal AuthUser user, @PathVariable Long id, @PathVariable Long chapterId) {
+        return service.claim(user.id(), id, chapterId);
+    }
     @Operation(summary = "내 글 잇기 — 햇살을 내고 내가 쓴 회차를 나에게 배달한다(마감 7일). 넘기거나 마감이 지나면 햇살을 돌려받는다")
     @PostMapping("/{id}/chapters/{chapterId}/self-delivery") @WriteBanGuarded
     public NovelDeliveryView selfDelivery(@AuthenticationPrincipal AuthUser user, @PathVariable Long id, @PathVariable Long chapterId) {
