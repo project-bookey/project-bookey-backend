@@ -11,7 +11,8 @@ import java.util.List;
 public final class NovelDtos {
     private NovelDtos() {}
     public record CreateNovelRequest(@NotNull NovelKind kind, @NotBlank @Size(max = 120) String title,
-            @Size(max = 500) String description, @NotBlank @Size(max = 30) String genre,
+            @Size(max = 500) String description,
+            @Schema(description = "예전 앱 호환용 — genres 를 비우면 이 한 장르로 만든다") @Size(max = 30) String genre,
             @NotNull Boolean isPublic, @Min(2) @Max(10) Integer memberLimit,
             @Min(1) @Max(50) Integer chapterLimit, @Min(1) @Max(168) Integer turnHours, Long coverId,
             @Schema(description = "릴레이 방식. 비우면 CIRCLE(예전 앱 호환)") NovelMode mode,
@@ -22,7 +23,9 @@ public final class NovelDtos {
             @Schema(description = "OPEN: 회차 하나에 붙을 수 있는 가지 수(10~20). 비우면 10")
             @Min(Novel.BRANCH_LIMIT_MIN) @Max(Novel.BRANCH_LIMIT_MAX) Integer branchLimit,
             @Schema(description = "만든 사람이 쓰는 1회차. 작품과 함께 저장돼 회차 없는 작품이 생기지 않는다")
-            @NotNull @Valid FirstChapterRequest firstChapter) {}
+            @NotNull @Valid FirstChapterRequest firstChapter,
+            @Schema(description = "작품 장르(1~3개, 고른 순서). 첫 번째가 대표 장르(genre)가 된다. 겹친 장르는 하나로 센다")
+            List<@NotBlank @Size(max = 30) String> genres) {}
     public record FirstChapterRequest(@NotBlank @Size(max = 120) String title, @NotBlank @Size(max = 20000) String body) {}
     public record NovelCoverRequest(Long coverId) {}
     public record NovelMemberDecision(@NotNull Boolean approved) {}
@@ -45,7 +48,8 @@ public final class NovelDtos {
             @Schema(description = "탈퇴한 사람을 뺀 좋아요 수") long likeCount,
             @Schema(description = "내가 좋아요를 눌렀는지") boolean liked,
             @NotNull NovelMode mode, @Schema(description = "OPEN: 회차 하나를 처음 배달할 사람 수(늘 10)") Integer deliveryCount,
-            @Schema(description = "OPEN: 회차 하나에 붙을 수 있는 가지 수") Integer branchLimit) {}
+            @Schema(description = "OPEN: 회차 하나에 붙을 수 있는 가지 수") Integer branchLimit,
+            @Schema(description = "작품 장르(1~3개, 고른 순서). 첫 번째가 genre 다") @NotNull List<String> genres) {}
     public record NovelLikeView(boolean liked, long likeCount) {}
     /** 홈 열매 밭 — 지금 놓인 묶음과 새로고침 횟수. 무료를 다 쓰면 광고를 보고, 광고 몫도 다 쓰면 결제해 새로고침한다. */
     public record NovelHomeFeedView(

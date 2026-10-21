@@ -38,7 +38,7 @@ public interface NovelDeliveryRepository extends JpaRepository<NovelDelivery, Lo
     /**
      * 열매를 받을 사람 고르기. 활동 중인 회원 가운데 뺄 사람(회차 작가·만든 사람)과
      * 이 작품의 열매를 이미 들고 있거나 이 회차를 한 번 받았던 사람을 뺀다.
-     * 작품 장르를 관심 장르로 고른 사람 → 소설 관심 장르를 하나라도 고른 사람 → 나머지 순으로, 같은 묶음 안에서는 무작위로 고른다.
+     * 작품 장르 가운데 하나라도 관심 장르로 고른 사람 → 소설 관심 장르를 하나라도 고른 사람 → 나머지 순으로, 같은 묶음 안에서는 무작위로 고른다.
      */
     @Query(value = """
         SELECT u.id FROM users u
@@ -46,12 +46,12 @@ public interface NovelDeliveryRepository extends JpaRepository<NovelDelivery, Lo
           AND NOT EXISTS (SELECT 1 FROM novel_deliveries d WHERE d.novel_id = :novelId
                           AND d.recipient_id = u.id AND d.status = 'DELIVERED')
           AND NOT EXISTS (SELECT 1 FROM novel_deliveries d WHERE d.chapter_id = :chapterId AND d.recipient_id = u.id)
-        ORDER BY EXISTS (SELECT 1 FROM novel_user_genres g WHERE g.user_id = u.id AND g.genre = :genre) DESC,
+        ORDER BY EXISTS (SELECT 1 FROM novel_user_genres g WHERE g.user_id = u.id AND g.genre IN (:genres)) DESC,
                  EXISTS (SELECT 1 FROM novel_user_genres g WHERE g.user_id = u.id) DESC,
                  random()
         LIMIT :limit
         """, nativeQuery = true)
     List<Long> pickRecipients(@Param("novelId") Long novelId, @Param("chapterId") Long chapterId,
-                              @Param("genre") String genre, @Param("excluded") Collection<Long> excluded,
+                              @Param("genres") Collection<String> genres, @Param("excluded") Collection<Long> excluded,
                               @Param("limit") int limit);
 }

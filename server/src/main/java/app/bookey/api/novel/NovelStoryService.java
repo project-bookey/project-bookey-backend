@@ -50,7 +50,7 @@ public class NovelStoryService {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "먼저 원고나 원하는 이야기 방향을 적어 주세요.");
         // 전체 원고를 외부로 보내지 않는다. 총 길이는 최대 2,000자 이내다.
         String context = "작품: " + head(novel.getTitle(), 80)
-                + "\n장르: " + head(novel.getGenre(), 30)
+                + "\n장르: " + head(String.join(", ", novel.getGenres()), 40)
                 + "\n소재·분위기·희망 전개: " + request.prompt()
                 + "\n앞 회차 끝부분:\n" + tail(previous, 500)
                 + "\n작성 중인 원고 끝부분:\n" + tail(request.body(), 900);
