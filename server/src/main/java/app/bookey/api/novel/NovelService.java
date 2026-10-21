@@ -100,9 +100,40 @@ public class NovelService {
 
     @Transactional(readOnly = true)
     public PageResponse<NovelSummary> feed(Long me, NovelKind kind, NovelStatus status, Pageable page) {
-        Page<Novel> found = novels.feed(kind, status, page);
+        return feed(me, kind, status, List.of(), null, page);
+    }
+    /**
+     * 열매 탭 목록. 장르(최대 3개)는 하나라도 맞으면 보이고, 검색어는 제목이나 만든 사람 닉네임에 들어 있으면 보인다.
+     * 둘 다 없으면 예전 피드 그대로다.
+     */
+    @Transactional(readOnly = true)
+    public PageResponse<NovelSummary> feed(Long me, NovelKind kind, NovelStatus status, List<String> genres, String query,
+                                           Pageable page) {
+        List<String> picked = searchGenres(genres);
+        String keyword = query == null ? "" : query.strip();
+        if (keyword.length() > SEARCH_QUERY_MAX) keyword = keyword.substring(0, SEARCH_QUERY_MAX);
+        Page<Novel> found = picked.isEmpty() && keyword.isEmpty()
+                ? novels.feed(kind, status, page)
+                : novels.search(kind.name(), status == null ? "" : status.name(), String.join(",", picked),
+                        keyword.isEmpty() ? "" : "%" + escapeLike(keyword) + "%", page);
         LikeStats likeStats = likeStats(found.getContent(), me);
         return PageResponse.of(found, n -> summary(n, me, likeStats));
+    }
+    /** 검색어는 이 길이까지만 쓴다(제목 최대 길이보다 길 필요가 없다). */
+    static final int SEARCH_QUERY_MAX = 50;
+    /** 목록에서 거를 장르. 작품을 만들 때처럼 세 개까지, 장르 목록에 있는 이름만 받는다. */
+    private List<String> searchGenres(List<String> requested) {
+        if (requested == null) return List.of();
+        List<String> genres = requested.stream().map(String::strip).filter(genre -> !genre.isEmpty()).distinct().toList();
+        if (genres.size() > Novel.GENRES_MAX)
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "장르는 세 개까지 고를 수 있어요.");
+        if (!NovelGenres.ALL.containsAll(genres))
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "고를 수 없는 장르가 있어요.");
+        return genres;
+    }
+    /** ILIKE 에서 %·_ 를 글자 그대로 찾도록 ! 로 이스케이프한다(리포지토리 search 의 ESCAPE '!'). */
+    static String escapeLike(String keyword) {
+        return keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
     @Transactional(readOnly = true)
     public PageResponse<NovelSummary> mine(Long me, NovelKind kind, Pageable page) {
