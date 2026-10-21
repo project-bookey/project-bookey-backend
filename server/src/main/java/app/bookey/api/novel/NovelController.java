@@ -25,11 +25,13 @@ public class NovelController {
     private final NovelBranchBinService binService;
     private final NovelSunlightService sunlightService;
     private final NovelSunlightPurchaseService sunlightPurchaseService;
+    @Operation(summary = "작품 목록 — 최신순. genres(최대 3개, 하나라도 맞으면)와 q(제목·만든 사람 닉네임에 든 글자)로 거른다. 장르가 넷 이상이거나 목록에 없으면 400")
     @GetMapping
     public PageResponse<NovelSummary> feed(@AuthenticationPrincipal AuthUser user,
             @RequestParam(defaultValue = "SOLO") NovelKind kind, @RequestParam(required = false) NovelStatus status,
+            @RequestParam(required = false) List<String> genres, @RequestParam(required = false) String q,
             @RequestParam(defaultValue = "0") int page) {
-        return service.feed(user.id(), kind, status, PageRequest.of(Math.max(0, page), 20));
+        return service.feed(user.id(), kind, status, genres, q, PageRequest.of(Math.max(0, page), 20));
     }
     @GetMapping("/mine")
     public PageResponse<NovelSummary> mine(@AuthenticationPrincipal AuthUser user, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "SOLO") NovelKind kind) {

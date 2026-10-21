@@ -21,6 +21,31 @@ public interface NovelRepository extends JpaRepository<Novel, Long> {
         """)
     Page<Novel> feed(@Param("kind") NovelKind kind, @Param("status") NovelStatus status, Pageable pageable);
 
+    /**
+     * 열매 탭 목록 — 피드와 같은 작품 가운데 고른 장르 중 하나라도 작품 장르에 있고, 제목이나 만든 사람 닉네임에 검색어가 든 작품을 최신순으로.
+     * 거르지 않는 조건은 빈 문자열로 넘긴다: status 는 상태 이름, genres 는 쉼표로 이은 장르, pattern 은 ! 로 이스케이프한 ILIKE 패턴.
+     */
+    @Query(value = """
+        SELECT n.* FROM novels n
+        WHERE n.kind = :kind AND n.is_public = TRUE AND n.chapter_count > 0
+          AND (:status = '' OR n.status = :status)
+          AND n.owner_id NOT IN (SELECT u.id FROM users u WHERE u.status = 'TERMINATED')
+          AND (:genres = '' OR n.genres && string_to_array(:genres, ','))
+          AND (:pattern = '' OR n.title ILIKE :pattern ESCAPE '!'
+               OR n.owner_id IN (SELECT u.id FROM users u WHERE u.nickname ILIKE :pattern ESCAPE '!'))
+        ORDER BY n.created_at DESC, n.id DESC
+        """, countQuery = """
+        SELECT count(*) FROM novels n
+        WHERE n.kind = :kind AND n.is_public = TRUE AND n.chapter_count > 0
+          AND (:status = '' OR n.status = :status)
+          AND n.owner_id NOT IN (SELECT u.id FROM users u WHERE u.status = 'TERMINATED')
+          AND (:genres = '' OR n.genres && string_to_array(:genres, ','))
+          AND (:pattern = '' OR n.title ILIKE :pattern ESCAPE '!'
+               OR n.owner_id IN (SELECT u.id FROM users u WHERE u.nickname ILIKE :pattern ESCAPE '!'))
+        """, nativeQuery = true)
+    Page<Novel> search(@Param("kind") String kind, @Param("status") String status, @Param("genres") String genres,
+                       @Param("pattern") String pattern, Pageable pageable);
+
     @Query("""
         select n from Novel n where n.currentWriterId = :userId and n.status = 'ONGOING'
         and (n.turnDueAt is null or n.turnDueAt > :now)

@@ -120,6 +120,38 @@ class NovelServiceTest {
         assertThat(content.get(1).likeCount()).isZero(); assertThat(content.get(1).liked()).isFalse();
         verify(likes, times(1)).countPerNovel(any()); verify(likes, never()).countByNovelId(any());
     }
+    @Test @DisplayName("열매 탭 목록은 고른 장르와 검색어로 거르고, %·_ 는 글자 그대로 찾는다")
+    void feedSearchesByGenresAndKeyword() {
+        var page = PageRequest.of(0, 20);
+        when(novels.search(any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of(n), page, 1));
+
+        service.feed(2L, NovelKind.RELAY, NovelStatus.ONGOING, List.of(" 무협 ", "스릴러", "무협"), "  100%_달 ", page);
+
+        verify(novels).search("RELAY", "ONGOING", "무협,스릴러", "%100!%!_달%", page);
+        verify(novels, never()).feed(any(), any(), any());
+    }
+    @Test @DisplayName("열매 탭 목록은 장르만 고르면 검색어 없이, 아무것도 없으면 예전 피드로 읽는다")
+    void feedWithoutFiltersUsesPlainFeed() {
+        var page = PageRequest.of(0, 20);
+        when(novels.search(any(), any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of(), page, 0));
+        when(novels.feed(NovelKind.RELAY, null, page)).thenReturn(new PageImpl<>(List.of(), page, 0));
+
+        service.feed(2L, NovelKind.RELAY, null, List.of("판타지"), " ", page);
+        service.feed(2L, NovelKind.RELAY, null, null, null, page);
+
+        verify(novels).search("RELAY", "", "판타지", "", page);
+        verify(novels).feed(NovelKind.RELAY, null, page);
+    }
+    @Test @DisplayName("열매 탭 목록은 장르를 넷 이상 고르거나 목록에 없는 장르를 받지 않는다")
+    void feedRejectsTooManyOrUnknownGenres() {
+        var page = PageRequest.of(0, 20);
+
+        assertThatThrownBy(() -> service.feed(2L, NovelKind.RELAY, null, List.of("판타지", "무협", "공포", "SF"), null, page))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> service.feed(2L, NovelKind.RELAY, null, List.of("없는장르"), null, page))
+                .isInstanceOf(ApiException.class);
+        verify(novels, never()).search(any(), any(), any(), any(), any());
+    }
     private CreateNovelRequest request(NovelMode mode, Integer branchLimit, List<Long> invitees) {
         return request(mode, branchLimit, invitees, "판타지", null);
     }
