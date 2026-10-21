@@ -42,16 +42,18 @@ public class NovelService {
         int chapterLimit = request.chapterLimit() == null ? 20 : request.chapterLimit();
         int turnHours = request.turnHours() == null ? 24 : request.turnHours();
         List<Long> invitees = mode == NovelMode.CIRCLE ? invitees(me, request.inviteeIds()) : List.of();
+        // 만든 사람이 1회차를 함께 올리므로, 한 줄기로 이어 쓸 작가가 없으면 시작할 수 없다.
+        if (mode == NovelMode.CIRCLE && invitees.isEmpty())
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "함께 쓸 작가를 한 명 이상 골라 주세요.");
         Novel created;
         if (mode == NovelMode.OPEN) {
             int branchLimit = request.branchLimit() == null ? Novel.BRANCH_LIMIT_MIN : request.branchLimit();
             created = Novel.open(me, request.title(), request.description(), request.genre(), chapterLimit, turnHours,
                     branchLimit, baseWorkId);
         } else {
-            // 함께 쓸 작가를 고르면 정원은 고른 사람과 나다. 고르지 않으면 예전처럼 모집한다.
-            int memberLimit = invitees.isEmpty() ? (request.memberLimit() == null ? 6 : request.memberLimit()) : invitees.size() + 1;
+            // 정원은 고른 사람과 나다. 고른 작가는 승인 없이 참가하니 바로 연재를 시작한다.
             created = new Novel(me, request.kind(), request.title(), request.description(), request.genre(),
-                    memberLimit, chapterLimit, turnHours, request.isPublic());
+                    invitees.size() + 1, chapterLimit, turnHours, request.isPublic());
             created.useBaseWork(baseWorkId);
         }
         Novel n = novels.saveAndFlush(created);
@@ -59,6 +61,11 @@ public class NovelService {
         invitees.forEach(id -> members.save(new NovelMember(n.getId(), id, true)));
         members.flush();
         attachCover(n, me, request.coverId());
+        Instant now = Instant.now();
+        if (!n.isOpen()) n.start(now);
+        // 회차 없는 작품이 홈에 열매로 떨어지지 않게 1회차를 작품과 같은 트랜잭션에 저장한다.
+        FirstChapterRequest first = request.firstChapter();
+        addChapter(n, me, null, first.title(), first.body(), now);
         return detail(n, me);
     }
     private Long requireBaseWork(Long id) {
@@ -237,13 +244,16 @@ public class NovelService {
         // 한 줄기로 이어지는 작품은 마지막 회차가 부모다. 열매로 퍼뜨리는 작품은 여기서 뿌리 회차만 나온다.
         Long parentId = n.getChapterCount() == 0 ? null
                 : chapters.findFirstByNovelIdOrderByChapterNumberDescIdDesc(id).map(NovelChapter::getId).orElse(null);
-        NovelChapter c = chapters.saveAndFlush(new NovelChapter(id, me, parentId, n.getChapterCount() + 1,
-                request.title(), request.body()));
+        NovelChapter c = addChapter(n, me, parentId, request.title(), request.body(), Instant.now());
         drafts.findByNovelIdAndUserId(id, me).ifPresent(drafts::delete);
-        Instant now = Instant.now();
+        return chapterView(c, n, me);
+    }
+    /** 회차를 저장하고 다음 차례를 연다. 열매로 퍼뜨리는 작품은 뿌리 회차를 배달한다. */
+    private NovelChapter addChapter(Novel n, Long me, Long parentId, String title, String body, Instant now) {
+        NovelChapter c = chapters.saveAndFlush(new NovelChapter(n.getId(), me, parentId, n.getChapterCount() + 1, title, body));
         n.publish(writerIds(n), now);
         if (n.isOpen()) delivery.deliverNewChapter(n, c, now);
-        return chapterView(c, n, me);
+        return c;
     }
     @Transactional(readOnly = true)
     public PageResponse<NovelChapterSummary> chapters(Long me, Long id, Pageable page) {

@@ -122,7 +122,7 @@ class NovelServiceTest {
     }
     private CreateNovelRequest request(NovelMode mode, Integer branchLimit, List<Long> invitees) {
         return new CreateNovelRequest(NovelKind.RELAY, "새 이야기", "소개", "판타지", mode != NovelMode.OPEN ? false : true,
-                null, 20, 24, null, mode, null, invitees, null, branchLimit);
+                null, 20, 24, null, mode, null, invitees, null, branchLimit, new FirstChapterRequest("1화", "첫 이야기"));
     }
     private void saveReturnsWithId(long id) {
         when(novels.saveAndFlush(any(Novel.class))).thenAnswer(call -> {
@@ -130,9 +130,10 @@ class NovelServiceTest {
             ReflectionTestUtils.setField(saved, "id", id); ReflectionTestUtils.setField(saved, "createdAt", Instant.now());
             return saved;
         });
+        when(chapters.saveAndFlush(any(NovelChapter.class))).thenAnswer(call -> call.getArgument(0));
     }
-    @Test @DisplayName("열매로 퍼뜨리는 작품은 정원 없이 바로 연재되고 만든 사람이 1회차를 쓴다")
-    void openNovelStartsWithOwnerWriting() {
+    @Test @DisplayName("열매로 퍼뜨리는 작품은 정원 없이 바로 연재되고 만든 사람이 쓴 1회차를 함께 올려 배달한다")
+    void openNovelStartsWithOwnersFirstChapter() {
         saveReturnsWithId(20L);
         NovelDetail created = service.create(1L, request(NovelMode.OPEN, 15, null));
         assertThat(created.novel().mode()).isEqualTo(NovelMode.OPEN);
@@ -140,7 +141,17 @@ class NovelServiceTest {
         assertThat(created.novel().memberLimit()).isNull();
         assertThat(created.novel().deliveryCount()).isEqualTo(Novel.DELIVERY_COUNT);
         assertThat(created.novel().branchLimit()).isEqualTo(15);
-        assertThat(created.canWrite()).isTrue(); assertThat(created.canApply()).isFalse();
+        assertThat(created.novel().chapterCount()).isEqualTo(1);
+        assertThat(created.canWrite()).isFalse(); assertThat(created.canApply()).isFalse();
+        verify(delivery).deliverNewChapter(argThat(n -> n.getId() == 20L), argThat(c -> c.getChapterNumber() == 1
+                && c.getParentChapterId() == null && c.getAuthorId().equals(1L) && "첫 이야기".equals(c.getBody())), any());
+    }
+    @Test @DisplayName("1회차 없이 작품을 만들면 거절한다")
+    void createRequiresFirstChapter() {
+        var violations = jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator()
+                .validate(new CreateNovelRequest(NovelKind.RELAY, "새 이야기", "소개", "판타지", true, null, 20, 24, null,
+                        NovelMode.OPEN, null, null, null, null, null));
+        assertThat(violations).extracting(v -> v.getPropertyPath().toString()).contains("firstChapter");
     }
     @Test @DisplayName("가지 상한을 비우면 10으로 만든다")
     void openNovelDefaultsBranchLimit() {
@@ -216,6 +227,25 @@ class NovelServiceTest {
         assertThat(created.novel().memberLimit()).isEqualTo(3);
         assertThat(created.novel().mode()).isEqualTo(NovelMode.CIRCLE);
         verify(members, times(2)).save(argThat(m -> "ACTIVE".equals(m.getStatus()) && m.getNovelId().equals(30L)));
+    }
+    @Test @DisplayName("모여 만들기는 만든 사람의 1회차를 올리며 바로 시작하고 다음 작가에게 차례를 넘긴다")
+    void circleStartsWithOwnersFirstChapter() {
+        saveReturnsWithId(30L);
+        List<UserFollow> followed = List.of(follow(1L, 2L));
+        when(follows.findAllByFollowerIdAndFolloweeIdIn(1L, List.of(2L))).thenReturn(followed);
+        when(members.activeMembers(30L)).thenReturn(List.of(new NovelMember(30L, 1L, true), new NovelMember(30L, 2L, true)));
+        NovelDetail created = service.create(1L, request(NovelMode.CIRCLE, null, List.of(2L)));
+        assertThat(created.novel().status()).isEqualTo(NovelStatus.ONGOING);
+        assertThat(created.novel().chapterCount()).isEqualTo(1);
+        assertThat(created.canWrite()).isFalse(); assertThat(created.currentWriterNickname()).isNotNull();
+        verify(chapters).saveAndFlush(argThat(c -> c.getChapterNumber() == 1 && c.getAuthorId().equals(1L)));
+        verify(delivery, never()).deliverNewChapter(any(), any(), any());
+    }
+    @Test @DisplayName("모여 만들기는 함께 쓸 작가를 고르지 않으면 만들지 않는다")
+    void circleRequiresInvitee() {
+        assertThatThrownBy(() -> service.create(1L, request(NovelMode.CIRCLE, null, List.of())))
+                .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.INVALID_REQUEST);
+        verify(novels, never()).saveAndFlush(any());
     }
     @Test @DisplayName("열매로 퍼뜨리는 작품에는 참가 신청을 받지 않는다")
     void openNovelRejectsApplications() {
