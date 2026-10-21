@@ -11,8 +11,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.*;
 
 /**
- * 배달받은 열매에서 가지를 뻗어 이어 쓰기. 받은 회차가 부모가 되고 깊이는 부모보다 1 크다.
- * 초안은 작품·사람마다 하나(NovelDraft)라 turnNumber 자리에 배달 id 를 넣어 다른 열매의 원고와 섞이지 않게 한다.
+ * 자리를 맡은 열매에서 가지를 뻗어 이어 쓰기. 맡은 회차가 부모가 되고 깊이는 부모보다 1 크다.
+ * 초안은 작품·사람마다 하나(NovelDraft)라 turnNumber 자리에 열매 id 를 넣어 다른 열매의 원고와 섞이지 않게 한다.
  */
 @Service @RequiredArgsConstructor
 public class NovelBranchService {
@@ -42,7 +42,7 @@ public class NovelBranchService {
         return new NovelDraftView(saved.getTurnNumber(), saved.getTitle(), saved.getBody(), saved.getUpdatedAt());
     }
 
-    /** 가지를 발행하면 그 회차가 다시 정한 인원에게 배달된다. 발행은 한 번뿐이라 같은 배달로 두 번 쓸 수 없다. */
+    /** 가지를 발행하면 그 회차도 자리가 남는 동안 다른 사람의 열매가 된다. 발행은 한 번뿐이라 같은 열매로 두 번 쓸 수 없다. */
     @Transactional
     public NovelChapterView publish(Long me, Long deliveryId, NovelBranchWriteRequest request) {
         if (request.title().isBlank() || request.body().isBlank()) throw ApiException.of(ErrorCode.INVALID_REQUEST);
@@ -58,22 +58,21 @@ public class NovelBranchService {
         d.written(branch.getId());
         drafts.findByNovelIdAndUserId(n.getId(), me).ifPresent(drafts::delete);
         n.addBranch();
-        delivery.deliverNewChapter(n, branch, now);
         return new NovelChapterView(branch.getId(), n.getId(), branch.getChapterNumber(), branch.getTitle(),
                 branch.getBody(), nickname(me), branch.getCreatedAt(), branch.getParentChapterId(), branch.getViewCount(),
-                delivery.canSendToSelf(n, branch, me, now), sunlight.selfBranchCost());
+                delivery.canSendToSelf(n, branch, me, now), sunlight.selfBranchCost(), branch.isTrunk(),
+                delivery.canClaim(n, branch, me, now), delivery.freeSlots(n, branch));
     }
 
-    /** 넘기기 — 열매를 내려놓으면 다른 한 사람에게 다시 간다. 내 글 잇기였으면 낸 햇살을 돌려받는다. */
+    /** 내려놓기 — 맡은 자리를 비운다. 그 회차는 다시 다른 사람의 열매가 된다. 내 글 잇기였으면 낸 햇살을 돌려받는다. */
     @Transactional
     public void decline(Long me, Long deliveryId) {
-        Instant now = Instant.now();
         NovelDelivery found = deliveries.findById(deliveryId).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         Novel n = novels.lockById(found.getNovelId()).orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
         NovelDelivery d = held(me, deliveryId, true);
         d.decline();
         drafts.findByNovelIdAndUserId(n.getId(), me).filter(saved -> saved.getTurnNumber() == d.getId()).ifPresent(drafts::delete);
-        delivery.settleUnwritten(n, d, now, true);
+        delivery.settleUnwritten(d);
     }
 
     private NovelDelivery held(Long me, Long deliveryId, boolean lock) {

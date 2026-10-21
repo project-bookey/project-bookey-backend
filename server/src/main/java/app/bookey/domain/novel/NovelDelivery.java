@@ -5,7 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.Instant;
 
-/** 한 회차를 한 사람에게 열매로 보낸 기록. 받은 사람은 마감 전에 그 회차에서 가지를 뻗어 이어 쓸 수 있다. */
+/** 한 회차의 가지 자리를 한 사람이 맡은 기록(열매). 맡은 사람은 마감 전에 그 회차에서 가지를 뻗어 이어 쓸 수 있다. */
 @Getter @Entity @Table(name = "novel_deliveries")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class NovelDelivery extends BaseTimeEntity {
@@ -24,6 +24,12 @@ public class NovelDelivery extends BaseTimeEntity {
         this.novelId = novelId; this.chapterId = chapterId; this.recipientId = recipientId;
         this.dueAt = dueAt; this.status = NovelDeliveryStatus.DELIVERED;
         this.source = NovelDeliverySource.RANDOM;
+    }
+    /** 홈의 열매(이어 쓸 수 있는 회차)를 골라 쓰기 시작하면 그 사람이 마감까지 자리를 하나 맡는다. */
+    public static NovelDelivery claim(Long novelId, Long chapterId, Long writerId, Instant dueAt) {
+        NovelDelivery d = new NovelDelivery(novelId, chapterId, writerId, dueAt);
+        d.source = NovelDeliverySource.CLAIM;
+        return d;
     }
     /** 햇살을 내고 내가 쓴 회차를 나에게 보낸다. */
     public static NovelDelivery toSelf(Long novelId, Long chapterId, Long authorId, Instant dueAt, int sunlightPaid) {

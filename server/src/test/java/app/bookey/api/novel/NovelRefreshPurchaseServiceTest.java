@@ -34,13 +34,14 @@ class NovelRefreshPurchaseServiceTest {
 
     private final NovelHomeFeedRepository feeds = mock(NovelHomeFeedRepository.class);
     private final NovelRepository novels = mock(NovelRepository.class);
+    private final NovelChapterRepository chapters = mock(NovelChapterRepository.class);
     private final NovelDeliveryRepository deliveries = mock(NovelDeliveryRepository.class);
     private final NovelRefreshPurchaseRepository purchases = mock(NovelRefreshPurchaseRepository.class);
     private final GooglePlayPaymentClient google = mock(GooglePlayPaymentClient.class);
     private final AppStorePaymentClient apple = mock(AppStorePaymentClient.class);
     private final Clock clock = mock(Clock.class);
     private final NovelService novelService = new NovelService(novels, mock(NovelMemberRepository.class),
-            mock(NovelChapterRepository.class), mock(NovelDraftRepository.class), mock(NovelCoverRepository.class),
+            chapters, mock(NovelDraftRepository.class), mock(NovelCoverRepository.class),
             mock(NovelLikeRepository.class), mock(UserRepository.class), mock(RateLimiter.class), deliveries,
             mock(NovelDeliveryService.class), mock(NovelBaseWorkRepository.class), mock(UserFollowRepository.class), mock(NovelSunlightService.class));
     private final NovelHomeFeedService homeFeedService = feedService(PAYMENT);
@@ -122,11 +123,11 @@ class NovelRefreshPurchaseServiceTest {
         assertThat(view.freeRefreshesLeftToday()).isZero();
         assertThat(view.adRefreshesLeftToday()).isZero();
         assertThat(feed.getPaidRefreshes()).isEqualTo(1);
-        assertThat(feed.getNovelIds()).containsExactly(1L);
+        assertThat(feed.getChapterIds()).containsExactly(1L);
         assertThat(purchase.isPaid()).isTrue();
         assertThat(purchase.getTransactionId()).isEqualTo("purchase-token");
         assertThat(purchase.getPaidAt()).isEqualTo(NOON);
-        verify(novels, never()).pickForHomeFeed(any(), any(), anyInt());
+        verify(chapters, never()).pickHomeFruits(any(), any(), any(), any(), anyInt());
     }
 
     @Test @DisplayName("Apple 결제를 릴레이노벨 번들로 확인하면 결제한 새로고침 하나를 더한다")
@@ -222,13 +223,13 @@ class NovelRefreshPurchaseServiceTest {
                 .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.NOT_FOUND);
     }
 
-    @Test @DisplayName("결제를 확인한 뒤 새로고침이 새 작품이 없어 거절되면 결제한 횟수는 다음에 쓰게 남는다")
+    @Test @DisplayName("결제를 확인한 뒤 새로고침이 새 열매가 없어 거절되면 결제한 횟수는 다음에 쓰게 남는다")
     void paidRefreshSurvivesRefreshWithoutNewNovels() {
         NovelHomeFeed feed = storedFeed(2, 3, 0);
         order(SubscriptionStore.GOOGLE);
         when(google.getProduct(any(), eq(PRODUCT), eq("purchase-token"))).thenReturn(new GoogleProduct(0, "GPA.1"));
         service.verify(ME, googleVerify(PRODUCT, "purchase-token"));
-        when(novels.pickForHomeFeed(eq(ME), any(), eq(7))).thenReturn(List.of(), List.of(11L));
+        when(chapters.pickHomeFruits(eq(ME), any(), any(), any(), eq(7))).thenReturn(List.of(), List.of(11L));
 
         assertThatThrownBy(() -> homeFeedService.refresh(ME))
                 .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.NOVEL_FEED_NO_NEW);
@@ -237,7 +238,7 @@ class NovelRefreshPurchaseServiceTest {
     }
 
     private NovelHomeFeedService feedService(BookeyProperties.Payment payment) {
-        return new NovelHomeFeedService(feeds, novels, deliveries, novelService, properties(payment), clock);
+        return new NovelHomeFeedService(feeds, chapters, novelService, properties(payment), clock);
     }
     private NovelRefreshPurchaseService purchaseService(NovelHomeFeedService feedService, BookeyProperties.Payment payment) {
         return new NovelRefreshPurchaseService(purchases, feedService, properties(payment), google, apple, clock);
@@ -245,7 +246,7 @@ class NovelRefreshPurchaseServiceTest {
     private static BookeyProperties properties(BookeyProperties.Payment payment) {
         return new BookeyProperties(null, null, null, null, null, null, null, payment, null, null, NOVEL);
     }
-    /** 작품 하나가 놓인 피드 자리. 작품 요약은 이 테스트의 관심 밖이라 비워 돌려준다. */
+    /** 열매 하나가 놓인 피드 자리. 열매 모양은 이 테스트의 관심 밖이라 이어 쓸 수 있는 열매가 없는 것으로 둔다. */
     private NovelHomeFeed storedFeed(int freeUsed, int adUsed, int paid) {
         NovelHomeFeed feed = new NovelHomeFeed(ME, TODAY);
         feed.placeFirst(List.of(1L));
@@ -253,7 +254,7 @@ class NovelRefreshPurchaseServiceTest {
         ReflectionTestUtils.setField(feed, "adUsedToday", (short) adUsed);
         ReflectionTestUtils.setField(feed, "paidRefreshes", paid);
         when(feeds.lockByUserId(ME)).thenReturn(Optional.of(feed));
-        when(novels.findShowableOnHome(anyCollection())).thenReturn(List.of());
+        when(chapters.continuableAmong(eq(ME), anyCollection())).thenReturn(List.of());
         return feed;
     }
     private NovelRefreshPurchase order(SubscriptionStore provider) {

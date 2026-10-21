@@ -48,7 +48,7 @@ public class NovelService {
             throw new ApiException(ErrorCode.INVALID_REQUEST, "함께 쓸 작가를 한 명 이상 골라 주세요.");
         Novel created;
         if (mode == NovelMode.OPEN) {
-            int branchLimit = request.branchLimit() == null ? Novel.BRANCH_LIMIT_MIN : request.branchLimit();
+            int branchLimit = request.branchLimit() == null ? Novel.BRANCH_LIMIT_DEFAULT : request.branchLimit();
             created = Novel.open(me, request.title(), request.description(), genres.get(0), chapterLimit, turnHours,
                     branchLimit, baseWorkId);
         } else {
@@ -67,7 +67,8 @@ public class NovelService {
         if (!n.isOpen()) n.start(now);
         // 회차 없는 작품이 홈에 열매로 떨어지지 않게 1회차를 작품과 같은 트랜잭션에 저장한다.
         FirstChapterRequest first = request.firstChapter();
-        addChapter(n, me, null, first.title(), first.body(), now);
+        if (n.isOpen()) addTrunkChapter(n, me, first.title(), first.body(), now);
+        else addChapter(n, me, null, first.title(), first.body(), now);
         return detail(n, me);
     }
     /** 고른 장르(겹치면 하나로, 고른 순서대로). 비우면 예전 앱처럼 한 장르로 만든다. 장르 목록에 없는 이름은 받지 않는다. */
@@ -150,7 +151,7 @@ public class NovelService {
         LikeStats likeStats = likeStats(found, me);
         return found.stream().map(n -> summary(n, me, likeStats)).toList();
     }
-    /** 내가 받은 열매 — 홈 열매 밭에 떨어진다. */
+    /** 내가 자리를 맡은 열매 — 홈 열매 밭에 먼저 떨어진다. */
     @Transactional(readOnly = true)
     public List<NovelDeliveryView> deliveries(Long me) {
         List<NovelDelivery> held = deliveries.holding(me, Instant.now(), HOME_LIST_PAGE);
@@ -170,7 +171,41 @@ public class NovelService {
         return new NovelDeliveryView(d.getId(), summary(n, me, likeStats), c.getId(), c.getChapterNumber(),
                 c.getTitle(), d.getDueAt(), d.getSource());
     }
-    /** 내 글 잇기 — 햇살을 내고 내가 쓴 회차를 나에게 배달한다. 그 뒤로는 받은 열매처럼 쓰고 발행한다. */
+    /** 자리 맡기 — 홈의 열매(이어 쓸 수 있는 회차)를 골라 쓰기 시작한다. 그 뒤로는 열매 id 로 초안·발행한다. */
+    @Transactional
+    public NovelDeliveryView claim(Long me, Long id, Long chapterId) {
+        limiter.require("novel:claim:" + me, 10, Duration.ofMinutes(1));
+        Novel n = readable(me, id, true);
+        NovelChapter c = chapters.findByIdAndNovelId(chapterId, id).filter(NovelChapter::isActive)
+                .orElseThrow(() -> ApiException.of(ErrorCode.NOT_FOUND));
+        NovelDelivery d = delivery.claim(n, c, me, Instant.now());
+        return deliveryView(d, n, c, me, likeStats(List.of(n), me));
+    }
+    /**
+     * 홈 열매 — 회차 id 순서대로, 그 회차와 작품 요약. 열매를 고르는 규칙은 {@link NovelHomeFeedService} 가 맡고
+     * 여기서는 지금 사용자 기준으로 보여 줄 모양만 만든다. 지워진 회차·작품은 뺀다.
+     */
+    public List<NovelHomeFruitView> fruits(List<Long> chapterIds, Long me) {
+        if (chapterIds.isEmpty()) return List.of();
+        Map<Long, NovelChapter> chaptersById = chapters.findAllById(chapterIds).stream()
+                .collect(Collectors.toMap(NovelChapter::getId, c -> c));
+        List<NovelChapter> ordered = chapterIds.stream().map(chaptersById::get).filter(Objects::nonNull).toList();
+        Map<Long, Novel> novelsById = novels.findAllById(ordered.stream().map(NovelChapter::getNovelId).distinct().toList())
+                .stream().collect(Collectors.toMap(Novel::getId, n -> n));
+        LikeStats likeStats = likeStats(List.copyOf(novelsById.values()), me);
+        Map<Long, String> authors = nicknames(ordered.stream().map(NovelChapter::getAuthorId).filter(Objects::nonNull)
+                .distinct().toList());
+        List<NovelHomeFruitView> fruits = new ArrayList<>();
+        for (NovelChapter c : ordered) {
+            Novel n = novelsById.get(c.getNovelId());
+            if (n == null) continue;
+            fruits.add(new NovelHomeFruitView(c.getId(), c.getChapterNumber(), c.getTitle(), excerpt(c.getBody()),
+                    authors.getOrDefault(c.getAuthorId(), "탈퇴한 작가"), c.getCreatedAt(), delivery.freeSlots(n, c),
+                    summary(n, me, likeStats)));
+        }
+        return fruits;
+    }
+    /** 내 글 잇기 — 햇살을 내고 내가 쓴 회차를 나에게 배달한다. 그 뒤로는 자리를 맡은 열매처럼 쓰고 발행한다. */
     @Transactional
     public NovelDeliveryView sendToSelf(Long me, Long id, Long chapterId) {
         limiter.require("novel:self-branch:" + me, 10, Duration.ofMinutes(1));
@@ -286,19 +321,41 @@ public class NovelService {
     public NovelChapterView publish(Long me, Long id, NovelWriteRequest request) {
         Novel n = readable(me, id, true); expire(n); requireWrite(n, me, request.turnNumber());
         if (request.title().isBlank() || request.body().isBlank()) throw ApiException.of(ErrorCode.INVALID_REQUEST);
-        // 한 줄기로 이어지는 작품은 마지막 회차가 부모다. 열매로 퍼뜨리는 작품은 여기서 뿌리 회차만 나온다.
-        Long parentId = n.getChapterCount() == 0 ? null
-                : chapters.findFirstByNovelIdOrderByChapterNumberDescIdDesc(id).map(NovelChapter::getId).orElse(null);
-        NovelChapter c = addChapter(n, me, parentId, request.title(), request.body(), Instant.now());
+        NovelChapter c;
+        if (n.isOpen()) {
+            // 열매로 퍼뜨리는 작품은 첫 작가의 줄기 끝에서 위로 잇는다.
+            c = addTrunkChapter(n, me, request.title(), request.body(), Instant.now());
+        } else {
+            // 한 줄기로 이어지는 작품은 마지막 회차가 부모다.
+            Long parentId = n.getChapterCount() == 0 ? null
+                    : chapters.findFirstByNovelIdOrderByChapterNumberDescIdDesc(id).map(NovelChapter::getId).orElse(null);
+            c = addChapter(n, me, parentId, request.title(), request.body(), Instant.now());
+        }
         drafts.findByNovelIdAndUserId(id, me).ifPresent(drafts::delete);
         return chapterView(c, n, me);
     }
-    /** 회차를 저장하고 다음 차례를 연다. 열매로 퍼뜨리는 작품은 뿌리 회차를 배달한다. */
+    /** 한 줄기 작품의 회차를 저장하고 다음 차례를 연다. */
     private NovelChapter addChapter(Novel n, Long me, Long parentId, String title, String body, Instant now) {
         NovelChapter c = chapters.saveAndFlush(new NovelChapter(n.getId(), me, parentId, n.getChapterCount() + 1, title, body));
         n.publish(writerIds(n), now);
-        if (n.isOpen()) delivery.deliverNewChapter(n, c, now);
         return c;
+    }
+    /** 첫 작가의 줄기 회차 — 줄기 끝에서 위로 한 마디 잇는다. 뿌리 회차(작품을 만들 때)도 여기서 나온다. */
+    private NovelChapter addTrunkChapter(Novel n, Long me, String title, String body, Instant now) {
+        NovelChapter tip = chapters.findFirstByNovelIdAndTrunkTrueOrderByChapterNumberDesc(n.getId()).orElse(null);
+        NovelChapter c = chapters.saveAndFlush(NovelChapter.trunk(n.getId(), me, tip, title, body));
+        n.publish(writerIds(n), now);
+        return c;
+    }
+    /** 첫 작가의 줄기 길이 — 줄기 끝 회차의 깊이. 아직 회차가 없으면 0. */
+    private int trunkDepth(Novel n) {
+        return chapters.findFirstByNovelIdAndTrunkTrueOrderByChapterNumberDesc(n.getId())
+                .map(NovelChapter::getChapterNumber).orElse(0);
+    }
+    /** CIRCLE 은 내 차례인지, OPEN 은 첫 작가가 줄기를 이어 쓸 수 있는지. */
+    private boolean canWrite(Novel n, Long me) {
+        if (!n.isOpen()) return n.canWrite(me);
+        return n.canGrowTrunk(me, trunkDepth(n));
     }
     @Transactional(readOnly = true)
     public PageResponse<NovelChapterSummary> chapters(Long me, Long id, Pageable page) {
@@ -337,13 +394,16 @@ public class NovelService {
         Map<Long, String> nicknames = nicknames(all.stream().map(NovelChapter::getAuthorId).filter(Objects::nonNull).distinct().toList());
         return all.stream().map(c -> new NovelChapterNode(c.getId(), c.getParentChapterId(), c.getChapterNumber(),
                 c.getTitle(), c.getAuthorId() == null ? "탈퇴한 작가" : nicknames.getOrDefault(c.getAuthorId(), "탈퇴한 작가"),
-                excerpt(c.getBody()), c.getCreatedAt())).toList();
+                excerpt(c.getBody()), c.getCreatedAt(), c.isTrunk())).toList();
     }
     private NovelChapterView chapterView(NovelChapter c, Novel n, Long me) { return chapterView(c, n, me, c.getViewCount()); }
     private NovelChapterView chapterView(NovelChapter c, Novel n, Long me, int viewCount) {
+        Instant now = Instant.now();
+        int slotsLeft = n.isOpen() ? delivery.freeSlots(n, c) : 0;
         return new NovelChapterView(c.getId(), c.getNovelId(), c.getChapterNumber(), c.getTitle(),
                 c.getBody(), nickname(c.getAuthorId()), c.getCreatedAt(), c.getParentChapterId(), viewCount,
-                delivery.canSendToSelf(n, c, me, Instant.now()), sunlight.selfBranchCost());
+                delivery.canSendToSelf(n, c, me, now), sunlight.selfBranchCost(), c.isTrunk(),
+                delivery.canClaim(n, c, me, now), slotsLeft);
     }
     @Transactional
     public void expire(Long id) { novels.lockById(id).ifPresent(this::expire); }
@@ -360,7 +420,7 @@ public class NovelService {
         return n;
     }
     private void requireWrite(Novel n, Long me, long turn) {
-        if (!n.canWrite(me) || n.getTurnNumber() != turn) throw ApiException.of(ErrorCode.NOVEL_NOT_YOUR_TURN);
+        if (!canWrite(n, me) || n.getTurnNumber() != turn) throw ApiException.of(ErrorCode.NOVEL_NOT_YOUR_TURN);
     }
     private void requireOwner(Novel n, Long me) { if (!n.isOwner(me)) throw ApiException.of(ErrorCode.FORBIDDEN); }
     private Novel readable(Long me, Long id, boolean lock) {
@@ -426,7 +486,7 @@ public class NovelService {
         return new NovelDetail(summary(n, me), active.stream().map(m -> member(n, m)).toList(), applications, membership,
                 n.isPublic() && n.getKind() == NovelKind.RELAY && !n.isOpen() && n.getStatus() != NovelStatus.COMPLETED
                         && !List.of("ACTIVE", "PENDING").contains(membership) && !isFull(n, active.size()),
-                n.canWrite(me), n.isOwner(me) && n.getStatus() == NovelStatus.RECRUITING && active.size() >= 2,
+                canWrite(n, me), n.isOwner(me) && n.getStatus() == NovelStatus.RECRUITING && active.size() >= 2,
                 n.isOwner(me) && n.getStatus() == NovelStatus.ONGOING && n.getChapterCount() > 0,
                 n.getTurnNumber(), n.getCurrentWriterId() == null ? null : nickname(n.getCurrentWriterId()),
                 n.getCoverId(),

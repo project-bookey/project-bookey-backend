@@ -27,11 +27,11 @@ class NovelBranchServiceTest {
     private NovelDelivery held;
 
     @BeforeEach void setup() {
-        open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 10, null);
+        open = Novel.open(1L, "열매", "소개", "판타지", 20, 24, 3, null);
         ReflectionTestUtils.setField(open, "id", 10L);
         parent = new NovelChapter(10L, 1L, null, 1, "뿌리", "본문");
         ReflectionTestUtils.setField(parent, "id", 100L);
-        held = new NovelDelivery(10L, 100L, 5L, Instant.now().plusSeconds(3600));
+        held = NovelDelivery.claim(10L, 100L, 5L, Instant.now().plusSeconds(3600));
         ReflectionTestUtils.setField(held, "id", 7L);
         when(novels.lockById(10L)).thenReturn(Optional.of(open));
         when(novels.findById(10L)).thenReturn(Optional.of(open));
@@ -45,15 +45,16 @@ class NovelBranchServiceTest {
         });
     }
 
-    @Test @DisplayName("받은 회차에서 가지를 뻗으면 깊이가 하나 늘고, 새 회차가 다시 배달된다")
-    void publishingBranchGrowsFromDeliveredChapter() {
+    @Test @DisplayName("자리를 맡은 회차에서 가지를 뻗으면 깊이가 하나 늘고, 아무에게도 배달하지 않는다")
+    void publishingBranchGrowsFromClaimedChapter() {
         NovelChapterView branch = service.publish(5L, 7L, new NovelBranchWriteRequest("1_1", "이어 쓴 이야기"));
         assertThat(branch.parentChapterId()).isEqualTo(100L);
         assertThat(branch.chapterNumber()).isEqualTo(2);
         assertThat(held.getStatus()).isEqualTo(NovelDeliveryStatus.WRITTEN);
         assertThat(held.getWrittenChapterId()).isEqualTo(200L);
         assertThat(open.getChapterCount()).isEqualTo(1);
-        verify(delivery).deliverNewChapter(eq(open), argThat(c -> c.getId() == 200L), any());
+        assertThat(branch.trunk()).isFalse();
+        verify(deliveries, never()).saveAll(any());
     }
     @Test @DisplayName("다른 사람이 받은 열매로는 쓸 수 없다")
     void othersCannotUseDelivery() {
@@ -79,11 +80,12 @@ class NovelBranchServiceTest {
                 .isInstanceOf(ApiException.class);
         verify(chapters, never()).saveAndFlush(any());
     }
-    @Test @DisplayName("넘기면 열매를 내려놓고 다른 한 사람에게 다시 보낸다")
-    void declineResends() {
+    @Test @DisplayName("내려놓으면 맡은 자리를 비운다 — 다른 사람에게 다시 보내지 않는다")
+    void declineReleasesTheSlot() {
         service.decline(5L, 7L);
         assertThat(held.getStatus()).isEqualTo(NovelDeliveryStatus.DECLINED);
-        verify(delivery).settleUnwritten(eq(open), eq(held), any(), eq(true));
+        verify(delivery).settleUnwritten(held);
+        verify(deliveries, never()).saveAll(any());
     }
     @Test @DisplayName("수거함에 들어간 회차의 열매로는 가지를 뻗을 수 없다")
     void prunedParentRejectsBranch() {

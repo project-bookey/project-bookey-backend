@@ -12,7 +12,8 @@ import java.util.stream.Collectors;
 
 /**
  * 나뭇가지 수거함 — 한 달이 지나도 조회가 50회를 못 넘긴 끝 가지를 나무에서 숨겨 글쓴이의 수거함에 둔다.
- * 글쓴이는 일주일 안에 햇살을 내고 살리거나 버린다. 고르지 않으면 지운다. 지워진 가지만큼 부모 회차에 자리가 생겨 다시 배달한다.
+ * 글쓴이는 일주일 안에 햇살을 내고 살리거나 버린다. 고르지 않으면 지운다. 지워진 가지만큼 부모 회차에 자리가 생겨
+ * 그 회차가 다시 홈의 열매 후보가 된다. 첫 작가의 줄기는 수거하지 않는다.
  * 작품을 먼저 잠그고 회차를 새로 읽는다(작품을 잠그는 가지 발행·넘기기와 같은 순서).
  */
 @Service @RequiredArgsConstructor
@@ -48,9 +49,8 @@ public class NovelBranchBinService {
     /** 버리기 — 바로 지우고 부모 회차의 자리를 비운다. */
     @Transactional
     public NovelBranchBinView discard(Long me, Long chapterId) {
-        Instant now = Instant.now();
-        Locked locked = lockMine(me, chapterId, now);
-        removeAndRefill(locked.novel(), locked.chapter(), now);
+        Locked locked = lockMine(me, chapterId, Instant.now());
+        locked.chapter().remove();
         return bin(me);
     }
 
@@ -66,7 +66,7 @@ public class NovelBranchBinService {
         if (!c.isStale(now) || !chapters.isTip(c.getId())) return;
         c.prune(now);
         n.hideBranch();
-        delivery.closeChapter(n, c, now);
+        delivery.closeChapter(c);
     }
 
     /** 배치 — 일주일 동안 고르지 않은 가지를 지운다. */
@@ -78,14 +78,7 @@ public class NovelBranchBinService {
         Novel n = novels.lockById(novelId).orElse(null);
         NovelChapter c = chapters.findById(chapterId).orElse(null);
         if (n == null || c == null || !c.isPurgeDue(now)) return;
-        removeAndRefill(n, c, now);
-    }
-
-    private void removeAndRefill(Novel n, NovelChapter c, Instant now) {
         c.remove();
-        chapters.flush();
-        if (c.getParentChapterId() != null)
-            chapters.findById(c.getParentChapterId()).ifPresent(parent -> delivery.resend(n, parent, now));
     }
 
     private record Locked(Novel novel, NovelChapter chapter) {}

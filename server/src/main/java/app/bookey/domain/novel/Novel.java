@@ -16,10 +16,10 @@ import java.util.List;
 @Table(name = "novels")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Novel extends BaseTimeEntity {
-    /** 새 회차는 늘 이만큼에게 먼저 배달한다(사용자 결정). */
-    public static final int DELIVERY_COUNT = 10;
-    public static final int BRANCH_LIMIT_MIN = 10;
-    public static final int BRANCH_LIMIT_MAX = 20;
+    /** 회차 하나에 붙는 가지 수(사용자 결정 2026-10-21). 첫 작가의 줄기는 따로 센다. */
+    public static final int BRANCH_LIMIT_MIN = 2;
+    public static final int BRANCH_LIMIT_MAX = 5;
+    public static final int BRANCH_LIMIT_DEFAULT = 3;
     /** 작품 장르는 세 개까지 고른다. */
     public static final int GENRES_MAX = 3;
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
@@ -38,10 +38,13 @@ public class Novel extends BaseTimeEntity {
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 10) private NovelMode mode;
     /** 열매로 퍼뜨리는 작품(OPEN)은 작가 수 제한이 없어 비어 있다. */
     @Column(name = "member_limit") private Integer memberLimit;
-    /** OPEN 작품이 회차 하나를 몇 명에게 배달할지 — 늘 {@link #DELIVERY_COUNT}. */
+    /** 예전에 회차 하나를 몇 명에게 무작위로 배달했는지. 무작위 배달을 없앤 뒤로는 새 작품에서 비어 있다. */
     @Column(name = "delivery_count") private Integer deliveryCount;
-    /** OPEN 작품의 회차 하나에 붙을 수 있는 가지 수. 수거함에 있는 가지와 들고 있는 열매도 자리를 차지한다. */
-    @Column(name = "branch_limit", nullable = false) private int branchLimit = BRANCH_LIMIT_MIN;
+    /**
+     * OPEN 작품의 회차 하나에 붙을 수 있는 가지 수. 나무에 있는 가지·수거함의 가지·자리를 맡은 사람이 자리를 차지하고,
+     * 첫 작가의 줄기는 세지 않는다.
+     */
+    @Column(name = "branch_limit", nullable = false) private int branchLimit = BRANCH_LIMIT_DEFAULT;
     @Column(name = "base_work_id") private Long baseWorkId;
     @Column(name = "chapter_limit", nullable = false) private int chapterLimit;
     @Column(name = "turn_hours", nullable = false) private int turnHours;
@@ -68,13 +71,15 @@ public class Novel extends BaseTimeEntity {
         this.mode = NovelMode.CIRCLE;
     }
 
-    /** 열매로 퍼뜨리는 작품 — 바로 연재가 시작되고 만든 사람이 1회차를 쓴다. 그 뒤 회차는 배달로만 생긴다. */
+    /**
+     * 열매로 퍼뜨리는 작품 — 바로 연재가 시작되고 만든 사람이 1회차를 쓴다. 만든 사람은 그 뒤로도 자기 회차로만 이어지는 줄기를
+     * 계속 쓰고, 다른 사람은 홈에 열매로 놓인 회차를 골라 자리를 맡고 가지를 뻗는다.
+     */
     public static Novel open(Long ownerId, String title, String description, String genre, int chapterLimit,
                              int turnHours, int branchLimit, Long baseWorkId) {
         Novel n = new Novel(ownerId, NovelKind.RELAY, title, description, genre, 1, chapterLimit, turnHours, true);
         n.mode = NovelMode.OPEN;
         n.memberLimit = null;
-        n.deliveryCount = DELIVERY_COUNT;
         n.branchLimit = branchLimit;
         n.baseWorkId = baseWorkId;
         n.status = NovelStatus.ONGOING;
@@ -92,6 +97,14 @@ public class Novel extends BaseTimeEntity {
     /** 이 깊이의 회차에서 가지를 더 뻗을 수 있는가 — 목표 회차에 닿은 가지는 끝난다. */
     public boolean canGrowFrom(int chapterNumber) {
         return status == NovelStatus.ONGOING && chapterNumber < chapterLimit;
+    }
+
+    /**
+     * 첫 작가가 줄기를 이어 쓸 수 있는가 — 연재 중이고 줄기가 목표 회차에 닿지 않았을 때. 줄기는 마감이 없다.
+     * trunkDepth 는 지금 줄기 끝 회차의 깊이(줄기 회차 수)다.
+     */
+    public boolean canGrowTrunk(Long userId, int trunkDepth) {
+        return isOpen() && isOwner(userId) && canGrowFrom(trunkDepth);
     }
 
     public void changeCover(Long coverId) { this.coverId = coverId; }
@@ -114,7 +127,7 @@ public class Novel extends BaseTimeEntity {
         chapterCount++;
         turnNumber++;
         if (mode == NovelMode.OPEN) {
-            // 1회차가 나오면 차례는 비고, 이어 쓰기는 배달받은 사람들의 가지로 이어진다.
+            // 차례는 두지 않는다. 첫 작가의 줄기는 canGrowTrunk 로, 다른 사람의 가지는 맡은 자리로 쓴다.
             currentWriterId = null;
             turnDueAt = null;
             if (chapterLimit <= 1) complete();
@@ -123,7 +136,7 @@ public class Novel extends BaseTimeEntity {
         if (chapterCount >= chapterLimit) complete();
         else if (kind == NovelKind.RELAY) advance(writers, 1, now);
     }
-    /** 배달받은 사람이 가지를 하나 뻗었다. 작품 전체의 완결은 만든 사람이 정한다. */
+    /** 자리를 맡은 사람이 가지를 하나 뻗었다. 작품 전체의 완결은 만든 사람이 정한다. */
     public void addBranch() { chapterCount++; }
     /** 가지가 수거함으로 가면 나무에서 숨기므로 회차 수에서도 뺀다. 살리면 {@link #addBranch()} 로 되돌린다. */
     public void hideBranch() { chapterCount = Math.max(0, chapterCount - 1); }

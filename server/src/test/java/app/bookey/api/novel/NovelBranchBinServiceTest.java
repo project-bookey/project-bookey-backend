@@ -42,7 +42,7 @@ class NovelBranchBinServiceTest {
         assertThat(tip.isPruned()).isTrue();
         assertThat(Duration.between(tip.getPrunedAt(), tip.getPurgeAt())).isEqualTo(Duration.ofDays(7));
         assertThat(open.getChapterCount()).isEqualTo(1);
-        verify(delivery).closeChapter(eq(open), eq(tip), any());
+        verify(delivery).closeChapter(tip);
     }
     @Test @DisplayName("조회가 50회를 넘었거나 아직 한 달이 안 됐거나 이어 쓴 가지가 있으면 수거하지 않는다")
     void livelyOrGrowingBranchStays() {
@@ -55,7 +55,7 @@ class NovelBranchBinServiceTest {
         when(chapters.isTip(200L)).thenReturn(false);
         service.pruneIfStale(200L);
         assertThat(tip.isActive()).isTrue();
-        verify(delivery, never()).closeChapter(any(), any(), any());
+        verify(delivery, never()).closeChapter(any());
     }
     @Test @DisplayName("완결한 작품의 가지와 뿌리 회차는 수거하지 않는다")
     void completedNovelAndRootStay() {
@@ -63,6 +63,22 @@ class NovelBranchBinServiceTest {
         service.pruneIfStale(200L);
         assertThat(tip.isActive()).isTrue();
         assertThat(parent.isStale(Instant.now().plus(Duration.ofDays(400)))).isFalse();
+    }
+    @Test @DisplayName("첫 작가의 줄기 회차는 조회가 모자라도 떨어지지 않는다")
+    void trunkChaptersNeverFall() {
+        NovelChapter root = NovelChapter.trunk(10L, 1L, null, "뿌리", "본문");
+        ReflectionTestUtils.setField(root, "id", 100L);
+        NovelChapter trunk = NovelChapter.trunk(10L, 1L, root, "줄기", "본문");
+        ReflectionTestUtils.setField(trunk, "id", 300L);
+        ReflectionTestUtils.setField(trunk, "judgedFrom", Instant.now().minus(Duration.ofDays(31)));
+        when(chapters.novelIdOf(300L)).thenReturn(Optional.of(10L));
+        when(chapters.findById(300L)).thenReturn(Optional.of(trunk));
+        when(chapters.isTip(300L)).thenReturn(true);
+        service.pruneIfStale(300L);
+        assertThat(trunk.isActive()).isTrue();
+        assertThat(trunk.isStale(Instant.now())).isFalse();
+        assertThat(trunk.getParentChapterId()).isEqualTo(100L);
+        assertThat(trunk.getChapterNumber()).isEqualTo(2);
     }
     @Test @DisplayName("살리면 햇살을 내고 나무로 돌아가며, 살린 날부터 다시 한 달을 센다")
     void restoreSpendsSunlightAndRestartsJudging() {
@@ -95,26 +111,28 @@ class NovelBranchBinServiceTest {
                 .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.NOVEL_BIN_GONE);
         verify(sunlight, never()).spend(any(), anyInt(), any(), any(), any());
     }
-    @Test @DisplayName("버리면 바로 지우고 부모 회차에 생긴 자리로 다시 배달한다")
+    @Test @DisplayName("버리면 바로 지우고 부모 회차에 자리가 생긴다")
     void discardFreesParentSlot() {
         tip.prune(Instant.now());
         when(chapters.binOf(5L)).thenReturn(List.of());
         service.discard(5L, 200L);
         assertThat(tip.getState()).isEqualTo(NovelChapterState.REMOVED);
-        verify(delivery).resend(eq(open), eq(parent), any());
+        // 자리가 비면 부모 회차가 다시 홈의 열매 후보가 된다 — 따로 배달하지 않는다.
+        verifyNoInteractions(delivery);
     }
-    @Test @DisplayName("일주일 동안 고르지 않은 가지는 배치가 지우고 부모에 다시 배달한다")
+    @Test @DisplayName("일주일 동안 고르지 않은 가지는 배치가 지운다")
     void purgeAfterGrace() {
         tip.prune(Instant.now().minus(Duration.ofDays(8)));
         service.purgeIfDue(200L);
         assertThat(tip.getState()).isEqualTo(NovelChapterState.REMOVED);
-        verify(delivery).resend(eq(open), eq(parent), any());
+        // 자리가 비면 부모 회차가 다시 홈의 열매 후보가 된다 — 따로 배달하지 않는다.
+        verifyNoInteractions(delivery);
     }
     @Test @DisplayName("지울 날 전인 가지는 배치가 건드리지 않는다")
     void purgeWaitsForGrace() {
         tip.prune(Instant.now());
         service.purgeIfDue(200L);
         assertThat(tip.isPruned()).isTrue();
-        verify(delivery, never()).resend(any(), any(), any());
+        verifyNoInteractions(delivery);
     }
 }
