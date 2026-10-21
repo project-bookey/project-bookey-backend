@@ -1,5 +1,14 @@
 # project-bookey-backend
 
+소설 생성 보조: `POST /api/v1/novels/{id}/story-assist` 또는
+`POST /api/v1/novels/deliveries/{deliveryId}/story-assist`로
+`{"turnNumber":1,"mode":"CONTINUE","body":"현재 원고","prompt":"희망 전개"}`를 보냅니다.
+모드는 `CONTINUE`(이어쓰기), `PLOT`(전개 3개), `OPENING`(첫 문단)이며 응답은
+`{"suggestions":[{"title":"제목","text":"제안"}]}`입니다. `body`는 최대 20,000자,
+`prompt`는 최대 300자이고 첫 문단 생성에는 소재가 필요합니다. 앞 회차는 집필 권한을 확인한
+작품·배달에서 서버가 선택하며, 외부에는 그 끝 500자와 현재 원고 끝 900자 등 최대
+2,000자의 참고 자료만 보냅니다. 다듬기와 동일한 사용자별 한도를 공유하며 초안을 저장하지 않습니다.
+
 릴레이 소설 문장 다듬기: `POST /api/v1/novels/{id}/writing-assist` 또는
 `POST /api/v1/novels/deliveries/{deliveryId}/writing-assist`에 인증된 사용자로
 `{"turnNumber":1,"text":"다듬을 글"}`을 보냅니다. 기존 집필 권한을 확인하고 최대 2,000자를

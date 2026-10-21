@@ -52,4 +52,19 @@ class NovelAiClientTest {
         assertThatThrownBy(() -> unconfigured.rewrite("원고")).isInstanceOf(ApiException.class);
         server.verify();
     }
+
+    @Test void storyValidatesNestedResponseAndMode() {
+        server.expect(requestTo("http://ai/v1/story-suggestions"))
+                .andExpect(header("X-API-Key", "private-key"))
+                .andExpect(content().json("{\"mode\":\"OPENING\",\"text\":\"소재\"}"))
+                .andRespond(withSuccess("{\"suggestions\":[{\"title\":\"편지\",\"text\":\"비가 내렸다.\"}]}", MediaType.APPLICATION_JSON));
+        assertThat(client.story("OPENING", "소재").suggestions().getFirst().text()).isEqualTo("비가 내렸다.");
+        server.verify();
+    }
+
+    @Test void wrongPlotCountIsRejected() {
+        server.expect(requestTo("http://ai/v1/story-suggestions"))
+                .andRespond(withSuccess("{\"suggestions\":[{\"title\":\"하나\",\"text\":\"단 하나의 전개.\"}]}", MediaType.APPLICATION_JSON));
+        assertThatThrownBy(() -> client.story("PLOT", "원고")).isInstanceOf(ApiException.class);
+    }
 }
