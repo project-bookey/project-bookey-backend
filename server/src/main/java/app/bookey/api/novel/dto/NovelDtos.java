@@ -2,6 +2,7 @@ package app.bookey.api.novel.dto;
 
 import app.bookey.domain.novel.*;
 import app.bookey.domain.wallet.SubscriptionStore;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
@@ -19,7 +20,10 @@ public final class NovelDtos {
             @Size(max = 9, message = "함께 쓸 작가는 아홉 명까지 고를 수 있어요.") List<Long> inviteeIds,
             @Schema(description = "줄거리를 가져온 베이스 작품") Long baseWorkId,
             @Schema(description = "OPEN: 회차 하나에 붙을 수 있는 가지 수(10~20). 비우면 10")
-            @Min(Novel.BRANCH_LIMIT_MIN) @Max(Novel.BRANCH_LIMIT_MAX) Integer branchLimit) {}
+            @Min(Novel.BRANCH_LIMIT_MIN) @Max(Novel.BRANCH_LIMIT_MAX) Integer branchLimit,
+            @Schema(description = "만든 사람이 쓰는 1회차. 작품과 함께 저장돼 회차 없는 작품이 생기지 않는다")
+            @NotNull @Valid FirstChapterRequest firstChapter) {}
+    public record FirstChapterRequest(@NotBlank @Size(max = 120) String title, @NotBlank @Size(max = 20000) String body) {}
     public record NovelCoverRequest(Long coverId) {}
     public record NovelMemberDecision(@NotNull Boolean approved) {}
     public record NovelWriteRequest(@NotNull @Min(1) Long turnNumber,
