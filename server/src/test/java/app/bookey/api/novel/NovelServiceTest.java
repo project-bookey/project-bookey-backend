@@ -121,8 +121,34 @@ class NovelServiceTest {
         verify(likes, times(1)).countPerNovel(any()); verify(likes, never()).countByNovelId(any());
     }
     private CreateNovelRequest request(NovelMode mode, Integer branchLimit, List<Long> invitees) {
-        return new CreateNovelRequest(NovelKind.RELAY, "새 이야기", "소개", "판타지", mode != NovelMode.OPEN ? false : true,
-                null, 20, 24, null, mode, null, invitees, null, branchLimit, new FirstChapterRequest("1화", "첫 이야기"));
+        return request(mode, branchLimit, invitees, "판타지", null);
+    }
+    private CreateNovelRequest request(NovelMode mode, Integer branchLimit, List<Long> invitees, String genre, List<String> genres) {
+        return new CreateNovelRequest(NovelKind.RELAY, "새 이야기", "소개", genre, mode != NovelMode.OPEN ? false : true,
+                null, 20, 24, null, mode, null, invitees, null, branchLimit, new FirstChapterRequest("1화", "첫 이야기"), genres);
+    }
+    @Test @DisplayName("장르는 세 개까지 고른 순서대로 두고, 첫 번째가 대표 장르다")
+    void createKeepsPickedGenresInOrder() {
+        saveReturnsWithId(22L);
+        NovelDetail created = service.create(1L, request(NovelMode.OPEN, null, null, null, List.of("미스터리", "판타지", "미스터리", "공포")));
+        assertThat(created.novel().genres()).containsExactly("미스터리", "판타지", "공포");
+        assertThat(created.novel().genre()).isEqualTo("미스터리");
+    }
+    @Test @DisplayName("장르를 비우면 예전 앱처럼 한 장르로 만든다")
+    void createFallsBackToSingleGenre() {
+        saveReturnsWithId(23L);
+        NovelDetail created = service.create(1L, request(NovelMode.OPEN, null, null, "일상", List.of()));
+        assertThat(created.novel().genres()).containsExactly("일상");
+    }
+    @Test @DisplayName("장르가 없거나 넷 이상이거나 목록에 없으면 만들지 않는다")
+    void createRejectsInvalidGenres() {
+        assertThatThrownBy(() -> service.create(1L, request(NovelMode.OPEN, null, null, null, null)))
+                .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.INVALID_REQUEST);
+        assertThatThrownBy(() -> service.create(1L, request(NovelMode.OPEN, null, null, null, List.of("판타지", "일상", "SF", "공포"))))
+                .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.INVALID_REQUEST);
+        assertThatThrownBy(() -> service.create(1L, request(NovelMode.OPEN, null, null, null, List.of("요리"))))
+                .isInstanceOf(ApiException.class).extracting("errorCode").isEqualTo(ErrorCode.INVALID_REQUEST);
+        verify(novels, never()).saveAndFlush(any());
     }
     private void saveReturnsWithId(long id) {
         when(novels.saveAndFlush(any(Novel.class))).thenAnswer(call -> {
@@ -150,7 +176,7 @@ class NovelServiceTest {
     void createRequiresFirstChapter() {
         var violations = jakarta.validation.Validation.buildDefaultValidatorFactory().getValidator()
                 .validate(new CreateNovelRequest(NovelKind.RELAY, "새 이야기", "소개", "판타지", true, null, 20, 24, null,
-                        NovelMode.OPEN, null, null, null, null, null));
+                        NovelMode.OPEN, null, null, null, null, null, List.of("판타지")));
         assertThat(violations).extracting(v -> v.getPropertyPath().toString()).contains("firstChapter");
     }
     @Test @DisplayName("가지 상한을 비우면 10으로 만든다")

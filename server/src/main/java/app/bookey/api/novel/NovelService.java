@@ -41,6 +41,7 @@ public class NovelService {
         Long baseWorkId = requireBaseWork(request.baseWorkId());
         int chapterLimit = request.chapterLimit() == null ? 20 : request.chapterLimit();
         int turnHours = request.turnHours() == null ? 24 : request.turnHours();
+        List<String> genres = genres(request.genres(), request.genre());
         List<Long> invitees = mode == NovelMode.CIRCLE ? invitees(me, request.inviteeIds()) : List.of();
         // 만든 사람이 1회차를 함께 올리므로, 한 줄기로 이어 쓸 작가가 없으면 시작할 수 없다.
         if (mode == NovelMode.CIRCLE && invitees.isEmpty())
@@ -48,14 +49,15 @@ public class NovelService {
         Novel created;
         if (mode == NovelMode.OPEN) {
             int branchLimit = request.branchLimit() == null ? Novel.BRANCH_LIMIT_MIN : request.branchLimit();
-            created = Novel.open(me, request.title(), request.description(), request.genre(), chapterLimit, turnHours,
+            created = Novel.open(me, request.title(), request.description(), genres.get(0), chapterLimit, turnHours,
                     branchLimit, baseWorkId);
         } else {
             // 정원은 고른 사람과 나다. 고른 작가는 승인 없이 참가하니 바로 연재를 시작한다.
-            created = new Novel(me, request.kind(), request.title(), request.description(), request.genre(),
+            created = new Novel(me, request.kind(), request.title(), request.description(), genres.get(0),
                     invitees.size() + 1, chapterLimit, turnHours, request.isPublic());
             created.useBaseWork(baseWorkId);
         }
+        created.useGenres(genres);
         Novel n = novels.saveAndFlush(created);
         members.saveAndFlush(new NovelMember(n.getId(), me, true));
         invitees.forEach(id -> members.save(new NovelMember(n.getId(), id, true)));
@@ -67,6 +69,18 @@ public class NovelService {
         FirstChapterRequest first = request.firstChapter();
         addChapter(n, me, null, first.title(), first.body(), now);
         return detail(n, me);
+    }
+    /** 고른 장르(겹치면 하나로, 고른 순서대로). 비우면 예전 앱처럼 한 장르로 만든다. 장르 목록에 없는 이름은 받지 않는다. */
+    private List<String> genres(List<String> picked, String single) {
+        List<String> requested = picked == null || picked.isEmpty() ? (single == null ? List.of() : List.of(single)) : picked;
+        List<String> genres = requested.stream().map(String::strip).distinct().toList();
+        if (genres.isEmpty() || genres.stream().anyMatch(String::isEmpty))
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "장르를 하나 이상 골라 주세요.");
+        if (genres.size() > Novel.GENRES_MAX)
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "장르는 세 개까지 고를 수 있어요.");
+        if (!NovelGenres.ALL.containsAll(genres))
+            throw new ApiException(ErrorCode.INVALID_REQUEST, "고를 수 없는 장르가 있어요.");
+        return genres;
     }
     private Long requireBaseWork(Long id) {
         if (id == null) return null;
@@ -352,7 +366,7 @@ public class NovelService {
                 url, nickname(n.getOwnerId()), memberCount(n), n.getMemberLimit(), n.getChapterCount(),
                 n.getChapterLimit(), n.isPublic(), n.isOwner(me), myTurn, n.getTurnDueAt(), n.getCreatedAt(),
                 likeStats.count(n.getId()), likeStats.liked(n.getId()), n.getMode(), n.getDeliveryCount(),
-                n.isOpen() ? n.getBranchLimit() : null);
+                n.isOpen() ? n.getBranchLimit() : null, n.getGenres());
     }
     /** 열매로 퍼뜨리는 작품은 참가 신청이 없으니 회차를 쓴 작가 수를 센다. */
     private int memberCount(Novel n) {

@@ -35,10 +35,10 @@ class NovelDeliveryServiceTest {
 
     @Test @DisplayName("새 회차는 회차 작가와 만든 사람을 빼고 작품 장르로 10명에게 배달한다")
     void deliversToPickedRecipients() {
-        when(deliveries.pickRecipients(eq(10L), eq(100L), eq("판타지"), any(), eq(10))).thenReturn(List.of(5L, 6L));
+        when(deliveries.pickRecipients(eq(10L), eq(100L), eq(List.of("판타지")), any(), eq(10))).thenReturn(List.of(5L, 6L));
         int sent = service.deliverNewChapter(open, chapter(100L, 3L, 1), NOW);
         assertThat(sent).isEqualTo(2);
-        verify(deliveries).pickRecipients(eq(10L), eq(100L), eq("판타지"), eq(Set.of(1L, 3L)), eq(10));
+        verify(deliveries).pickRecipients(eq(10L), eq(100L), eq(List.of("판타지")), eq(Set.of(1L, 3L)), eq(10));
         List<NovelDelivery> saved = savedDeliveries();
         assertThat(saved).extracting(NovelDelivery::getRecipientId).containsExactly(5L, 6L);
         assertThat(saved).allSatisfy(d -> {

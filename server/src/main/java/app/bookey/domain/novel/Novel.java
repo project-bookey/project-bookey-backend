@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -18,6 +20,8 @@ public class Novel extends BaseTimeEntity {
     public static final int DELIVERY_COUNT = 10;
     public static final int BRANCH_LIMIT_MIN = 10;
     public static final int BRANCH_LIMIT_MAX = 20;
+    /** 작품 장르는 세 개까지 고른다. */
+    public static final int GENRES_MAX = 3;
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY) private Long id;
     @Column(name = "owner_id", nullable = false) private Long ownerId;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 10) private NovelKind kind;
@@ -25,7 +29,11 @@ public class Novel extends BaseTimeEntity {
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 12) private NovelStatus status;
     @Column(nullable = false, length = 120) private String title;
     @Column(nullable = false, length = 500) private String description;
+    /** 첫 번째 장르. 예전 앱과 한 장르만 보이는 자리에 쓴다. */
     @Column(nullable = false, length = 30) private String genre;
+    /** 작품 장르(1~3개, 고른 순서). 첫 번째가 {@link #genre} 다. */
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(nullable = false, columnDefinition = "text[]") private String[] genres;
     @Column(name = "cover_id") private Long coverId;
     @Enumerated(EnumType.STRING) @Column(nullable = false, length = 10) private NovelMode mode;
     /** 열매로 퍼뜨리는 작품(OPEN)은 작가 수 제한이 없어 비어 있다. */
@@ -50,6 +58,7 @@ public class Novel extends BaseTimeEntity {
         this.title = title.strip();
         this.description = description == null ? "" : description.strip();
         this.genre = genre.strip();
+        this.genres = new String[] { this.genre };
         this.memberLimit = kind == NovelKind.SOLO ? 1 : memberLimit;
         this.chapterLimit = chapterLimit;
         this.turnHours = turnHours;
@@ -73,6 +82,12 @@ public class Novel extends BaseTimeEntity {
         return n;
     }
     public void useBaseWork(Long baseWorkId) { this.baseWorkId = baseWorkId; }
+    /** 고른 장르로 바꾼다. 개수·목록 확인은 만들 때 서비스가 한다. */
+    public void useGenres(List<String> picked) {
+        this.genres = picked.toArray(String[]::new);
+        this.genre = genres[0];
+    }
+    public List<String> getGenres() { return List.of(genres); }
     public boolean isOpen() { return mode == NovelMode.OPEN; }
     /** 이 깊이의 회차에서 가지를 더 뻗을 수 있는가 — 목표 회차에 닿은 가지는 끝난다. */
     public boolean canGrowFrom(int chapterNumber) {

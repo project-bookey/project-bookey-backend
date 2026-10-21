@@ -41,7 +41,7 @@ public interface NovelRepository extends JpaRepository<Novel, Long> {
 
     /**
      * 홈 열매 밭 새로고침에 놓을 작품 고르기. 피드와 같은 작품(공개 릴레이, 만든 사람이 탈퇴하지 않음) 가운데 뺄 작품을 빼고,
-     * 내 소설 관심 장르와 맞는 작품 → 나머지 순으로, 같은 묶음 안에서는 무작위로 고른다. 상태와 내 작품은 피드처럼 가리지 않는다.
+     * 내 소설 관심 장르가 작품 장르 가운데 하나라도 맞는 작품 → 나머지 순으로, 같은 묶음 안에서는 무작위로 고른다. 상태와 내 작품은 피드처럼 가리지 않는다.
      */
     default List<Long> pickForHomeFeed(Long userId, Collection<Long> excluded, int limit) {
         // NOT IN 에 빈 목록을 넘기면 (null) 로 펼쳐져 아무 작품도 고르지 못한다 — 없는 id 0 을 늘 함께 넘긴다.
@@ -56,7 +56,7 @@ public interface NovelRepository extends JpaRepository<Novel, Long> {
         WHERE n.kind = 'RELAY' AND n.is_public = TRUE AND n.chapter_count > 0
           AND n.owner_id NOT IN (SELECT u.id FROM users u WHERE u.status = 'TERMINATED')
           AND n.id NOT IN (:excluded)
-        ORDER BY EXISTS (SELECT 1 FROM novel_user_genres g WHERE g.user_id = :userId AND g.genre = n.genre) DESC,
+        ORDER BY EXISTS (SELECT 1 FROM novel_user_genres g WHERE g.user_id = :userId AND g.genre = ANY(n.genres)) DESC,
                  random()
         LIMIT :limit
         """, nativeQuery = true)

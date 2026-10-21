@@ -113,7 +113,7 @@ public class NovelDeliveryService {
         Set<Long> excluded = new HashSet<>();
         excluded.add(n.getOwnerId());
         if (c.getAuthorId() != null) excluded.add(c.getAuthorId());
-        List<Long> recipients = deliveries.pickRecipients(n.getId(), c.getId(), n.getGenre(), excluded, count);
+        List<Long> recipients = deliveries.pickRecipients(n.getId(), c.getId(), n.getGenres(), excluded, count);
         Instant dueAt = now.plus(Duration.ofHours(n.getTurnHours()));
         deliveries.saveAll(recipients.stream().map(id -> new NovelDelivery(n.getId(), c.getId(), id, dueAt)).toList());
         return recipients.size();
