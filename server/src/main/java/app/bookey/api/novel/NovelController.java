@@ -33,6 +33,12 @@ public class NovelController {
             @RequestParam(defaultValue = "0") int page) {
         return service.feed(user.id(), kind, status, genres, q, PageRequest.of(Math.max(0, page), 20));
     }
+    @Operation(summary = "이번 주 많이 이어 쓴 이야기 — 지난 7일 동안 이어 쓴 회차가 많은 공개 작품 10편. genres(최대 3개, 하나라도 맞으면)로 거른다")
+    @GetMapping("/ranking")
+    public List<NovelSummary> ranking(@AuthenticationPrincipal AuthUser user,
+            @RequestParam(defaultValue = "SOLO") NovelKind kind, @RequestParam(required = false) List<String> genres) {
+        return service.weeklyRanking(user.id(), kind, genres);
+    }
     @GetMapping("/mine")
     public PageResponse<NovelSummary> mine(@AuthenticationPrincipal AuthUser user, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "SOLO") NovelKind kind) {
         return service.mine(user.id(), kind, PageRequest.of(Math.max(0, page), 20));

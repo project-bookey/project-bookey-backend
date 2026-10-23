@@ -152,6 +152,30 @@ class NovelServiceTest {
                 .isInstanceOf(ApiException.class);
         verify(novels, never()).search(any(), any(), any(), any(), any());
     }
+    @Test @DisplayName("순위는 지난 7일 동안 많이 이어 쓴 작품 열 편을 고른 장르로 거른다")
+    void weeklyRankingReadsLastSevenDaysByGenres() {
+        when(novels.mostContinuedSince(any(), any(), any(), anyInt())).thenReturn(List.of(n));
+        Instant before = Instant.now();
+
+        var ranked = service.weeklyRanking(2L, NovelKind.RELAY, List.of(" 무협 ", "판타지"));
+
+        var since = org.mockito.ArgumentCaptor.forClass(Instant.class);
+        verify(novels).mostContinuedSince(eq("RELAY"), eq("무협,판타지"), since.capture(), eq(10));
+        assertThat(since.getValue()).isBetween(before.minus(java.time.Duration.ofDays(7)), Instant.now().minus(java.time.Duration.ofDays(7)));
+        assertThat(ranked).extracting(NovelSummary::id).containsExactly(10L);
+    }
+    @Test @DisplayName("순위는 장르를 안 고르면 모든 장르에서, 넷 이상이거나 목록에 없는 장르는 받지 않는다")
+    void weeklyRankingGenres() {
+        when(novels.mostContinuedSince(any(), any(), any(), anyInt())).thenReturn(List.of());
+
+        service.weeklyRanking(2L, NovelKind.RELAY, null);
+
+        verify(novels).mostContinuedSince(eq("RELAY"), eq(""), any(), eq(10));
+        assertThatThrownBy(() -> service.weeklyRanking(2L, NovelKind.RELAY, List.of("판타지", "무협", "공포", "SF")))
+                .isInstanceOf(ApiException.class);
+        assertThatThrownBy(() -> service.weeklyRanking(2L, NovelKind.RELAY, List.of("없는장르")))
+                .isInstanceOf(ApiException.class);
+    }
     private CreateNovelRequest request(NovelMode mode, Integer branchLimit, List<Long> invitees) {
         return request(mode, branchLimit, invitees, "판타지", null);
     }

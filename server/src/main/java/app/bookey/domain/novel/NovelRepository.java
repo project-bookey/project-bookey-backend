@@ -46,6 +46,25 @@ public interface NovelRepository extends JpaRepository<Novel, Long> {
     Page<Novel> search(@Param("kind") String kind, @Param("status") String status, @Param("genres") String genres,
                        @Param("pattern") String pattern, Pageable pageable);
 
+    /**
+     * 열매 탭 순위 — since 뒤로 이어 쓴 회차(뿌리가 아닌, 나무에 있는, 탈퇴하지 않은 사람이 쓴 회차)가 많은 공개 작품 순.
+     * 수가 같으면 더 최근에 이어 쓴 작품이 앞이다. 거르지 않는 장르는 빈 문자열로 넘긴다(쉼표로 이은 장르, 하나라도 맞으면).
+     */
+    @Query(value = """
+        SELECT n.* FROM novels n
+        JOIN (SELECT c.novel_id, count(*) AS added, max(c.created_at) AS latest FROM novel_chapters c
+              WHERE c.state = 'ACTIVE' AND c.parent_chapter_id IS NOT NULL AND c.created_at >= :since
+                AND c.author_id NOT IN (SELECT u.id FROM users u WHERE u.status = 'TERMINATED')
+              GROUP BY c.novel_id) recent ON recent.novel_id = n.id
+        WHERE n.kind = :kind AND n.is_public = TRUE
+          AND n.owner_id NOT IN (SELECT u.id FROM users u WHERE u.status = 'TERMINATED')
+          AND (:genres = '' OR n.genres && string_to_array(:genres, ','))
+        ORDER BY recent.added DESC, recent.latest DESC, n.id DESC
+        LIMIT :size
+        """, nativeQuery = true)
+    List<Novel> mostContinuedSince(@Param("kind") String kind, @Param("genres") String genres,
+                                   @Param("since") Instant since, @Param("size") int size);
+
     @Query("""
         select n from Novel n where n.currentWriterId = :userId and n.status = 'ONGOING'
         and (n.turnDueAt is null or n.turnDueAt > :now)
