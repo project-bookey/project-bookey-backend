@@ -136,6 +136,16 @@ public class NovelService {
     static String escapeLike(String keyword) {
         return keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
+    /** 열매 탭 순위의 크기와 기간 — 이번 주(지난 7일) 많이 이어 쓴 이야기 열 편. */
+    static final int RANKING_SIZE = 10;
+    static final Duration RANKING_PERIOD = Duration.ofDays(7);
+    /** 열매 탭 순위. 장르는 목록처럼 세 개까지 고르고, 하나라도 맞으면 든다. */
+    @Transactional(readOnly = true)
+    public List<NovelSummary> weeklyRanking(Long me, NovelKind kind, List<String> genres) {
+        List<String> picked = searchGenres(genres);
+        Instant since = Instant.now().minus(RANKING_PERIOD);
+        return summaries(novels.mostContinuedSince(kind.name(), String.join(",", picked), since, RANKING_SIZE), me);
+    }
     @Transactional(readOnly = true)
     public PageResponse<NovelSummary> mine(Long me, NovelKind kind, Pageable page) {
         Page<Novel> found = novels.mine(me, kind, page);
