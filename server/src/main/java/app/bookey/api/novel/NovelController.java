@@ -43,6 +43,12 @@ public class NovelController {
     public PageResponse<NovelSummary> mine(@AuthenticationPrincipal AuthUser user, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "SOLO") NovelKind kind) {
         return service.mine(user.id(), kind, PageRequest.of(Math.max(0, page), 20));
     }
+    @Operation(summary = "내가 이어 쓴 이야기 — 남의 작품에 내가 쓴 회차가 있는 작품, 내가 가장 최근에 쓴 순. 내 작품·참가한 모여 만들기는 빠진다")
+    @GetMapping("/me/continued")
+    public PageResponse<NovelSummary> continued(@AuthenticationPrincipal AuthUser user,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "SOLO") NovelKind kind) {
+        return service.continued(user.id(), kind, PageRequest.of(Math.max(0, page), 20));
+    }
     @GetMapping("/my-turns")
     public List<NovelSummary> myTurns(@AuthenticationPrincipal AuthUser user) { return service.myTurns(user.id()); }
     @Operation(summary = "홈 열매 밭 — 지금 놓인 묶음과 오늘 남은 무료·광고 새로고침, 결제한 새로고침. 처음이거나 묶음이 비어 있으면 최신순으로 첫 묶음을 만든다(횟수 차감 없음)")
