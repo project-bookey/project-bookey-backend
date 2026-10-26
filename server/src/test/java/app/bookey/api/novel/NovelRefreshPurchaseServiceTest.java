@@ -43,7 +43,8 @@ class NovelRefreshPurchaseServiceTest {
     private final NovelService novelService = new NovelService(novels, mock(NovelMemberRepository.class),
             chapters, mock(NovelDraftRepository.class), mock(NovelCoverRepository.class),
             mock(NovelLikeRepository.class), mock(UserRepository.class), mock(RateLimiter.class), deliveries,
-            mock(NovelDeliveryService.class), mock(NovelBaseWorkRepository.class), mock(UserFollowRepository.class), mock(NovelSunlightService.class));
+            mock(NovelDeliveryService.class), mock(NovelBaseWorkRepository.class), mock(UserFollowRepository.class), mock(NovelSunlightService.class),
+            mock(NovelFavoriteRepository.class));
     private final NovelHomeFeedService homeFeedService = feedService(PAYMENT);
     private final NovelRefreshPurchaseService service = purchaseService(homeFeedService, PAYMENT);
 

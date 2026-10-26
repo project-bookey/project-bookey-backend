@@ -28,8 +28,9 @@ class NovelServiceTest {
     private final NovelDeliveryService delivery = mock(NovelDeliveryService.class);
     private final NovelBaseWorkRepository baseWorks = mock(NovelBaseWorkRepository.class);
     private final UserFollowRepository follows = mock(UserFollowRepository.class);
+    private final NovelFavoriteRepository favorites = mock(NovelFavoriteRepository.class);
     private final NovelService service = new NovelService(novels, members, chapters, drafts, covers, likes, users,
-            mock(RateLimiter.class), deliveries, delivery, baseWorks, follows, mock(NovelSunlightService.class));
+            mock(RateLimiter.class), deliveries, delivery, baseWorks, follows, mock(NovelSunlightService.class), favorites);
     private Novel n;
     @BeforeEach void setup() {
         n = new Novel(1L, NovelKind.RELAY, "제목", "소개", "일상", 2, 10, 24, true);
@@ -119,6 +120,54 @@ class NovelServiceTest {
         assertThat(content.get(0).likeCount()).isEqualTo(128L); assertThat(content.get(0).liked()).isTrue();
         assertThat(content.get(1).likeCount()).isZero(); assertThat(content.get(1).liked()).isFalse();
         verify(likes, times(1)).countPerNovel(any()); verify(likes, never()).countByNovelId(any());
+    }
+    @Test @DisplayName("즐겨찾기는 좋아요와 따로, 누를 때마다 담겼다 빠진다")
+    void favoriteTogglesOnAndOff() {
+        NovelFavoriteView added = service.toggleFavorite(2L, 10L);
+        assertThat(added.favorited()).isTrue();
+        verify(favorites).save(any(NovelFavorite.class));
+
+        NovelFavorite existing = NovelFavorite.builder().userId(2L).novelId(10L).build();
+        when(favorites.findByUserIdAndNovelId(2L, 10L)).thenReturn(Optional.of(existing));
+        NovelFavoriteView removed = service.toggleFavorite(2L, 10L);
+        assertThat(removed.favorited()).isFalse();
+        verify(favorites).delete(existing);
+        verifyNoInteractions(likes);
+    }
+    @Test @DisplayName("볼 수 없는 비공개 작품은 즐겨찾기에 담을 수 없다")
+    void cannotFavoriteUnreadablePrivateNovel() {
+        ReflectionTestUtils.setField(n, "isPublic", false);
+        assertThatThrownBy(() -> service.toggleFavorite(2L, 10L)).isInstanceOf(ApiException.class);
+        verify(favorites, never()).save(any());
+    }
+    @Test @DisplayName("목록은 한 페이지에서 내가 즐겨찾기에 담은 작품을 한 번에 읽어 싣는다")
+    void feedCarriesFavoritesLoadedOnce() {
+        Novel other = new Novel(1L, NovelKind.RELAY, "다른 제목", "소개", "일상", 2, 10, 24, true);
+        ReflectionTestUtils.setField(other, "id", 11L); ReflectionTestUtils.setField(other, "createdAt", Instant.now());
+        var page = PageRequest.of(0, 20);
+        when(novels.feed(NovelKind.RELAY, null, page)).thenReturn(new PageImpl<>(List.of(n, other), page, 2));
+        when(favorites.findAllByUserIdAndNovelIdIn(2L, List.of(10L, 11L)))
+                .thenReturn(List.of(NovelFavorite.builder().userId(2L).novelId(11L).build()));
+
+        var content = service.feed(2L, NovelKind.RELAY, null, page).content();
+
+        assertThat(content.get(0).favorited()).isFalse(); assertThat(content.get(1).favorited()).isTrue();
+        verify(favorites, times(1)).findAllByUserIdAndNovelIdIn(any(), any());
+    }
+    @Test @DisplayName("내 즐겨찾기 목록은 저장소가 고른 순서 그대로, 담긴 작품으로 내려 준다")
+    void favoritesListKeepsOrderAndMarksFavorited() {
+        Novel other = new Novel(1L, NovelKind.RELAY, "다른 제목", "소개", "일상", 2, 10, 24, true);
+        ReflectionTestUtils.setField(other, "id", 11L); ReflectionTestUtils.setField(other, "createdAt", Instant.now());
+        var page = PageRequest.of(0, 20);
+        when(favorites.favorites(2L, NovelKind.RELAY, page)).thenReturn(new PageImpl<>(List.of(other, n), page, 2));
+        when(favorites.findAllByUserIdAndNovelIdIn(2L, List.of(11L, 10L))).thenReturn(List.of(
+                NovelFavorite.builder().userId(2L).novelId(11L).build(), NovelFavorite.builder().userId(2L).novelId(10L).build()));
+
+        var found = service.favorites(2L, NovelKind.RELAY, page);
+
+        assertThat(found.content()).extracting(NovelSummary::id).containsExactly(11L, 10L);
+        assertThat(found.content()).allMatch(NovelSummary::favorited);
+        assertThat(found.totalElements()).isEqualTo(2L);
     }
     @Test @DisplayName("열매 탭 목록은 고른 장르와 검색어로 거르고, %·_ 는 글자 그대로 찾는다")
     void feedSearchesByGenresAndKeyword() {

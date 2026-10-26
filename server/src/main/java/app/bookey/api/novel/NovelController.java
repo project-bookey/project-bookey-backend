@@ -39,6 +39,12 @@ public class NovelController {
             @RequestParam(defaultValue = "SOLO") NovelKind kind, @RequestParam(required = false) List<String> genres) {
         return service.weeklyRanking(user.id(), kind, genres);
     }
+    @Operation(summary = "내가 즐겨찾기에 담은 작품 — 최근에 담은 것부터 20편씩. 지금 볼 수 없는 작품은 뺀다")
+    @GetMapping("/me/favorites")
+    public PageResponse<NovelSummary> favorites(@AuthenticationPrincipal AuthUser user,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "SOLO") NovelKind kind) {
+        return service.favorites(user.id(), kind, PageRequest.of(Math.max(0, page), 20));
+    }
     @GetMapping("/mine")
     public PageResponse<NovelSummary> mine(@AuthenticationPrincipal AuthUser user, @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "SOLO") NovelKind kind) {
         return service.mine(user.id(), kind, PageRequest.of(Math.max(0, page), 20));
@@ -139,6 +145,11 @@ public class NovelController {
     /** 좋아요 토글 — 책·독후감 좋아요처럼 쓰기 제재와 상관없이 누를 수 있다. */
     @PostMapping("/{id}/like")
     public NovelLikeView like(@AuthenticationPrincipal AuthUser user, @PathVariable Long id) { return service.toggleLike(user.id(), id); }
+    @Operation(summary = "즐겨찾기 토글 — 좋아요와 따로, 누를 때마다 담고 뺀다. 볼 수 없는 작품이면 404")
+    @PostMapping("/{id}/favorite")
+    public NovelFavoriteView favorite(@AuthenticationPrincipal AuthUser user, @PathVariable Long id) {
+        return service.toggleFavorite(user.id(), id);
+    }
     @PutMapping("/{id}/cover") @WriteBanGuarded
     public NovelDetail cover(@AuthenticationPrincipal AuthUser user, @PathVariable Long id, @Valid @RequestBody NovelCoverRequest request) {
         return service.changeCover(user.id(), id, request.coverId());

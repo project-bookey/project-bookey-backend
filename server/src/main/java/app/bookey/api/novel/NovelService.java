@@ -32,6 +32,7 @@ public class NovelService {
     private final NovelBaseWorkRepository baseWorks;
     private final UserFollowRepository follows;
     private final NovelSunlightService sunlight;
+    private final NovelFavoriteRepository favorites;
 
     @Transactional
     public NovelDetail create(Long me, CreateNovelRequest request) {
@@ -233,6 +234,22 @@ public class NovelService {
         if (existing.isPresent()) likes.delete(existing.get());
         else likes.save(NovelLike.builder().userId(me).novelId(id).build());
         return new NovelLikeView(existing.isEmpty(), likes.countByNovelId(id));
+    }
+    /** 즐겨찾기 — 좋아요와 따로, 누를 때마다 담고 뺀다. 볼 수 있는 작품에만 담을 수 있다. */
+    @Transactional
+    public NovelFavoriteView toggleFavorite(Long me, Long id) {
+        readable(me, id, false);
+        var existing = favorites.findByUserIdAndNovelId(me, id);
+        if (existing.isPresent()) favorites.delete(existing.get());
+        else favorites.save(NovelFavorite.builder().userId(me).novelId(id).build());
+        return new NovelFavoriteView(existing.isEmpty());
+    }
+    /** 내가 즐겨찾기에 담은 작품 — 최근에 담은 것부터. 마이의 즐겨찾기 수는 이 목록의 전체 수다. */
+    @Transactional(readOnly = true)
+    public PageResponse<NovelSummary> favorites(Long me, NovelKind kind, Pageable page) {
+        Page<Novel> found = favorites.favorites(me, kind, page);
+        LikeStats likeStats = likeStats(found.getContent(), me);
+        return PageResponse.of(found, n -> summary(n, me, likeStats));
     }
     @Transactional
     public NovelDetail get(Long me, Long id) {
@@ -467,26 +484,29 @@ public class NovelService {
                 url, nickname(n.getOwnerId()), memberCount(n), n.getMemberLimit(), n.getChapterCount(),
                 n.getChapterLimit(), n.isPublic(), n.isOwner(me), myTurn, n.getTurnDueAt(), n.getCreatedAt(),
                 likeStats.count(n.getId()), likeStats.liked(n.getId()), n.getMode(), n.getDeliveryCount(),
-                n.isOpen() ? n.getBranchLimit() : null, n.getGenres());
+                n.isOpen() ? n.getBranchLimit() : null, n.getGenres(), likeStats.favorited(n.getId()));
     }
     /** 열매로 퍼뜨리는 작품은 참가 신청이 없으니 회차를 쓴 작가 수를 센다. */
     private int memberCount(Novel n) {
         if (!n.isOpen()) return active(n).size();
         return (int) Math.max(1, chapters.countAuthors(n.getId()));
     }
-    /** 작품들의 좋아요 수와 내가 누른 작품. 목록 한 페이지를 줄마다 세지 않고 한 번에 읽는다. */
-    private record LikeStats(Map<Long, Long> counts, Set<Long> mine) {
+    /** 작품들의 좋아요 수와 내가 누른 작품, 내가 즐겨찾기에 담은 작품. 목록 한 페이지를 줄마다 세지 않고 한 번에 읽는다. */
+    private record LikeStats(Map<Long, Long> counts, Set<Long> mine, Set<Long> favoriteIds) {
         long count(Long id) { return counts.getOrDefault(id, 0L); }
         boolean liked(Long id) { return mine.contains(id); }
+        boolean favorited(Long id) { return favoriteIds.contains(id); }
     }
     private LikeStats likeStats(List<Novel> found, Long me) {
         List<Long> ids = found.stream().map(Novel::getId).toList();
-        if (ids.isEmpty()) return new LikeStats(Map.of(), Set.of());
+        if (ids.isEmpty()) return new LikeStats(Map.of(), Set.of(), Set.of());
         Map<Long, Long> counts = likes.countPerNovel(ids).stream().collect(Collectors.toMap(
                 NovelLikeRepository.NovelLikeCount::getNovelId, NovelLikeRepository.NovelLikeCount::getLikeCount));
         Set<Long> mine = likes.findAllByUserIdAndNovelIdIn(me, ids).stream()
                 .map(NovelLike::getNovelId).collect(Collectors.toSet());
-        return new LikeStats(counts, mine);
+        Set<Long> favoriteIds = favorites.findAllByUserIdAndNovelIdIn(me, ids).stream()
+                .map(NovelFavorite::getNovelId).collect(Collectors.toSet());
+        return new LikeStats(counts, mine, favoriteIds);
     }
     private NovelDetail detail(Novel n, Long me) {
         var active = active(n);
