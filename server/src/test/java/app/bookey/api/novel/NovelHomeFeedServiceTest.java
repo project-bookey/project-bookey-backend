@@ -31,7 +31,7 @@ class NovelHomeFeedServiceTest {
     private final NovelService novelService = new NovelService(novels, mock(NovelMemberRepository.class), chapters,
             mock(NovelDraftRepository.class), mock(NovelCoverRepository.class), likes, mock(UserRepository.class),
             mock(RateLimiter.class), mock(NovelDeliveryRepository.class), delivery, mock(NovelBaseWorkRepository.class),
-            mock(UserFollowRepository.class), mock(NovelSunlightService.class));
+            mock(UserFollowRepository.class), mock(NovelSunlightService.class), mock(NovelFavoriteRepository.class));
     private final BookeyProperties properties = new BookeyProperties(null, null, null, null, null, null, null, null,
             null, null, new BookeyProperties.Novel(2, 3, 7, null, null));
     private final NovelHomeFeedService service =

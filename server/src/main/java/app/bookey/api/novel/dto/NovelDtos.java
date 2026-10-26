@@ -50,8 +50,10 @@ public final class NovelDtos {
             @NotNull NovelMode mode,
             @Schema(description = "예전 앱 호환용 — 예전에 회차 하나를 무작위로 배달한 사람 수. 새 작품은 비어 있다", deprecated = true) Integer deliveryCount,
             @Schema(description = "OPEN: 회차 하나에 붙을 수 있는 가지 수") Integer branchLimit,
-            @Schema(description = "작품 장르(1~3개, 고른 순서). 첫 번째가 genre 다") @NotNull List<String> genres) {}
+            @Schema(description = "작품 장르(1~3개, 고른 순서). 첫 번째가 genre 다") @NotNull List<String> genres,
+            @Schema(description = "내가 즐겨찾기에 담았는지(좋아요와 따로)") boolean favorited) {}
     public record NovelLikeView(boolean liked, long likeCount) {}
+    public record NovelFavoriteView(boolean favorited) {}
     /**
      * 홈 열매 하나 — 지금 이어 쓸 수 있는 회차. 누르면 그 회차를 읽고, 쓰기 시작하면 자리를 맡는다.
      * 같은 작품의 다른 회차가 따로 열매로 놓일 수 있다.
