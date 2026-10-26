@@ -152,6 +152,13 @@ public class NovelService {
         LikeStats likeStats = likeStats(found.getContent(), me);
         return PageResponse.of(found, n -> summary(n, me, likeStats));
     }
+    /** 내가 이어 쓴 이야기 — 남의 작품에 가지를 뻗은 작품(마이). 내 작품·참가한 모여 만들기는 mine 이 맡는다. */
+    @Transactional(readOnly = true)
+    public PageResponse<NovelSummary> continued(Long me, NovelKind kind, Pageable page) {
+        Page<Novel> found = novels.continuedBy(me, kind.name(), page);
+        LikeStats likeStats = likeStats(found.getContent(), me);
+        return PageResponse.of(found, n -> summary(n, me, likeStats));
+    }
     @Transactional(readOnly = true)
     public List<NovelSummary> myTurns(Long me) {
         return summaries(novels.myTurns(me, Instant.now(), HOME_LIST_PAGE), me);
