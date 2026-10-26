@@ -77,4 +77,26 @@ public interface NovelRepository extends JpaRepository<Novel, Long> {
     List<Long> expiredIds(@Param("now") Instant now, Pageable pageable);
     @Query("select n from Novel n where n.kind = :kind and n.ownerId not in (select u.id from User u where u.status = 'TERMINATED') and (n.ownerId = :userId or n.id in (select m.novelId from NovelMember m where m.userId = :userId and m.status in ('ACTIVE', 'PENDING'))) order by n.createdAt desc")
     Page<Novel> mine(@Param("userId") Long userId, @Param("kind") NovelKind kind, Pageable pageable);
+
+    /**
+     * 내가 이어 쓴 이야기 — 남의 작품에 내가 쓴 회차(나무에 있는)가 있는 작품을 내가 가장 최근에 쓴 순으로.
+     * 내 작품과 참가한 모여 만들기(mine)는 빼서 마이의 내 작품과 겹치지 않게 한다.
+     */
+    @Query(value = """
+        SELECT n.* FROM novels n
+        JOIN (SELECT c.novel_id, max(c.created_at) AS latest FROM novel_chapters c
+              WHERE c.author_id = :userId AND c.state = 'ACTIVE'
+              GROUP BY c.novel_id) written ON written.novel_id = n.id
+        WHERE n.kind = :kind AND n.owner_id <> :userId
+          AND n.owner_id NOT IN (SELECT u.id FROM users u WHERE u.status = 'TERMINATED')
+          AND n.id NOT IN (SELECT m.novel_id FROM novel_members m WHERE m.user_id = :userId AND m.status IN ('ACTIVE', 'PENDING'))
+        ORDER BY written.latest DESC, n.id DESC
+        """, countQuery = """
+        SELECT count(*) FROM novels n
+        WHERE n.kind = :kind AND n.owner_id <> :userId
+          AND n.owner_id NOT IN (SELECT u.id FROM users u WHERE u.status = 'TERMINATED')
+          AND n.id NOT IN (SELECT m.novel_id FROM novel_members m WHERE m.user_id = :userId AND m.status IN ('ACTIVE', 'PENDING'))
+          AND n.id IN (SELECT c.novel_id FROM novel_chapters c WHERE c.author_id = :userId AND c.state = 'ACTIVE')
+        """, nativeQuery = true)
+    Page<Novel> continuedBy(@Param("userId") Long userId, @Param("kind") String kind, Pageable pageable);
 }

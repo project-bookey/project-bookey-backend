@@ -225,6 +225,17 @@ class NovelServiceTest {
         assertThatThrownBy(() -> service.weeklyRanking(2L, NovelKind.RELAY, List.of("없는장르")))
                 .isInstanceOf(ApiException.class);
     }
+    @Test @DisplayName("내가 이어 쓴 이야기는 내 작품 목록과 따로, 한 페이지의 좋아요를 한 번에 실어 읽는다")
+    void continuedReadsNovelsIBranchedInto() {
+        var page = PageRequest.of(0, 20);
+        when(novels.continuedBy(2L, "RELAY", page)).thenReturn(new PageImpl<>(List.of(n), page, 1));
+
+        var found = service.continued(2L, NovelKind.RELAY, page).content();
+
+        assertThat(found).extracting(NovelSummary::id).containsExactly(10L);
+        verify(novels, never()).mine(any(), any(), any());
+        verify(likes, times(1)).countPerNovel(any());
+    }
     private CreateNovelRequest request(NovelMode mode, Integer branchLimit, List<Long> invitees) {
         return request(mode, branchLimit, invitees, "판타지", null);
     }
